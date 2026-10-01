@@ -1,11 +1,11 @@
-"""Mémoire inter-sessions.
+"""Cross-session memory.
 
-Stocke chaque échange terminé, puis retrouve les plus pertinents pour les
-injecter au démarrage d'une nouvelle session.
+Stores every finished exchange, then finds the most relevant ones to inject
+at the start of a new session.
 
-Le scoring est lexical (TF-IDF simplifié), volontairement sans dépendance ni
-appel réseau : pas d'embeddings à héberger, rien à réindexer, et le
-comportement reste inspectable. Suffisant pour quelques centaines d'échanges.
+Scoring is lexical (simplified TF-IDF), deliberately with no dependency and no
+network call: no embeddings to host, nothing to reindex, and the behaviour
+stays inspectable. Enough for a few hundred exchanges.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pathlib import Path
 
 log = logging.getLogger("ocmemory")
 
-# Mots vides FR + EN : sans ça, "comment" et "the" dominent le score.
+# FR + EN stop words: without these, "comment" and "the" dominate the score.
 STOP = set(
     """le la les un une des du de au aux et ou mais donc or ni car que qui quoi
     dont ou a as ai est sont etre ete avoir eu pour par sur sous dans avec sans
@@ -41,7 +41,7 @@ STEM_LEN = 6
 def stem(word: str) -> str:
     """Troncature : rapproche migration/migrations, config/configurer.
 
-    Grossier mais sans dépendance, et l'effet recherché (tolérer pluriels et
+    Crude but dependency-free, and the intended effect (tolerating plurals and
     flexions) est atteint sans le coût d'un vrai stemmer multilingue.
     """
     return word[:STEM_LEN] if len(word) > STEM_LEN else word
@@ -72,7 +72,7 @@ class Memory:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.path.write_text(json.dumps(entries[-self.max_entries :], indent=1))
         except Exception as exc:  # noqa: BLE001
-            log.warning("mémoire non persistée: %s", exc)
+            log.warning("memory not persisted: %s", exc)
 
     def add(self, chat_id: int, question: str, answer: str, session_id: str) -> None:
         if not question.strip() or not answer.strip():
@@ -99,7 +99,7 @@ class Memory:
     def count(self, chat_id: int) -> int:
         return sum(1 for e in self._load() if e.get("chat") == chat_id)
 
-    # ---------------------------------------------------------- récupération
+    # ------------------------------------------------------------- retrieval
 
     def search(self, chat_id: int, query: str, top: int = 3) -> list[dict]:
         entries = [e for e in self._load() if e.get("chat") == chat_id]
@@ -124,7 +124,7 @@ class Memory:
             if not overlap:
                 continue
             score = sum(idf[t] for t in overlap)
-            # Décroissance douce : un échange d'il y a 60 jours pèse ~la moitié
+            # Gentle decay: a 60-day-old exchange weighs roughly half
             age_days = (now - entry.get("ts", now)) / 86400
             score *= 1 / (1 + age_days / 60)
             scored.append((score, entry))
@@ -139,7 +139,7 @@ class Memory:
             return ""
         lines = [
             "<contexte-anterieur>",
-            "Extraits d'échanges précédents avec cet utilisateur, retrouvés",
+            "Excerpts from previous exchanges with this user, retrieved by",
             "automatiquement. Utilise-les s'ils sont pertinents, ignore-les sinon.",
             "Ne les commente pas explicitement.",
             "",

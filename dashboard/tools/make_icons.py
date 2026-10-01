@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère les icônes PWA de Mav (orbe sauge) en PNG, sans dépendance externe.
+"""Generates Mav's PWA icons (sage orb) as PNG, no external dependency.
 
 Usage: python3 make_icons.py
 Produit dans icons/ : 192, 512, 512-maskable, apple-touch (180).
@@ -29,15 +29,15 @@ def pixel(x, y, size, maskable=False):
     r = (dx * dx + dy * dy) ** 0.5
     R = size * 0.5
 
-    # Fond dégradé vertical
+    # Vertical gradient background
     bg = lerp(BG_TOP, BG_BOT, y / (size - 1))
 
-    # Marge de sécurité pour l'icône maskable (contenu dans 80%)
+    # Safety margin for the maskable icon (content within 80%)
     inner = 0.40 if maskable else 0.46
     orb_r = size * inner
     edge = orb_r * 0.12
 
-    # Extérieur : fond (coins transparents si non maskable pour un bel arrondi)
+    # Outside: background (transparent corners if not maskable for a nice round shape)
     if not maskable:
         rr = size * 0.22
         # rectangle arrondi
@@ -55,7 +55,7 @@ def pixel(x, y, size, maskable=False):
         col = lerp(GLOW, bg, t)
         return (*col, 255)
 
-    # Dégradé radial de l'orbe
+    # Radial gradient of the orb
     t = min(r / orb_r, 1.0)
     base = lerp((124, 196, 172), (47, 111, 94), t)
 

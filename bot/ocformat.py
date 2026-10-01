@@ -1,4 +1,4 @@
-"""Rendu markdown -> HTML Telegram, et découpage sans casser les balises."""
+"""Markdown -> Telegram HTML rendering, and splitting without breaking tags."""
 
 from __future__ import annotations
 

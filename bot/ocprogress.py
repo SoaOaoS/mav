@@ -1,8 +1,7 @@
-"""Traduit le flux d'événements d'une session en une ligne d'état lisible.
+"""Turns a session's event stream into a readable status line.
 
-Telegram limite la fréquence d'édition d'un message : on regroupe donc les
-événements et on n'édite qu'au-delà d'un intervalle minimum, et seulement si
-le texte a réellement changé.
+Telegram rate-limits message edits: we batch events and only edit beyond a
+minimum interval, and only if the text actually changed.
 """
 
 from __future__ import annotations
@@ -14,21 +13,21 @@ import time
 
 log = logging.getLogger("ocprogress")
 
-EDIT_INTERVAL = 3.0  # secondes entre deux éditions du message d'état
+EDIT_INTERVAL = 3.0  # seconds between status message edits
 
-# Étiquettes lisibles pour les outils courants. Les serveurs MCP sont préfixés
-# par leur nom (github_*, notion_*), on les traite génériquement.
+# Readable labels for common tools. MCP servers are prefixed by their
+# name (github_*, notion_*); we handle them generically.
 TOOL_LABELS = {
     "websearch": "recherche web",
     "webfetch": "lecture d'une page",
     "read": "lecture de fichier",
-    "write": "écriture de fichier",
+    "write": "writing file",
     "edit": "modification de fichier",
     "bash": "commande shell",
     "grep": "recherche dans le code",
     "glob": "parcours de fichiers",
-    "task": "délégation à un sous-agent",
-    "todowrite": "mise à jour du plan",
+    "task": "delegating to a sub-agent",
+    "todowrite": "updating the plan",
     "apply_patch": "application d'un patch",
 }
 
@@ -48,7 +47,7 @@ def human_delay(seconds: float) -> str:
 
 
 class ProgressTracker:
-    """Accumule l'état d'une session en cours et produit le texte à afficher."""
+    """Accumulates a running session's state and produces the text to display."""
 
     def __init__(self) -> None:
         self.started = time.monotonic()
@@ -69,19 +68,19 @@ class ProgressTracker:
 
         if etype == "session.next.step.started":
             self.steps += 1
-            self.current = "réflexion"
+            self.current = "thinking"
         elif etype == "session.next.tool.called":
             tool = props.get("tool", "?")
             self.last_tool = tool
             self.tool_counts[tool] = self.tool_counts.get(tool, 0) + 1
             self.current = tool_label(tool)
         elif etype == "session.next.tool.failed":
-            self.current = f"{tool_label(props.get('tool', '?'))} — échec, reprise"
+            self.current = f"{tool_label(props.get('tool', '?'))} — failed, retrying"
         elif etype in ("session.next.text.started", "session.next.text.delta"):
-            self.current = "rédaction de la réponse"
+            self.current = "writing the answer"
             self.text_chars += len(props.get("delta", "") or "")
         elif etype == "session.next.reasoning.started":
-            self.current = "réflexion"
+            self.current = "thinking"
         elif etype == "session.next.compaction.started":
             self.compacting = True
             self.current = "compactage du contexte"
@@ -102,13 +101,13 @@ class ProgressTracker:
     def render(self) -> str:
         elapsed = human_delay(time.monotonic() - self.started)
         if self.error:
-            return f"⚠️ {html.escape(self.error)} — après {elapsed}"
+            return f"⚠️ {html.escape(self.error)} — after {elapsed}"
 
-        head = f"⏳ <b>{html.escape(self.current or 'démarrage')}</b>  ·  {elapsed}"
+        head = f"⏳ <b>{html.escape(self.current or 'starting')}</b>  ·  {elapsed}"
 
         detail = []
         if self.steps > 1:
-            detail.append(f"{self.steps} étapes")
+            detail.append(f"{self.steps} steps")
         total_tools = sum(self.tool_counts.values())
         if total_tools:
             top = sorted(self.tool_counts.items(), key=lambda x: -x[1])[:3]
@@ -118,7 +117,7 @@ class ProgressTracker:
                 )
             )
         if self.compacting:
-            detail.append("contexte saturé, compactage en cours")
+            detail.append("context saturated, compacting")
 
         if not detail:
             return head
@@ -131,10 +130,10 @@ async def follow(
     on_update,
     idle_timeout: float | None = None,
 ) -> ProgressTracker:
-    """Consomme la file d'événements jusqu'à session.idle.
+    """Consumes the event queue until session.idle.
 
-    on_update(texte) est appelé au plus une fois toutes les EDIT_INTERVAL
-    secondes, et uniquement si le rendu a changé.
+    on_update(text) is called at most once every EDIT_INTERVAL seconds,
+    and only if the rendering changed.
     """
     last_edit = 0.0
     last_text = ""
@@ -143,7 +142,7 @@ async def follow(
         try:
             event = await asyncio.wait_for(queue.get(), timeout=idle_timeout)
         except asyncio.TimeoutError:
-            tracker.error = "aucun événement reçu (session bloquée ?)"
+            tracker.error = "no events received (session stuck?)"
             tracker.done = True
             break
 
@@ -160,6 +159,6 @@ async def follow(
                 try:
                     await on_update(text)
                 except Exception as exc:  # noqa: BLE001
-                    log.debug("édition du message d'état ignorée: %s", exc)
+                    log.debug("status edit skipped: %s", exc)
 
     return tracker

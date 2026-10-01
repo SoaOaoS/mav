@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Collecte de données biotech/santé pour le bilan quotidien.
+"""Collects biotech/health data for a daily brief.
 
-Sources ouvertes, sans clé :
-  - Yahoo Finance : cotations des indices santé, grands labos et biotechs.
-  - openFDA       : approbations récentes (NDA/BLA originaux).
-  - ClinicalTrials.gov : essais récemment modifiés.
-  - FDA press RSS : communiqués.
+Open sources, no API key:
+  - Yahoo Finance: health indices, big pharma and biotech quotes.
+  - openFDA: recent approvals (original NDA/BLA).
+  - ClinicalTrials.gov: recently updated trials.
+  - FDA press RSS: press releases.
 
-Sort par défaut un texte compact lisible par un LLM (le job le lit et
-rédige le bilan). Options : --json pour la sortie brute structurée.
+By default prints compact text a LLM can read (the job reads it and writes
+the brief). Options: --json for the raw structured output.
 
-Conçu pour ne jamais planter globalement : chaque source est isolée, une
+Designed never to fail as a whole: each source is isolated, one
 source en panne produit une ligne « indisponible » sans casser le reste.
 """
 
@@ -30,7 +30,7 @@ UA = (
 )
 YF_HOSTS = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]
 
-# Indices / ETF santé et biotech.
+# Health and biotech indices / ETFs.
 ETFS = ["XBI", "IBB", "XLV", "IHI", "ARKG", "XPH"]
 # Grands labos.
 MAJORS = ["LLY", "NVO", "JNJ", "ABBV", "MRK", "PFE", "AMGN", "GILD",
@@ -145,7 +145,7 @@ def recent_approvals(days: int = 45, limit: int = 12) -> list[dict]:
             "status": subs[0].get("submission_status"),
             "priority": subs[0].get("review_priority"),
         })
-    # Dédoublonne (plusieurs produits d'un même dossier) et trie par date.
+    # Dedup (several products of one file) and sort by date.
     seen = set()
     uniq = []
     for a in out:
@@ -249,8 +249,8 @@ def fmt_pct(p) -> str:
 
 def to_text(d: dict) -> str:
     L = []
-    L.append("=== BIOTECH / SANTÉ — données collectées ===")
-    L.append(f"(généré {d['generated']} UTC)")
+    L.append("=== BIOTECH / HEALTH — collected data ===")
+    L.append(f"(generated {d['generated']} UTC)")
 
     for label, key in (("INDICES & ETF SANTÉ", "etfs"),
                        ("GRANDS LABOS", "majors"),
@@ -299,7 +299,7 @@ def to_text(d: dict) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Collecte de données biotech.")
+    ap = argparse.ArgumentParser(description="Biotech data collection.")
     ap.add_argument("--json", action="store_true", help="sortie JSON brute")
     args = ap.parse_args()
     data = build()

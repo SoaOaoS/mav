@@ -1,7 +1,7 @@
-"""Bus d'événements SSE d'opencode.
+"""SSE event bus for opencode.
 
-Une seule connexion à GET /event, reconnexion automatique, et distribution
-des événements aux abonnés indexés par sessionID.
+A single connection to GET /event, automatic reconnection, and distribution
+of events to subscribers indexed by sessionID.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ import httpx
 
 log = logging.getLogger("ocbus")
 
-# Le serveur émet server.heartbeat toutes les ~10s. Sans trafic pendant ce
-# délai, la connexion est morte (serveur figé, réseau coupé) : on coupe et on
-# reconnecte plutôt que d'attendre indéfiniment sur un socket zombie.
+# The server emits server.heartbeat roughly every 10s. With no traffic for that
+# long, the connection is dead (frozen server, dropped network): we cut and
+# reconnect instead of waiting forever on a zombie socket.
 READ_TIMEOUT = 60.0
 
 
@@ -29,7 +29,7 @@ class EventBus:
         self._task: asyncio.Task | None = None
         self.connected = asyncio.Event()
 
-    # ---------------------------------------------------------------- abonnés
+    # ----------------------------------------------------------------- subscribers
 
     def subscribe(self, session_id: str) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue()
@@ -68,7 +68,7 @@ class EventBus:
                     resp.raise_for_status()
                     self.connected.set()
                     backoff = 1.0
-                    log.info("flux d'événements connecté")
+                    log.info("event stream connected")
                     async for line in resp.aiter_lines():
                         if not line.startswith("data:"):
                             continue
@@ -87,9 +87,9 @@ class EventBus:
 
             # Un serveur qui ferme proprement termine aiter_lines() sans lever
             # d'exception : sans ce traitement commun, on ne se reconnecterait
-            # jamais et connected resterait à True indéfiniment.
+            # never fires and connected would stay True forever.
             self.connected.clear()
-            log.warning("flux coupé (%s), reconnexion dans %.0fs", reason, backoff)
+            log.warning("stream dropped (%s), reconnecting in %.0fs", reason, backoff)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)
 

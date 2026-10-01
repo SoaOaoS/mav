@@ -1,4 +1,4 @@
-"""Exécutions programmées.
+"""Scheduled runs.
 
 Fichier jobs.json :
 
@@ -9,7 +9,7 @@ Fichier jobs.json :
     "days": ["mon","tue","wed","thu","fri"],
     "chat_id": 123456789,
     "agent": "research",
-    "prompt": "Résume l'état des PR ouvertes sur mes repos et les CI en échec.",
+    "prompt": "Summarize the open PRs on my repos and the failing CI.",
     "enabled": true
   }
 ]
@@ -76,10 +76,10 @@ def due(job: dict, now: datetime, last_run: str | None) -> bool:
 
 
 class Scheduler:
-    """Boucle une fois par minute et déclenche les jobs échus.
+    """Loops once a minute and fires due jobs.
 
-    L'état des dernières exécutions est persisté : un redémarrage à 08:00:30
-    ne doit pas rejouer le brief de 08:00.
+    The last-run state is persisted: a restart at 08:00:30 must not replay the
+    08:00 brief.
     """
 
     def __init__(self, jobs_path: Path, state_path: Path, runner):
@@ -101,7 +101,7 @@ class Scheduler:
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
             self.state_path.write_text(json.dumps(state, indent=1))
         except Exception as exc:  # noqa: BLE001
-            log.warning("état du planificateur non persisté: %s", exc)
+            log.warning("scheduler state not persisted: %s", exc)
 
     async def _tick(self) -> None:
         now = datetime.now()
@@ -110,14 +110,14 @@ class Scheduler:
             name = job["name"]
             if due(job, now, state.get(name)):
                 self._mark(name, now.strftime("%Y-%m-%d %H:%M"))
-                log.info("déclenchement du job %s", name)
+                log.info("firing job %s", name)
                 asyncio.create_task(self._safe_run(job))
 
     async def _safe_run(self, job: dict) -> None:
         try:
             await self.runner(job)
         except Exception:  # noqa: BLE001
-            log.exception("job %s en échec", job.get("name"))
+            log.exception("job %s failed", job.get("name"))
 
     async def _loop(self) -> None:
         while True:
@@ -127,7 +127,7 @@ class Scheduler:
                 raise
             except Exception:  # noqa: BLE001
                 log.exception("erreur dans la boucle du planificateur")
-            # Se recale sur le début de la minute suivante
+            # Realign on the start of the next minute
             await asyncio.sleep(60 - datetime.now().second % 60)
 
     def start(self) -> None:

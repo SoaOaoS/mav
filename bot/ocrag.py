@@ -1,9 +1,8 @@
-"""RAG léger : recherche plein-texte dans les documents indexés (Postgres).
+"""Lightweight RAG: full-text search over indexed documents (Postgres).
 
-Utilise le full-text search natif de Postgres (tsvector + GIN), sans
-embeddings à héberger ni service externe. Suffisant pour retrouver des
-extraits pertinents dans les docs (Notion, mails, code) et les injecter
-dans le contexte d'une session.
+Uses Postgres native full-text search (tsvector + GIN), with no embeddings to
+host and no external service. Enough to surface relevant excerpts from docs
+(notes, mail, code) and inject them into a session's context.
 """
 
 from __future__ import annotations
@@ -60,10 +59,10 @@ class RAG:
                  source[:200], int(time.time())),
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("indexation RAG échouée: %s", exc)
+            log.warning("RAG indexing failed: %s", exc)
 
     def search(self, chat_id: int, query: str, top: int = 3) -> list[dict]:
-        """Retourne les documents les plus pertinents pour la requête."""
+        """Return the documents most relevant to the query."""
         self._ensure()
         if self._pg is None:
             return []
@@ -82,18 +81,18 @@ class RAG:
                 for r in cur.fetchall()
             ]
         except Exception as exc:  # noqa: BLE001
-            log.warning("recherche RAG échouée: %s", exc)
+            log.warning("RAG search failed: %s", exc)
             return []
 
     def context_block(self, chat_id: int, query: str, top: int = 3) -> str:
-        """Bloc de contexte à injecter dans une session, si des docs matchent."""
+        """Context block to inject into a session, if any docs match."""
         hits = self.search(chat_id, query, top)
         if not hits:
             return ""
         lines = [
             "<documents-pertinents>",
-            "Extraits de documents indexés, retrouvés par recherche plein-texte.",
-            "Utilise-les s'ils répondent à la question, ignore-les sinon.",
+            "Excerpts from indexed documents, found by full-text search.",
+            "Use them if they answer the question, otherwise ignore them.",
             "",
         ]
         for h in hits:

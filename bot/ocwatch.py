@@ -1,13 +1,12 @@
-"""Veille continue : surveille des sources et alerte Telegram quand ça change.
+"""Continuous watch: monitors sources and alerts on change.
 
-Les items surveillés sont stockés dans Postgres (table watch_items) :
+Watched items are stored in Postgres (watch_items table):
   kind    : "mail" | "github" | "moodle" | "proxmox" | "web"
-  target  : ce qu'on surveille (requête, repo, deadline, VM, URL)
+  target  : what is watched (query, repo, deadline, VM, URL)
   last_state / last_checked : pour ne re-alerter que sur un changement
 
-Le bot lance une boucle de veille en parallèle du scheduler. Chaque source
-est vérifiée à son propre intervalle. On n'alerte que sur un changement
-d'état, pas en boucle.
+The bot runs a watch loop alongside the scheduler. Each source is checked at
+its own interval. We only alert on a state change, never in a loop.
 """
 
 from __future__ import annotations
@@ -36,7 +35,7 @@ class Watch:
         self.bot = bot
         self.chat_id = chat_id
         self._pg = None
-        # Cache des dernières cotations par item (pour l'alerte enrichie).
+        # Cache of the latest quotes per item (for the enriched alert).
         self._quotes: dict[int, dict] = {}
         self._connect()
 
@@ -75,7 +74,7 @@ class Watch:
                 (self.chat_id, kind, target, int(time.time())),
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("ajout item veille échoué: %s", exc)
+            log.warning("adding watch item failed: %s", exc)
 
     def list(self) -> list[dict]:
         self._ensure()
@@ -96,7 +95,7 @@ class Watch:
                 for r in cur.fetchall()
             ]
         except Exception as exc:  # noqa: BLE001
-            log.warning("liste veille échouée: %s", exc)
+            log.warning("listing watch items failed: %s", exc)
             return []
 
     def remove(self, item_id: int) -> None:
@@ -110,7 +109,7 @@ class Watch:
                 (item_id, self.chat_id),
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("suppression item veille échouée: %s", exc)
+            log.warning("removing watch item failed: %s", exc)
 
     def _set_state(self, item_id: int, state: str) -> None:
         self._ensure()
@@ -124,21 +123,21 @@ class Watch:
                 (state, int(time.time()), item_id),
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("maj état veille échouée: %s", exc)
+            log.warning("watch state update failed: %s", exc)
 
     # ------------------------------------------------------------- checks
 
     async def _check_one(self, item: dict) -> None:
-        """Vérifie un item et alerte si l'état a changé."""
+        """Check an item and alert if the state changed."""
         try:
             state = await self._fetch_state(item)
         except Exception as exc:  # noqa: BLE001
-            log.warning("check %s/%s échoué: %s", item["kind"], item["target"], exc)
+            log.warning("check %s/%s failed: %s", item["kind"], item["target"], exc)
             return
         if state is None:
             return
         if item["last_state"] is None:
-            # premier passage : on mémorise sans alerter (évite le spam au boot)
+            # first pass: record without alerting (avoids spam at boot)
             self._set_state(item["id"], state)
             return
         if state != item["last_state"]:
@@ -169,9 +168,9 @@ class Watch:
         volume anormal.
 
         Cible : « AAPL » ou « AAPL:180:200:240 » (niveaux optionnels,
-        séparés par des virgules ou des deux-points). L'état retourné ne
-        change que sur un événement pertinent (changement de zone ou volume
-        ≥ 2x la moyenne 20 j), pas à chaque variation de prix.
+        separated by commas or colons). The returned state only
+        changes on a relevant event (zone change or volume ≥ 2x the 20-day
+        average), not on every price move.
         """
         raw = target.replace(",", ":").replace(";", ":")
         bits = [b.strip() for b in raw.split(":") if b.strip()]
@@ -198,10 +197,10 @@ class Watch:
         zone = 0
         while zone < len(levels) and price >= levels[zone]:
             zone += 1
-        # État : zone de prix + date de la dernière journée à volume anormal.
+        # State: price zone + date of the last abnormal-volume day.
         # Le marqueur volume ne recule jamais (il ne redevient pas vide quand le
-        # volume renormalise), donc l'état ne change que sur un vrai événement :
-        # franchissement de niveau, ou nouvelle journée à volume ≥ 2x.
+        # volume renormalises), so the state only changes on a real event:
+        # a level crossing, or a new day at volume ≥ 2x.
         day = time.strftime("%Y-%m-%d")
         prev = item.get("last_state") or ""
         volsince = ""
@@ -251,7 +250,7 @@ class Watch:
         avg_vol = sum(vols[-20:]) / len(vols[-20:]) if vols else None
         today_vol = m.get("regularMarketVolume") or (vols[-1] if vols else None)
         ratio = (today_vol / avg_vol) if (avg_vol and today_vol) else None
-        # Variation du jour : regularMarketPrice vs l'avant-dernière clôture
+        # Day change: regularMarketPrice vs the previous close
         # (chartPreviousClose est trompeur sur un range glissant comme 1 mois).
         prev = closes[-2] if len(closes) >= 2 else None
         pct = ((price - prev) / prev * 100.0) if prev else None
@@ -273,7 +272,7 @@ class Watch:
         return f"len={len(body)}"
 
     async def _check_mail(self, query: str) -> str:
-        """Compte les mails non lus correspondant à la requête."""
+        """Count unread mail matching the query."""
         try:
             import subprocess  # noqa: PLC0415
 
@@ -283,7 +282,7 @@ class Watch:
             )
             return f"search={r.stdout.strip()[:200]}"
         except Exception as exc:  # noqa: BLE001
-            log.warning("check mail échoué: %s", exc)
+            log.warning("mail check failed: %s", exc)
             return ""
 
     async def _check_github(self, repo: str) -> str:
@@ -295,9 +294,9 @@ class Watch:
         return f"open={len(pulls)}"
 
     async def _check_moodle(self, _target: str) -> str:
-        """Deadlines à venir (via le MCP Moodle)."""
+        """Upcoming deadlines (via the Moodle MCP)."""
         # Le MCP Moodle n'est pas appelable directement ici ; on laisse le
-        # job planifié gérer les deadlines. Retourne None pour ne pas alerter.
+        # scheduled job handles deadlines. Return None so we do not alert.
         return None
 
     async def _check_proxmox(self, _target: str) -> str:
@@ -328,7 +327,7 @@ class Watch:
         return f"running={len(running)}: {','.join(sorted(running))[:200]}"
 
     async def _check_health(self) -> str:
-        """Vérifie que les services critiques répondent."""
+        """Check that critical services respond."""
         import subprocess  # noqa: PLC0415
 
         checks = []
@@ -366,9 +365,9 @@ class Watch:
                 parse_mode="HTML",
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("alerte veille échouée: %s", exc)
+            log.warning("watch alert failed: %s", exc)
 
-        # Notification hors Telegram (Web Push) — dédup par item+état.
+        # Out-of-Telegram notification (Web Push) — dedup by item+state.
         try:
             from ocnotify import notify  # noqa: PLC0415
 
@@ -380,10 +379,10 @@ class Watch:
                 dedup_key=f"watch:{item.get('id')}:{state[:80]}",
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("push veille échoué: %s", exc)
+            log.warning("watch push failed: %s", exc)
 
     def _describe_alert(self, item: dict, state: str) -> tuple[str, str]:
-        """Rend un état en message lisible. Retourne (texte Telegram, corps push)."""
+        """Render a state into a readable message. Returns (Telegram text, push body)."""
         default = (f"État : {state}", f"{item['target']}\nÉtat : {state}")
         if item.get("kind") != "stock":
             return default
@@ -395,7 +394,7 @@ class Watch:
         ratio = q.get("volRatio")
         pct_s = f"{pct:+.2f}%" if pct is not None else "n/a"
         lines = [f"Prix : <b>{price}</b> USD ({pct_s})"]
-        # Niveau franchi à la hausse/à la baisse.
+        # Level crossed upward/downward.
         try:
             zone = int(state.split("zone=")[1].split("|")[0])
         except Exception:  # noqa: BLE001
@@ -417,7 +416,7 @@ class Watch:
     # ------------------------------------------------------------- boucle
 
     async def run(self) -> None:
-        """Boucle de veille : vérifie chaque item à son rythme."""
+        """Watch loop: check each item at its own pace."""
         while True:
             try:
                 items = self.list()

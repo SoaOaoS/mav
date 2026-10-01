@@ -1,21 +1,21 @@
-"""Notifications proactives de Mav — Web Push + historique/dédup.
+"""Proactive notifications for Mav — Web Push + history/dedup.
 
-Objectif : permettre au bot (veille, jobs) de *venir vers* Raphaël, pas
-seulement de répondre. Une seule logique, deux usages :
+Goal: let the bot (watch, jobs) *reach out* to the user, not only reply.
+One logic, two uses:
 
-  - veille    (ocwatch)   : alerte quand un état change ;
-  - jobs      (run_job)   : résumé court quand un rapport est prêt.
+  - watch  (ocwatch) : alert when a state changes;
+  - jobs   (run_job) : short summary when a report is ready.
 
-Les clés VAPID et les abonnements sont les mêmes que ceux du dashboard
-(~/bot/vapid_private.pem, ~/bot/push_subs.json) : un abonnement pris dans
-l'interface sert donc aussi au bot.
+VAPID keys and subscriptions are the same as the dashboard's
+(~/bot/vapid_private.pem, ~/bot/push_subs.json): a subscription taken in the
+web UI therefore also serves the bot.
 
-Postgres sert à deux choses :
-  - table `notifications` : historique (futur centre de notifs) ;
-  - dédoublonnage : un même `dedup_key` non relivré pendant un délai.
+Postgres serves two purposes:
+  - `notifications` table: history (future notification center);
+  - deduplication: the same `dedup_key` not redelivered within a window.
 
-Tout est optionnel et silencieux : sans Postgres ou sans abonné, on ne plante
-jamais — on n'envoie simplement pas.
+Everything is optional and silent: without Postgres or without a subscriber,
+it never crashes — it simply does not send.
 """
 
 from __future__ import annotations
@@ -37,11 +37,11 @@ PG_DSN = os.environ.get(
     "host=127.0.0.1 port=5432 user=mav password=mav_secret dbname=mav",
 )
 
-# Délai anti-doublon par défaut (secondes) : 6 h.
+# Default anti-duplicate window (seconds): 6 h.
 DEDUP_WINDOW = int(os.environ.get("NOTIFY_DEDUP_WINDOW", "21600"))
 
 # Heures calmes : pas de notification entre QUIET_START et QUIET_END (locales).
-# Format "23-7". Mettre "0-0" pour désactiver.
+# Format "23-7". Use "0-0" to disable.
 _q = os.environ.get("NOTIFY_QUIET", "23-7")
 try:
     _qs, _qe = (int(x) for x in _q.split("-", 1))
@@ -49,8 +49,8 @@ except Exception:  # noqa: BLE001
     _qs, _qe = 23, 7
 QUIET_START, QUIET_END = _qs, _qe
 
-# Contact VAPID (obligatoire pour le protocole Web Push) : renseigné par
-# l'installeur via MAV_VAPID_SUB, sinon valeur neutre.
+# VAPID contact (required by the Web Push protocol): set by
+# the installer via MAV_VAPID_SUB, otherwise a neutral value.
 _VAPID_SUB = os.environ.get("MAV_VAPID_SUB") or "mailto:admin@localhost"
 _vapid_obj = None
 
@@ -84,10 +84,10 @@ def _pg_get():
 
 
 def ensure_schema() -> None:
-    """Crée la table d'historique si besoin (idempotent)."""
+    """Create the history table if needed (idempotent)."""
     pg = _pg_get()
     if pg is None:
-        log.info("notifications : Postgres indisponible, historique désactivé")
+        log.info("notifications: Postgres unavailable, history disabled")
         return
     try:
         cur = pg.cursor()
@@ -114,10 +114,10 @@ def ensure_schema() -> None:
             "ON notifications (dedup_key, ts DESC)"
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("schéma notifications : %s", exc)
+        log.warning("notifications schema: %s", exc)
 
 
-# --------------------------------------------------------------- préférences
+# ------------------------------------------------------------- preferences
 def _pref(chat_id: int | None, key: str, default: str = "on") -> str:
     if chat_id is None:
         return default
@@ -156,7 +156,7 @@ def set_preference(chat_id: int, key: str, value: str) -> None:
             (chat_id, key, value, int(time.time())),
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("préférence notify : %s", exc)
+        log.warning("notify preference: %s", exc)
 
 
 # --------------------------------------------------------------- heures calmes
@@ -170,7 +170,7 @@ def in_quiet_hours(now: time.struct_time | None = None) -> bool:
     return h >= QUIET_START or h < QUIET_END
 
 
-# --------------------------------------------------------------- dédup
+# ----------------------------------------------------------------- dedup
 def _seen_recently(dedup_key: str, window: int) -> bool:
     pg = _pg_get()
     if pg is None or not dedup_key:
@@ -201,7 +201,7 @@ def _record(chat_id, topic, title, body, dedup_key, channels, delivered) -> int 
         row = cur.fetchone()
         return row[0] if row else None
     except Exception as exc:  # noqa: BLE001
-        log.warning("enregistrement notification : %s", exc)
+        log.warning("recording notification: %s", exc)
         return None
 
 
@@ -231,12 +231,12 @@ def _write_subs(subs: list[dict]) -> None:
     try:
         PUSH_FILE.write_text(json.dumps(subs))
     except Exception:
-        # Le dashboard (root) possède parfois le fichier : on n'insiste pas.
+        # The dashboard (root) sometimes owns the file: do not insist.
         pass
 
 
 def _vapid():
-    """Objet Vapid signataire (chargé une fois)."""
+    """Vapid signer object (loaded once)."""
     global _vapid_obj
     if _vapid_obj is None:
         from py_vapid import Vapid01  # noqa: PLC0415
@@ -246,19 +246,19 @@ def _vapid():
 
 
 def send_push(title: str, body: str, url: str = "./") -> int:
-    """Envoie à tous les abonnés ; retire ceux qui sont réellement morts. 0 si aucun."""
+    """Send to all subscribers; drop the truly dead ones. 0 if none."""
     subs = _subs()
     if not subs or not VAPID_PEM.exists():
         return 0
     try:
         from pywebpush import webpush, WebPushException  # noqa: PLC0415
     except Exception:
-        log.warning("pywebpush absent : push désactivé")
+        log.warning("pywebpush missing: push disabled")
         return 0
     try:
         vapid = _vapid()
     except Exception as exc:  # noqa: BLE001
-        log.warning("clé VAPID illisible : %s", exc)
+        log.warning("unreadable VAPID key: %s", exc)
         return 0
     payload = json.dumps({"title": title, "body": body, "url": url})
     sent, alive = 0, []
@@ -270,19 +270,19 @@ def send_push(title: str, body: str, url: str = "./") -> int:
                 vapid_private_key=vapid,
                 vapid_claims={"sub": _VAPID_SUB},
                 ttl=86400,  # FCM garde le message 24 h si l'appareil dort
-                headers={"Urgency": "high"},  # réveille l'appareil
+                headers={"Urgency": "high"},  # wake the device
                 timeout=15,
             )
             sent += 1
             alive.append(s)
         except WebPushException as exc:
             code = getattr(getattr(exc, "response", None), "status_code", None)
-            # 404/410 = abonnement expiré (définitif). Le reste = transitoire :
-            # on garde l'abonné et on retentera.
+            # 404/410 = expired subscription (permanent). Anything else = transient:
+            # keep the subscriber and retry later.
             if code in (404, 410):
-                log.info("abonnement push expiré (retiré): %s", code)
+                log.info("expired push subscription (removed): %s", code)
             else:
-                log.warning("push échoué (code %s): %s", code, str(exc)[:200])
+                log.warning("push failed (code %s): %s", code, str(exc)[:200])
                 alive.append(s)
         except Exception as exc:  # noqa: BLE001
             log.warning("push erreur inattendue : %s", str(exc)[:200])
@@ -303,11 +303,11 @@ def notify(
     dedup_key: str | None = None,
     force: bool = False,
 ) -> dict:
-    """Notifie Raphaël par Web Push, en respectant préférences, heures calmes
-    et dédoublonnage. Retourne ce qui a été décidé (pour les logs/tests).
+    """Notify via Web Push, honouring preferences, quiet hours and
+    deduplication. Returns what was decided (for logs/tests).
 
-    Le canal Telegram reste géré par l'appelant (déjà en place) : ici on
-    n'ajoute que le push et on trace l'historique.
+    The Telegram channel is still handled by the caller: here we only add
+    the push and record the history.
     """
     result = {"push": 0, "skipped": None, "id": None}
 
@@ -325,7 +325,7 @@ def notify(
         return result
 
     # On enregistre d'abord pour obtenir l'id, puis on l'inclut dans le lien :
-    # un clic sur la notif ouvrira le détail dans le dashboard.
+    # tapping the notification opens the detail in the dashboard.
     nid = _record(chat_id, topic, title, body, dedup_key, [], delivered=False)
     result["id"] = nid
     link = f"./?notif={nid}" if nid else url
@@ -336,7 +336,7 @@ def notify(
 
 
 def recent(limit: int = 30) -> list[dict]:
-    """Historique récent des notifications (pour le dashboard)."""
+    """Recent notification history (for the dashboard)."""
     pg = _pg_get()
     if pg is None:
         return []
