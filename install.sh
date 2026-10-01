@@ -21,6 +21,7 @@ SERVER_UNIT="${MAV_SERVER_UNIT:-mav-server}"
 DASH_UNIT="${MAV_DASH_UNIT:-mav-dashboard}"
 ENV_BOT="${MAV_ENV_BOT:-/etc/mav.env}"
 ENV_DASH="${MAV_ENV_DASH:-/etc/mav-dashboard.env}"
+ENV_SERVER="${MAV_ENV_SERVER:-/etc/mav-server.env}"
 COMPOSE_FILE="${MAV_COMPOSE_FILE:-/etc/mav/docker-compose.yml}"
 PG_VOLUME="${MAV_PG_VOLUME:-mav_pgdata}"
 PG_CONTAINER_SUFFIX="${MAV_PG_CONTAINER:-mav-postgres}"
@@ -515,11 +516,13 @@ ok "OK."
 step "Fichiers de configuration"
 
 # 8a. config opencode de l'utilisateur (provider + modèle).
+# Pour anthropic/openai, opencode les connaît déjà : on ne met que le modèle,
+# et la clé passe par l'env (lue nativement). Pour les providers custom
+# (ollama compris), on déclare le provider avec son endpoint.
 OPENCODE_CFG_DIR="${A[INSTALL_HOME]}/.config/opencode"
 OPENCODE_CFG="$OPENCODE_CFG_DIR/opencode.json"
 if [[ $DRY_RUN -eq 0 ]]; then
   mkdir -p "$OPENCODE_CFG_DIR"
-  # On complète un fichier existant sans écraser les autres clés.
   OPENCODE_CFG="$OPENCODE_CFG" python3 - <<PY
 import json, os
 from pathlib import Path
@@ -528,26 +531,29 @@ cfg = {}
 if p.is_file():
     try: cfg = json.loads(p.read_text())
     except Exception: cfg = {}
-provider = {
-    "npm": "${A[PROVIDER_NPM]}",
-    "name": "${A[PROVIDER_ID]}",
-    "options": {},
-    "models": {"${A[OPENCODE_MODEL]}": {"name": "${A[OPENCODE_MODEL]}"}},
-}
+pid = "${A[PROVIDER_ID]}"
+model = "${A[OPENCODE_MODEL]}"
 base = "${A[PROVIDER_BASEURL]}"
-if base: provider["options"]["baseURL"] = base
 key = "${A[PROVIDER_APIKEY]}"
-if key:
-    envname = {"anthropic":"ANTHROPIC_API_KEY","openai":"OPENAI_API_KEY"}.get("${A[PROVIDER_ID]}")
-    provider["options"]["apiKey"] = "{env:%s}" % envname if envname else key
-cfg.setdefault("provider", {})["${A[PROVIDER_ID]}"] = provider
+if pid in ("anthropic", "openai"):
+    # Provider natif : clé par variable d'env, pas de redéfinition.
+    pass
+else:
+    envname = {"ollama": "OLLAMA_API_KEY"}.get(pid)
+    provider = {
+        "npm": "${A[PROVIDER_NPM]}",
+        "name": pid,
+        "options": {},
+        "models": {model: {"name": model}},
+    }
+    if base: provider["options"]["baseURL"] = base
+    if key: provider["options"]["apiKey"] = ("{env:%s}" % envname) if envname else key
+    cfg.setdefault("provider", {})[pid] = provider
 cfg["model"] = "${A[OPENCODE_MODEL_REF]}"
-if "${A[OPENCODE_AGENT]}": cfg["agent"] = cfg.get("agent", {})
 p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
 print("opencode.json écrit")
 PY
-  # Env du moteur : la clé API y est lue (lue par le service, pas dans le JSON).
-  ENV_SERVER="/etc/mav-server.env"
+  # Env du moteur : la clé API y est lue (par le service, pas dans le JSON).
   {
     echo "# Mav — env du moteur opencode (généré)"
     case "${A[PROVIDER_ID]}" in
@@ -629,7 +635,8 @@ tpl() { sed -e "s|__USER__|${A[INSTALL_USER]}|g" \
             -e "s|__DASH_USER__|root|g" \
             -e "s|__PORT__|${OPENCODE_PORT:-4096}|g" \
             -e "s|__ENV_BOT__|$ENV_BOT|g" \
-            -e "s|__ENV_DASH__|$ENV_DASH|g" "$1"; }
+            -e "s|__ENV_DASH__|$ENV_DASH|g" \
+            -e "s|__ENV_SERVER__|$ENV_SERVER|g" "$1"; }
 
 if [[ $DRY_RUN -eq 0 ]]; then
   tpl "$SCRIPT_DIR/systemd/opencode-server.service.tpl" > "/etc/systemd/system/$SERVER_UNIT.service"
