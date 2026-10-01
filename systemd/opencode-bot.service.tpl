@@ -1,5 +1,5 @@
 [Unit]
-Description=Mav — pont Telegram
+Description=Mav — Telegram bridge
 After=opencode-server.service
 Requires=opencode-server.service
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Mav — dashboard web (HTTP/HTTPS)
+Description=Mav — web dashboard (HTTP/HTTPS)
 After=network-online.target docker.service
 Wants=network-online.target
 

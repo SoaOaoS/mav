@@ -1,5 +1,5 @@
 [Unit]
-Description=Mav — moteur opencode (headless)
+Description=Mav — opencode engine (headless)
 After=network-online.target
 Wants=network-online.target
 

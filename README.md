@@ -1,36 +1,47 @@
-# ============================================================================
+<div align="center">
 
 # Mav
 
-#
+**A personal AI companion — Telegram bot + web dashboard, installed in one command.**
 
-# Un compagnon IA personnel : un bot Telegram, un dashboard web, une mémoire
+Talk to it, it acts, it remembers, it watches things for you.
 
-# persistante, une veille automatique et des notifications. Tout s'installe
+`curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
 
-# en une commande.
+</div>
 
-# ============================================================================
+Mav is made of two pieces that work together:
 
-Mav, c'est deux morceaux qui bossent ensemble :
+- **the Telegram bot** — you talk to it, it acts on your machine, it remembers,
+  it watches sources and pings you when something changes;
+- **the web dashboard** — the same brain with an interface: reports, infra
+  status, memory, and push notifications.
 
-- **le bot Telegram** — tu lui parles, il agit, il retient, il surveille ;
-- **le dashboard web** — la même chose en interface, avec les rapports, l'état
-  de l'infra, la mémoire et les notifications push.
+Under the hood it uses **opencode** as the agent engine and **Postgres** for
+memory. You bring your own model: **Ollama** (local), **Claude**, **OpenAI**, or
+any OpenAI-compatible endpoint.
 
-Le tout s'appuie sur **opencode** comme moteur d'agent et **Postgres** pour la
-mémoire. Tu choisis ton modèle : **Ollama** (local), **Claude**, **OpenAI**, ou
-n'importe quel endpoint compatible OpenAI.
+## Features
+
+- **Chat** on Telegram and in the dashboard, routed through your own agent.
+- **Persistent memory** — past exchanges, durable facts and preferences are
+  stored in Postgres and injected back into new sessions.
+- **Watch** — poll web pages, mailboxes, GitHub repos, Proxmox VMs, service
+  health, or stock levels, and alert only when something actually changes.
+- **Scheduled jobs** — run prompts on a schedule (cron-like), with retries.
+- **Web Push** — get notified outside the app, and tap a notification to open a
+  chat that explains the alert in detail.
+- **RAG** — index documents and retrieve relevant excerpts into context.
 
 ## Installation
 
-**En une ligne** (télécharge et lance l'assistant) :
+**One-liner** (downloads the repo and runs the wizard):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash
 ```
 
-Ou, si tu préfères cloner d'abord :
+Or clone first:
 
 ```bash
 git clone https://github.com/SoaOaoS/mav.git
@@ -38,117 +49,118 @@ cd mav
 sudo ./install.sh
 ```
 
-Sur une machine Debian/Ubuntu fraîche, un assistant te guide : identité, token
-Telegram, moteur opencode, Postgres, dashboard, comportement du bot. Tu peux
-tout valider par défaut là où c'est possible. Puis il fait le reste —
-dépendances, base, certificats, services.
+On a fresh Debian/Ubuntu machine, a wizard walks you through: contact email,
+Telegram token, model provider, Postgres, dashboard. Accept the defaults where
+it makes sense. Then it does the rest — dependencies, database, certificates,
+services.
 
-Autres modes :
+Other modes:
 
 ```bash
-sudo ./install.sh --yes        # tout par défaut, sans question
-sudo ./install.sh --dry-run    # montre ce qui serait fait, ne touche à rien
-sudo ./install.sh --uninstall  # retire services, configs et conteneur
+sudo ./install.sh --yes        # all defaults, no questions
+sudo ./install.sh --dry-run    # show what would happen, change nothing
+sudo ./install.sh --uninstall  # remove services, configs and container
 ```
 
-En mode `--yes`, tu peux fournir les valeurs par variables d'environnement
-(pratique pour automatiser) : `MAV_TELEGRAM_TOKEN`, `MAV_ALLOWED_CHAT_IDS`,
-`MAV_OPENCODE_MODEL`, `MAV_API_BIND`, `MAV_POSTGRES_PASSWORD`, etc.
+In `--yes` mode you can supply values via environment variables (handy for
+automation): `MAV_TELEGRAM_TOKEN`, `MAV_ALLOWED_CHAT_IDS`, `MAV_PROVIDER`,
+`MAV_OPENCODE_MODEL`, `MAV_API_BIND`, `MAV_POSTGRES_PASSWORD`, and so on.
 
-> L'installeur est **idempotent** : tu peux le relancer pour mettre à jour
-> sans rien casser.
+> The installer is **idempotent**: run it again to upgrade without breaking an
+> existing install.
 
-## Ce que l'installeur fait
+## What the installer does
 
-1. Vérifie le système et installe les dépendances (python, docker, openssl…).
-2. Crée l'utilisateur système du bot (par défaut : ton utilisateur courant).
-3. Copie le bot et le dashboard aux bons endroits.
-4. Crée les environnements Python et installe les dépendances.
-5. Lance **Postgres** (Docker) et applique le **schéma** (mémoire, veille, RAG,
+1. Checks the system and installs dependencies (python, docker, openssl, …).
+2. Creates the system user that runs the bot (defaults to your current user).
+3. Copies the bot and the dashboard into place.
+4. Creates the Python venvs and installs dependencies.
+5. Starts **Postgres** (Docker) and applies the **schema** (memory, watch, RAG,
    notifications).
-6. Génère les **certificats TLS** du dashboard et les **clés VAPID** (push).
-7. Écrit les fichiers de configuration (`/etc/mav.env`,
-   `/etc/mav-dashboard.env`).
-8. Installe et démarre les **trois services** systemd.
-9. Vérifie que le moteur et le dashboard répondent.
+6. Generates the dashboard **TLS certificates** and the **VAPID keys** (push).
+7. Writes the configuration files (`/etc/mav.env`, `/etc/mav-dashboard.env`).
+8. Installs and starts the **three systemd services**.
+9. Health-checks the engine and the dashboard.
 
 ## Architecture
 
 ```
                     ┌─────────────────────┐
    Telegram  ─────► │  mav-bot            │ ──┐
-   (bot)            │  pont + veille/jobs │   │
+   (bot)            │  bridge + watch/jobs│   │
                     └─────────────────────┘   │
                                               ▼
                     ┌─────────────────────┐  ┌──────────────────┐
-   Navigateur ────► │  mav-dashboard      │─►│  opencode serve  │
-   (VPN)            │  UI + /api/*        │  │  (moteur, :4096) │
+   Browser  ──────► │  mav-dashboard      │─►│  opencode serve  │
+   (VPN)            │  UI + /api/*        │  │  (engine, :4096) │
                     └─────────────────────┘  └──────────────────┘
                               │
                               ▼
                     ┌─────────────────────┐
-                    │  Postgres (Docker)  │  mémoire, veille, RAG, notifs
+                    │  Postgres (Docker)  │  memory, watch, RAG, notifs
                     └─────────────────────┘
 ```
 
-Trois services systemd :
+Three systemd services:
 
-| Service         | Rôle                               |
+| Service         | Role                               |
 | --------------- | ---------------------------------- |
-| `mav-server`    | moteur opencode (`127.0.0.1:4096`) |
-| `mav-bot`       | pont Telegram + veille + jobs      |
-| `mav-dashboard` | interface web (HTTP/HTTPS)         |
+| `mav-server`    | opencode engine (`127.0.0.1:4096`) |
+| `mav-bot`       | Telegram bridge + watch + jobs     |
+| `mav-dashboard` | web interface (HTTP/HTTPS)         |
 
-## Ce que tu configures toi-même
+## Supported providers
 
-**L'agent opencode.** L'installeur écrit une config minimale
-(`~/.config/opencode/opencode.json`) avec ton provider et ton modèle, et pose
-ta clé API dans l'env du service. Le reste — agents personnalisés, MCP, skills —
-reste à ta main, dans `~/.config/opencode/`. Mav fonctionne avec _ton_ agent.
+The wizard lets you pick:
 
-## Providers supportés
+| Provider      | What you need                    | Model (example)             |
+| ------------- | -------------------------------- | --------------------------- |
+| **ollama**    | a running Ollama (local/remote)  | `llama3.1`, `qwen2.5-coder` |
+| **anthropic** | an `ANTHROPIC_API_KEY`           | `claude-sonnet-4-5`         |
+| **openai**    | an `OPENAI_API_KEY`              | `gpt-4o`                    |
+| **custom**    | OpenAI-compatible endpoint + key | depends on your provider    |
 
-Le wizard te laisse choisir :
+## What you configure yourself
 
-| Provider      | Ce qu'il te faut                     | Modèle (exemple)            |
-| ------------- | ------------------------------------ | --------------------------- |
-| **ollama**    | Ollama qui tourne (local ou distant) | `llama3.1`, `qwen2.5-coder` |
-| **anthropic** | une clé `ANTHROPIC_API_KEY`          | `claude-sonnet-4-5`         |
-| **openai**    | une clé `OPENAI_API_KEY`             | `gpt-4o`                    |
-| **custom**    | endpoint compatible OpenAI + clé     | selon ton fournisseur       |
+The installer writes a minimal opencode config
+(`~/.config/opencode/opencode.json`) with your provider and model, and stores
+your API key in the engine's environment. Everything else — custom agents, MCP
+servers, skills — stays in your hands, under `~/.config/opencode/`. Mav runs on
+_your_ agent.
 
-## Licence
-
-MIT — voir [LICENSE](LICENSE).
-
-## Commandes utiles
+## Useful commands
 
 ```bash
-systemctl status mav-bot mav-dashboard      # état
-journalctl -u mav-bot -f                     # logs du bot
-journalctl -u mav-dashboard -f               # logs du dashboard
+systemctl status mav-bot mav-dashboard      # status
+journalctl -u mav-bot -f                     # bot logs
+journalctl -u mav-dashboard -f               # dashboard logs
 ```
 
-Commandes du bot (sur Telegram) : `/ask`, `/new`, `/agent`, `/stop`,
-`/memory`, `/jobs`, `/run <nom>`, `/watch`, `/rag`, `/notify`.
+Bot commands (on Telegram): `/ask`, `/new`, `/agent`, `/stop`, `/memory`,
+`/jobs`, `/run <name>`, `/watch`, `/rag`, `/notify`.
 
-## Structure du dépôt
+## Repository layout
 
 ```
 mav/
-├── get.sh                  # bootstrap « curl | bash »
-├── install.sh              # l'installeur unifié (le wizard)
-├── scripts/schema.sql      # schéma complet de la base
-├── systemd/                # templates des 3 services
-├── bot/                    # le bot Telegram (oc*.py)
-└── dashboard/              # le dashboard web (front + server/)
+├── get.sh                  # "curl | bash" bootstrap
+├── install.sh              # the unified installer (the wizard)
+├── scripts/schema.sql      # full database schema
+├── systemd/                # the 3 service templates
+├── bot/                    # the Telegram bot (oc*.py)
+├── dashboard/              # the web dashboard (front + server/)
+└── examples/               # optional example scripts
 ```
 
-## Configuration manuelle (sans l'installeur)
+## Manual configuration (without the installer)
 
-L'installeur écrit deux fichiers :
+The installer writes two files:
 
-- `/etc/mav.env` — bot : token Telegram, chat ids, moteur, Postgres, veille.
-- `/etc/mav-dashboard.env` — dashboard : IP/ports, TLS, base, rattachement.
+- `/etc/mav.env` — bot: Telegram token, chat ids, engine, Postgres, watch.
+- `/etc/mav-dashboard.env` — dashboard: IP/ports, TLS, database, chat binding.
 
-Les variables sont documentées directement dans ces fichiers après génération.
+Their variables are documented inline after generation.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

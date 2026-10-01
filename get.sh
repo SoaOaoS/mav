@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  Mav — bootstrap d'installation en une ligne
+#  Mav — one-line install bootstrap
 #
 #     curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | bash
 #
-#  Ce script télécharge le dépôt, puis lance install.sh en reconnectant le
-#  terminal (indispensable : quand on « pipe » vers bash, stdin contient le
-#  script et le lecteur de questions n'aurait plus rien à lire).
+#  This script downloads the repo, then runs install.sh while reattaching the
+#  terminal (essential: when you pipe into bash, stdin holds the
+#  script and the prompt reader would have nothing left to read).
 #
-#  Variables d'environnement acceptées (utile pour l'automatisation, avec
-#  install.sh --yes) : MAV_TELEGRAM_TOKEN, MAV_ALLOWED_CHAT_IDS,
-#  MAV_OPENCODE_MODEL, MAV_API_BIND, … (voir le README).
+#  Environment variables accepted (useful for automation, with
+#  install.sh --yes): MAV_TELEGRAM_TOKEN, MAV_ALLOWED_CHAT_IDS,
+#  MAV_OPENCODE_MODEL, MAV_API_BIND, … (see the README).
 # ============================================================================
 set -euo pipefail
 
@@ -30,33 +30,33 @@ printf "${B}${CYA}  Mav — installation${R}\n"
 
 # root ?
 if [[ $EUID -ne 0 ]]; then
-  die "Lance la commande avec sudo :  curl -fsSL .../get.sh | sudo bash"
+  die "Run the command with sudo:  curl -fsSL .../get.sh | sudo bash"
 fi
 
 command -v curl >/dev/null 2>&1 || {
-  command -v wget >/dev/null 2>&1 || die "curl ou wget requis."
+  command -v wget >/dev/null 2>&1 || die "curl or wget is required."
 }
-command -v tar >/dev/null 2>&1 || die "tar requis."
+command -v tar >/dev/null 2>&1 || die "tar is required."
 
 TMP="$(mktemp -d /tmp/mav-install.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
-info "Téléchargement du dépôt ($REPO@$REF)…"
+info "Downloading repository ($REPO@$REF)…"
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$TARBALL" -o "$TMP/mav.tar.gz" || die "Téléchargement impossible."
+  curl -fsSL "$TARBALL" -o "$TMP/mav.tar.gz" || die "Download failed."
 else
-  wget -qO "$TMP/mav.tar.gz" "$TARBALL" || die "Téléchargement impossible."
+  wget -qO "$TMP/mav.tar.gz" "$TARBALL" || die "Download failed."
 fi
-tar xzf "$TMP/mav.tar.gz" -C "$TMP" --strip-components=1 || die "Extraction impossible."
-[[ -f "$TMP/install.sh" ]] || die "install.sh introuvable dans l'archive."
-ok "Dépôt prêt."
+tar xzf "$TMP/mav.tar.gz" -C "$TMP" --strip-components=1 || die "Extraction failed."
+[[ -f "$TMP/install.sh" ]] || die "install.sh not found in the archive."
+ok "Repository ready."
 
-# Lance install.sh en réattachant le terminal : les questions du wizard lisent
-# alors tes vraies réponses, même si ce script a été « pipé ».
+# Run install.sh while reattaching the terminal: the wizard questions then read
+# your real answers, even though this script was piped.
 cd "$TMP"
 ARGS=("$@")
 if [[ " ${ARGS[*]} " == *" --yes "* ]] || ! [ -e /dev/tty ]; then
-  # Mode automatique (ou pas de terminal) : on ne réattache pas stdin.
+  # Automatic mode (or no terminal): do not reattach stdin.
   bash "$TMP/install.sh" "${ARGS[@]}"
 else
   bash "$TMP/install.sh" "${ARGS[@]}" </dev/tty

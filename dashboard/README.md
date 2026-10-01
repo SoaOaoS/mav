@@ -1,35 +1,40 @@
-# Mav
+# Mav dashboard
 
-Interface web de **Mav**, ton compagnon IA. Simple et chaleureuse : on lui parle,
-il retient, il surveille et il agit en arrière-plan.
+The web interface for **Mav**, your personal AI companion. Warm and simple:
+talk to it, it remembers, it watches, and it acts in the background.
 
-Deux modes :
+> This module is part of the [Mav](../README.md) project. A full Mav install is
+> handled by the top-level `install.sh`; the details below are for running the
+> dashboard on its own.
 
-- **LIVE** — servi par la VM, branchée sur l'agent réel : jobs, mémoire (Postgres),
-  veille, état des services, et un vrai chat qui passe par une session dédiée.
-- **MOCK** — repli automatique si l'API n'est pas joignable (ex. GitHub Pages) :
-  l'UI reste consultable avec des données simulées.
+Two modes:
+
+- **LIVE** — served from your machine, wired to the real agent: jobs, memory
+  (Postgres), watch items, service status, and a real chat that runs through a
+  dedicated session.
+- **MOCK** — automatic fallback if the API is unreachable (e.g. GitHub Pages):
+  the UI stays browsable with simulated data.
 
 ## Architecture
 
 ```
-Navigateur (VPN)
+Browser (VPN)
       │
       ▼
-mav_api.py  ── HTTP :8787 ──►  sert l'UI + /api/*
+mav_api.py  ── HTTP ──►  serves the UI + /api/*
       │
-      ├──► opencode serve :4096  (moteur, agents, sessions)
-      └──► Postgres mav (Docker)  (conversations, facts, watch_items…)
+      ├──► opencode serve :4096  (engine, agents, sessions)
+      └──► Postgres (Docker)      (conversations, facts, watch_items…)
 ```
 
-Le dashboard utilise **sa propre session opencode** (`dashboard`), distincte de la
-session Telegram, pour ne jamais perturber le bot qui tourne en parallèle.
+The dashboard uses **its own opencode session** (`dash:` prefix), separate from
+the Telegram session, so it never interferes with the bot running alongside.
 
 ## Stack
 
-- Front : HTML / CSS / JS vanilla, zéro dépendance, zéro build.
-- Back : Python stdlib (`http.server`) + `psycopg2` (déjà dans le venv du bot).
-- Déploiement : GitHub Pages (mock) ou VM privée (live, via VPN).
+- Front: vanilla HTML / CSS / JS, zero dependencies, zero build.
+- Back: Python stdlib (`http.server`) + `psycopg2` + `pywebpush`.
+- Deploy: GitHub Pages (mock) or a private machine (live, over VPN).
 
 ## Structure
 
@@ -38,131 +43,123 @@ session Telegram, pour ne jamais perturber le bot qui tourne en parallèle.
 ├── index.html
 ├── assets
 │   ├── css/style.css
-│   └── js/app.js          # mode live + fallback mock
-└── server
-    ├── mav_api.py         # backend lecture + /api/ask
-    └── run.sh             # lanceur (watchdog cron)
+│   ├── js/app.js          # live mode + mock fallback
+│   └── vendor/            # vendored libs (charts)
+├── server/mav_api.py      # backend: UI + /api/*
+├── tools/                 # cert / icon generators
+├── sw.js                  # service worker (PWA + push)
+└── manifest.webmanifest
 ```
 
 ## API
 
-| Méthode | Route                     | Rôle                                 |
-| ------- | ------------------------- | ------------------------------------ |
-| GET     | `/api/status`             | santé moteur, métriques, compteurs   |
-| GET     | `/api/connections`        | état des services                    |
-| GET     | `/api/proxmox`            | nœuds et VMs (Proxmox)               |
-| GET     | `/api/jobs`               | jobs planifiés + dernière exécution  |
-| GET     | `/api/memory`             | conversations, facts, préférences    |
-| GET     | `/api/search?q=`          | recherche mémoire + documents        |
-| GET     | `/api/watch`              | items surveillés                     |
-| GET     | `/api/agents`             | agents disponibles                   |
-| GET     | `/api/sessions`           | liste des discussions du dashboard   |
-| GET     | `/api/session?id=`        | messages + titre d'une discussion    |
-| GET     | `/api/session/export?id=` | export markdown d'une discussion     |
-| GET     | `/api/stream`             | **SSE** : réponse en streaming       |
-| GET     | `/api/push/key`           | clé publique VAPID                   |
-| POST    | `/api/ask`                | envoie un prompt (bloquant)          |
-| POST    | `/api/session/new`        | crée une discussion                  |
-| POST    | `/api/session/rename`     | renomme une discussion               |
-| POST    | `/api/session/delete`     | supprime une discussion              |
-| POST    | `/api/session/abort`      | stoppe la génération en cours        |
-| POST    | `/api/session/summary`    | résume une discussion                |
-| POST    | `/api/job/toggle`         | active / met en pause un job         |
-| POST    | `/api/job/run`            | lance un job dans une session dédiée |
-| POST    | `/api/watch/add`          | ajoute une surveillance              |
-| POST    | `/api/watch/remove`       | retire une surveillance              |
-| POST    | `/api/upload`             | pièce jointe (base64 → fichier)      |
-| POST    | `/api/push/subscribe`     | abonnement Web Push                  |
-| POST    | `/api/push/unsubscribe`   | désabonnement                        |
-| POST    | `/api/push/test`          | notification de test                 |
+| Method | Route                                  | Purpose                            |
+| ------ | -------------------------------------- | ---------------------------------- |
+| GET    | `/api/status`                          | engine health, metrics, counters   |
+| GET    | `/api/connections`                     | service status                     |
+| GET    | `/api/proxmox`                         | Proxmox nodes and VMs              |
+| GET    | `/api/jobs`                            | scheduled jobs + last run          |
+| GET    | `/api/job-results`                     | latest reports produced by jobs    |
+| GET    | `/api/memory`                          | conversations, facts, preferences  |
+| GET    | `/api/search?q=`                       | memory + document search           |
+| GET    | `/api/watch`                           | watch items                        |
+| GET    | `/api/notifications`                   | notification history               |
+| GET    | `/api/notification?id=`                | one notification                   |
+| GET    | `/api/agents`                          | available agents                   |
+| GET    | `/api/sessions`                        | dashboard conversations            |
+| GET    | `/api/session?id=`                     | messages + title of a conversation |
+| GET    | `/api/session/export?id=`              | markdown export                    |
+| GET    | `/api/stream`                          | **SSE**: streamed answer           |
+| GET    | `/api/push/key`                        | VAPID public key                   |
+| GET    | `/api/chart` / `/api/quotes`           | market data                        |
+| GET    | `/api/media` / `/api/asset`            | media / local files                |
+| POST   | `/api/ask`                             | send a prompt (blocking)           |
+| POST   | `/api/session/new                      | rename                             | delete | abort           | summary` | conversation management |
+| POST   | `/api/job/toggle` / `/api/job/run`     | job control                        |
+| POST   | `/api/watch/add` / `/api/watch/remove` | watch control                      |
+| POST   | `/api/upload`                          | attachment (base64 → file)         |
+| POST   | `/api/push/subscribe                   | unsubscribe                        | test`  | push management |
 
 ### Sessions
 
-Les discussions du dashboard sont des sessions opencode dont le titre commence
-par `dash: ` — ce préfixe les distingue des sessions Telegram et des jobs, sans
-registre local. Le front propose un gestionnaire type ChatGPT : créer, lister,
-ouvrir, renommer, supprimer.
+Dashboard conversations are opencode sessions whose title starts with `dash: ` —
+that prefix tells them apart from Telegram sessions and jobs, with no local
+registry. The front end offers a ChatGPT-style manager: create, list, open,
+rename, delete.
 
-> ⚠️ **Pas d'authentification** : à réserver à un accès VPN. Ne pas exposer tel quel.
+> ⚠️ **No authentication**: meant for VPN access only. Do not expose it publicly.
 
-## Lancer en local
+## Run locally
 
-Front seul (mock) :
+Front only (mock):
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Avec le backend (live) :
+With the backend (live):
 
 ```bash
 MAV_STATIC="$PWD" BOT_DIR="$HOME/bot" \
-  ~/bot/venv/bin/python server/mav_api.py
+  <venv>/bin/python server/mav_api.py
 # http://localhost:8787
 ```
 
-## Écrans
+## Screens
 
-- **Accueil** — salutation, barre de message, raccourcis, résumé du jour, automatisations.
-- **Discussions** — gestionnaire de conversations (créer, renommer, supprimer, basculer) + chat **en streaming** avec l'agent, sélecteur d'agent par discussion, pièces jointes, stop, résumé, export markdown.
-- **Automatisations** — jobs planifiés + actions : lancer un job, l'activer/mettre en pause.
-- **Souvenirs** — mémoire (conversations, faits, préférences) + recherche plein-texte.
-- **Surveillance** — items surveillés, ajout/retrait, alerte seulement au changement.
-- **Infra** — nœuds et VMs Proxmox en direct (CPU, RAM, uptime, état).
+- **Home** — greeting, message bar, shortcuts, today's summary, automations.
+- **Conversations** — conversation manager + **streaming** chat with the agent,
+  per-conversation agent selector, attachments, stop, summary, markdown export.
+- **Automations** — scheduled jobs + actions: run, enable/pause.
+- **Memories** — memory (conversations, facts, preferences) + full-text search.
+- **Watch** — watched items, add/remove, alert only on change.
+- **Infra** — live Proxmox nodes and VMs (CPU, RAM, uptime, status).
 
-## Fonctionnalités
+## Features
 
-- **Streaming SSE** : les réponses arrivent mot à mot, avec progression des outils et un bouton stop.
-- **Palette de commandes** (`⌘K` / `Ctrl+K`) : chercher une discussion, un souvenir, une action.
-- **Thème clair / sombre** avec bascule et mémorisation.
-- **Voix** : dictée (Web Speech) et lecture à voix haute des réponses.
-- **Notifications Web Push** : Mav pousse les alertes de veille sur le téléphone, app fermée.
-- **Recherche globale** dans la mémoire et les documents indexés.
-- **Export / résumé** d'une conversation.
+- **SSE streaming**: answers arrive word by word, with tool progress and a stop button.
+- **Command palette** (`⌘K` / `Ctrl+K`): find a conversation, a memory, an action.
+- **Voice**: dictation (Web Speech) and read-aloud of answers.
+- **Web Push**: Mav pushes watch alerts to your phone, app closed. Tapping a
+  notification opens a chat that explains the alert.
+- **Global search** across memory and indexed documents.
+- **Export / summary** of a conversation.
 
 ## Design
 
-Feuilles de style « glass » façon iOS 26 : surfaces en verre dépoli
-(`backdrop-filter`), halos colorés animés en fond, liserés lumineux, ombres
-douces, thème sombre assorti. Repli automatique sur fond opaque si
-`backdrop-filter` n'est pas supporté.
+iOS-style "glass" styling: frosted-glass surfaces (`backdrop-filter`), animated
+color halos in the background, soft shadows. Automatic fallback to an opaque
+background when `backdrop-filter` is unsupported.
 
-## PWA (installation sur mobile)
+## PWA (install on mobile)
 
-L'app est installable comme une appli native : `manifest.webmanifest`,
-service worker (`sw.js`), icônes et bandeau d'installation.
+The app is installable: `manifest.webmanifest`, service worker (`sw.js`), icons
+and an install banner.
 
-**Contrainte** : le service worker et l'installabilité exigent un **contexte
-sécurisé** (HTTPS, ou `localhost`). En HTTP sur une IP, Chrome n'expose pas
-`navigator.serviceWorker` et l'install n'est pas proposée.
+**Constraint**: the service worker and installability require a **secure
+context** (HTTPS, or `localhost`). Over plain HTTP on an IP, Chrome does not
+expose `navigator.serviceWorker` and install is not offered.
 
-- **Mock GitHub Pages** : déjà en HTTPS → installable directement.
-- **Live sur le VLAN** : HTTP sur IP → il faut le TLS local décrit ci-dessous.
+- **GitHub Pages mock**: already HTTPS → installable directly.
+- **Live on a LAN**: HTTP on an IP → you need the local TLS described below.
 
-### TLS local
+### Local TLS
 
-Le service écoute en **HTTP :80** _et_ **HTTPS :443** avec un certificat local
-(`certs/`, non committé). Le dossier `certs/` n'est jamais servi, sauf la CA
-publique `certs/ca.crt`.
+The service listens on **HTTP :80** _and_ **HTTPS :443** with a local
+certificate (`certs/`, not committed). Only the public CA `certs/ca.crt` is ever
+served.
 
-Pour installer sur le téléphone (une fois sur le VLAN) :
+To install on your phone (once on the LAN):
 
-1. Ouvrir `https://192.168.1.32/certs/ca.crt` et approuver le certificat.
-2. Ouvrir `https://192.168.1.32/`, puis « Ajouter à l'écran d'accueil ».
+1. Open `https://<host>/certs/ca.crt` and approve the certificate.
+2. Open `https://<host>/`, then "Add to Home Screen".
 
-Variables d'env. du serveur : `MAV_TLS_PORT`, `MAV_TLS_CERT`, `MAV_TLS_KEY`
-(laisser `MAV_TLS_PORT=0` pour désactiver le TLS).
+Server env vars: `MAV_TLS_PORT`, `MAV_TLS_CERT`, `MAV_TLS_KEY`
+(set `MAV_TLS_PORT=0` to disable TLS).
 
-### Régénérer le certificat
+### Regenerate the certificate
 
 ```bash
-python3 tools/make_icons.py          # icônes
-tools/make_certs.sh                  # CA + cert serveur (SAN: IP/DNS à ajuster)
+python3 tools/make_icons.py          # icons
+tools/make_certs.sh                  # CA + server cert (adjust SAN IP/DNS)
 ```
-
-## Prochaines étapes
-
-- [ ] Accès restreint par VPN (pare-feu côté hyperviseur).
-- [ ] Réponses en streaming (SSE via le bus opencode).
-- [ ] Actions depuis l'UI (lancer un job, éditer une surveillance).
-- [ ] Personnalisation finale (nom, ton, données).

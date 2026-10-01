@@ -1,106 +1,92 @@
-# opencode-bot
+# Mav bot
 
-Pont **opencode ↔ Telegram** : posez une question depuis Telegram, opencode
-répond avec progression en direct, mémoire inter-sessions et exécutions
-programmées.
+The **opencode ↔ Telegram** bridge: ask a question from Telegram, opencode
+answers with live progress, cross-session memory and scheduled runs.
 
-## Fonctionnalités
+> This module is part of the [Mav](../README.md) project. In a full Mav install
+> the top-level `install.sh` sets everything up; the details below are for
+> running the bot on its own.
 
-- **Questions** : `/ask <question>` ou simplement écrire un message
-- **Progression en direct** : statut mis à jour pendant la réponse
-- **Mémoire inter-sessions** : les échanges pertinents sont rappelés
-- **Pièces jointes** : photos et documents envoyés à opencode
-- **Jobs planifiés** : exécutions programmées poussées vers Telegram
-- **Débats multi-agents** : `/debate <question>`
-- **Sécurité** : allowlist des chats autorisés
+## Features
 
-## Commandes
+- **Questions**: `/ask <question>` or just send a message
+- **Live progress**: status updated while the answer streams in
+- **Cross-session memory**: relevant past exchanges are recalled
+- **Attachments**: photos and documents forwarded to opencode
+- **Scheduled jobs**: recurring prompts pushed to Telegram
+- **Multi-agent debates**: `/debate <question>`
+- **Security**: allowlist of authorized chats
 
-| Commande             | Description                             |
-| -------------------- | --------------------------------------- |
-| `/ask <question>`    | Poser une question                      |
-| `/new`               | Nouvelle session                        |
-| `/agent [nom]`       | Afficher / changer d'agent              |
-| `/stop`              | Interrompre la tâche en cours           |
-| `/memory`            | État de la mémoire                      |
-| `/forget`            | Effacer la mémoire du chat              |
-| `/clear`             | Effacer les messages du bot (allowlist) |
-| `/jobs`              | Lister les exécutions programmées       |
-| `/run <nom>`         | Déclencher un job                       |
-| `/debate <question>` | Lancer un débat multi-agents            |
-| `/id`                | Identifiant du chat                     |
+## Commands
 
-## Installation
-
-```bash
-git clone <repo-url>
-cd opencode-bot
-sudo ./install.sh
-```
-
-Le script installe les dépendances, copie les fichiers, crée le fichier de
-config et démarre le service systemd.
+| Command              | Description                           |
+| -------------------- | ------------------------------------- |
+| `/ask <question>`    | Ask a question                        |
+| `/new`               | New session                           |
+| `/agent [name]`      | Show / switch agent                   |
+| `/stop`              | Abort the current task                |
+| `/memory`            | Memory status                         |
+| `/forget`            | Clear the chat's memory               |
+| `/clear`             | Delete the bot's messages (allowlist) |
+| `/jobs`              | List scheduled jobs                   |
+| `/run <name>`        | Trigger a job                         |
+| `/watch`             | Manage watch items                    |
+| `/rag`               | Full-text document search/index       |
+| `/notify`            | Toggle push / Telegram notifications  |
+| `/debate <question>` | Start a multi-agent debate            |
+| `/id`                | Chat identifier                       |
 
 ## Configuration
 
-Copiez `.env.example` vers `/etc/opencode-bot.env` (fait par le script) et
-remplissez :
+The bot reads environment variables (in a full install these live in
+`/etc/mav.env`). See [`.env.example`](.env.example) for the full list. The
+essentials:
 
 ```bash
-TELEGRAM_TOKEN=            # token du bot (via @BotFather)
-ALLOWED_CHAT_IDS=          # chats autorisés, séparés par des virgules
+TELEGRAM_TOKEN=            # bot token (from @BotFather)
+ALLOWED_CHAT_IDS=          # allowed chats, comma-separated
 OPENCODE_URL=http://127.0.0.1:4096/
-OPENCODE_MODEL=<provider>/<modele>
-OPENCODE_AGENT=research
-ANSWER_MODE=last
-PLAIN_TEXT_IS_ASK=1
+OPENCODE_MODEL=<provider>/<model>
+OPENCODE_AGENT=            # empty = opencode default
 STATE_FILE=/home/USER/bot/sessions.json
-SHOW_PROGRESS=1
-IDLE_TIMEOUT=1800
-MEMORY=1
-MEMORY_TOP=3
 BOT_DIR=/home/USER/bot
-CLEAR_ALLOWED_CHAT_IDS=
+PG_DSN=host=127.0.0.1 port=5432 user=mav password=CHANGE_ME dbname=mav
 ```
 
-## Prérequis
+## Requirements
 
-- Un serveur **opencode** qui tourne (`opencode serve`, par défaut sur
-  `http://127.0.0.1:4096`) — le script installe le service `opencode-server`
+- A running **opencode** server (`opencode serve`, default
+  `http://127.0.0.1:4096`)
 - Python 3.10+
-- Un token de bot Telegram (via [@BotFather](https://t.me/BotFather))
+- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
+- Postgres (for memory, watch, RAG, notifications) — optional but recommended
 
-## Services systemd
+## systemd services
 
-Le script installe deux services :
+The top-level installer sets up three services; the bot is one of them:
 
-- **`opencode-server`** — le serveur headless opencode sur `127.0.0.1:4096`
-  (fichier : `systemd/opencode-server.service`)
-- **`opencode-bot`** — le pont Telegram, qui dépend d'opencode-server
-  (fichier : `systemd/opencode-bot.service`)
+- **`mav-server`** — the headless opencode engine on `127.0.0.1:4096`
+- **`mav-bot`** — the Telegram bridge, depends on `mav-server`
+- **`mav-dashboard`** — the web interface
 
 ```bash
-systemctl status opencode-server
-systemctl status opencode-bot
-journalctl -u opencode-bot -f
+systemctl status mav-bot
+journalctl -u mav-bot -f
 ```
 
 ## Structure
 
 ```
-opencode_bot.py     # bot principal (pont Telegram <-> opencode)
-ocbus.py            # bus d'événements SSE
-ocformat.py         # rendu markdown -> HTML Telegram
-ocjobs.py           # planificateur de jobs
-ocmemory.py         # mémoire inter-sessions
-ocnotify.py         # notifications proactives (Web Push + historique/dédup)
-ocprogress.py       # suivi de progression
-ocwatch.py          # veille continue (alerte sur changement d'état)
-ocrag.py            # recherche plein-texte (RAG)
-monitor_sls.py      # script de monitoring (exemple)
-biotech_brief.py    # collecte de données biotech (Yahoo, openFDA, ClinicalTrials)
-jobs.json           # exemples de jobs planifiés
-install.sh          # script d'installation
-.env.example        # modèle de configuration
-systemd/            # fichiers de services systemd
+opencode_bot.py     # main bot (Telegram <-> opencode bridge)
+ocbus.py            # SSE event bus
+ocformat.py         # markdown -> Telegram HTML rendering
+ocjobs.py           # job scheduler
+ocmemory.py         # cross-session memory
+ocnotify.py         # proactive notifications (Web Push + history/dedup)
+ocprogress.py       # progress tracking
+ocwatch.py          # continuous watch (alerts on state change)
+ocrag.py            # full-text search (RAG)
+jobs.json           # scheduled jobs (empty by default)
+requirements.txt    # Python dependencies
+.env.example        # configuration reference
 ```

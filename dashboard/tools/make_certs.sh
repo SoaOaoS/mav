@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Génère une CA locale + un certificat serveur pour le dashboard Mav.
-# Ajuste SAN si l'IP ou le hostname changent.
+# Generates a local CA + a server certificate for the Mav dashboard.
+# Adjust SAN if the IP or hostname change.
 #
 # Variables :
-#   MAV_SAN_IP   une ou plusieurs IP, séparées par des virgules  (ex. 192.168.1.32,10.0.0.7)
-#   MAV_SAN_DNS  un ou plusieurs noms, séparés par des virgules  (ex. mav.local,opc.local)
+#   MAV_SAN_IP   one or more IPs, comma-separated  (e.g. 192.168.1.32,10.0.0.7)
+#   MAV_SAN_DNS  one or more names, comma-separated  (e.g. mav.local,opc.local)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)/certs"
@@ -14,8 +14,8 @@ cd "$DIR"
 SAN_IP="${MAV_SAN_IP:-192.168.1.32}"
 SAN_DNS="${MAV_SAN_DNS:-mav.local,opc.local}"
 
-# Construit la liste subjectAltName : chaque entrée doit porter son type.
-# « IP:a,DNS:b,DNS:c » et non « IP:a,DNS:b,c » (openssl refuse).
+# Build the subjectAltName list: every entry must carry its type.
+# "IP:a,DNS:b,DNS:c", not "IP:a,DNS:b,c" (openssl refuses).
 build_san() {
   local out="" item
   IFS=',' read -ra ips <<<"$SAN_IP"
@@ -39,7 +39,7 @@ SAN="$(build_san)"
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
   -keyout ca.key -out ca.crt -subj "/CN=Mav Local CA/O=Mav" 2>/dev/null
 
-# Certificat serveur (CN = première IP)
+# Server certificate (CN = first IP)
 CN="$(echo "$SAN_IP" | cut -d',' -f1 | xargs)"
 openssl req -newkey rsa:2048 -sha256 -nodes \
   -keyout server.key -out server.csr -subj "/CN=${CN}/O=Mav" 2>/dev/null
@@ -50,13 +50,13 @@ extendedKeyUsage=serverAuth
 keyUsage=digitalSignature,keyEncipherment
 EOF
 
-# 397 jours : au-delà de 398, Chrome/Android rejettent le certificat.
+# 397 days: beyond 398, Chrome/Android reject the certificate.
 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out server.crt -days 397 -sha256 -extfile san.cnf 2>/dev/null
 
-# Version DER pour l'installation sur Android (fichier .cer).
+# DER version for Android install (.cer file).
 openssl x509 -in ca.crt -outform DER -out ca.cer
 
 chmod 600 ./*.key
-echo "Certificats générés dans $DIR"
+echo "Certificates generated in $DIR"
 openssl verify -CAfile ca.crt server.crt
