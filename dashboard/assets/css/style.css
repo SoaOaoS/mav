@@ -1964,7 +1964,7 @@ body.is-thinking .orb::before {
     background: var(--accent-soft);
   }
 
-  /* --- Accueil --- */
+  /* --- Home --- */
   .hello {
     margin-bottom: 1.1rem;
   }
@@ -2102,13 +2102,13 @@ body.is-thinking .orb::before {
     flex: 1;
   }
 
-  /* --- Souvenirs --- */
+  /* --- Memories --- */
   .memory li {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.2rem;
   }
 
-  /* --- Surveillance --- */
+  /* --- Watch --- */
   .watch-add {
     flex-direction: column;
   }
