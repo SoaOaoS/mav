@@ -18,8 +18,9 @@ Mav, c'est deux morceaux qui bossent ensemble :
 - **le dashboard web** — la même chose en interface, avec les rapports, l'état
   de l'infra, la mémoire et les notifications push.
 
-Le tout s'appuie sur **opencode** comme moteur d'agent (que tu configures
-toi-même : modèle, agents, MCP), et **Postgres** pour la mémoire.
+Le tout s'appuie sur **opencode** comme moteur d'agent et **Postgres** pour la
+mémoire. Tu choisis ton modèle : **Ollama** (local), **Claude**, **OpenAI**, ou
+n'importe quel endpoint compatible OpenAI.
 
 ## Installation
 
@@ -100,10 +101,25 @@ Trois services systemd :
 
 ## Ce que tu configures toi-même
 
-**L'installeur ne touche pas à ton agent opencode.** C'est volontaire : le
-modèle, les agents et les MCP sont personnels. Configure-les dans
-`~/.config/opencode/` (voir la doc d'opencode). Le bot et le dashboard se
-contentent d'appeler le moteur — ils fonctionnent avec _ton_ agent.
+**L'agent opencode.** L'installeur écrit une config minimale
+(`~/.config/opencode/opencode.json`) avec ton provider et ton modèle, et pose
+ta clé API dans l'env du service. Le reste — agents personnalisés, MCP, skills —
+reste à ta main, dans `~/.config/opencode/`. Mav fonctionne avec _ton_ agent.
+
+## Providers supportés
+
+Le wizard te laisse choisir :
+
+| Provider      | Ce qu'il te faut                     | Modèle (exemple)            |
+| ------------- | ------------------------------------ | --------------------------- |
+| **ollama**    | Ollama qui tourne (local ou distant) | `llama3.1`, `qwen2.5-coder` |
+| **anthropic** | une clé `ANTHROPIC_API_KEY`          | `claude-sonnet-4-5`         |
+| **openai**    | une clé `OPENAI_API_KEY`             | `gpt-4o`                    |
+| **custom**    | endpoint compatible OpenAI + clé     | selon ton fournisseur       |
+
+## Licence
+
+MIT — voir [LICENSE](LICENSE).
 
 ## Commandes utiles
 

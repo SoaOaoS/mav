@@ -49,7 +49,9 @@ except Exception:  # noqa: BLE001
     _qs, _qe = 23, 7
 QUIET_START, QUIET_END = _qs, _qe
 
-_VAPID_SUB = "mailto:raphael.girard.tech@gmail.com"
+# Contact VAPID (obligatoire pour le protocole Web Push) : renseigné par
+# l'installeur via MAV_VAPID_SUB, sinon valeur neutre.
+_VAPID_SUB = os.environ.get("MAV_VAPID_SUB") or "mailto:admin@localhost"
 _vapid_obj = None
 
 

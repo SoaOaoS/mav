@@ -45,9 +45,10 @@ PG_DSN = os.environ.get(
     "PG_DSN", "host=127.0.0.1 port=5432 user=mav password=mav_secret dbname=mav"
 )
 DEFAULT_AGENT = os.environ.get("MAV_DASH_AGENT", "").strip()
-DEFAULT_MODEL = os.environ.get("OPENCODE_MODEL", "ollama-cloud/deepseek-v4.1-flash").strip()
+DEFAULT_MODEL = os.environ.get("OPENCODE_MODEL", "").strip()
 # Chat id utilisé pour rattacher les nouvelles surveillances au bot Telegram.
-DEFAULT_CHAT_ID = int(os.environ.get("MAV_CHAT_ID", "7674111325"))
+# 0 par défaut : l'installeur renseigne la vraie valeur via MAV_CHAT_ID.
+DEFAULT_CHAT_ID = int(os.environ.get("MAV_CHAT_ID", "0") or 0)
 
 # Agents proposés dans le sélecteur du dashboard.
 PRIMARY_AGENTS = ["general", "dev", "finance", "ops", "research", "reviewer", "writer"]
@@ -1346,7 +1347,7 @@ def send_push(title: str, body: str, url: str = "./") -> int:
                 subscription_info=s,
                 data=payload,
                 vapid_private_key=vapid,
-                vapid_claims={"sub": "mailto:raphael.girard.tech@gmail.com"},
+                vapid_claims={"sub": os.environ.get("MAV_VAPID_SUB") or "mailto:admin@localhost"},
                 ttl=86400,
                 headers={"Urgency": "high"},
                 timeout=15,

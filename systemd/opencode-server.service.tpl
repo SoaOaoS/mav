@@ -9,6 +9,7 @@ User=__USER__
 WorkingDirectory=__HOME__/workspace
 Environment=HOME=__HOME__
 Environment=OPENCODE_DISABLE_AUTOUPDATE=1
+EnvironmentFile=-/etc/mav-server.env
 ExecStart=__HOME__/.opencode/bin/opencode serve --hostname 127.0.0.1 --port __PORT__
 Restart=always
 RestartSec=5

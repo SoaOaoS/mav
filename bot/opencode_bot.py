@@ -900,7 +900,7 @@ async def cmd_watch(update: Update, ctx) -> None:
                 "/watch add mail <requête> — surveille les mails\n"
                 "/watch add github <owner/repo> — PR ouvertes\n"
                 "/watch add stock <SYMBOLE>[:niveaux] — franchissement + volume\n"
-                "   ex. /watch add stock SLS:7.07:10.20:15.88:16.07\n"
+                "   ex. /watch add stock AAPL:180:200:240\n"
                 "/watch rm <id> — retirer un item"
             )
             return

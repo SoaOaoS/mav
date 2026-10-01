@@ -50,16 +50,16 @@ remplissez :
 TELEGRAM_TOKEN=            # token du bot (via @BotFather)
 ALLOWED_CHAT_IDS=          # chats autorisés, séparés par des virgules
 OPENCODE_URL=http://127.0.0.1:4096/
-OPENCODE_MODEL=ollama-cloud/deepseek-v4-flash
+OPENCODE_MODEL=<provider>/<modele>
 OPENCODE_AGENT=research
 ANSWER_MODE=last
 PLAIN_TEXT_IS_ASK=1
-STATE_FILE=/home/opencode/bot/sessions.json
+STATE_FILE=/home/USER/bot/sessions.json
 SHOW_PROGRESS=1
 IDLE_TIMEOUT=1800
 MEMORY=1
 MEMORY_TOP=3
-BOT_DIR=/home/opencode/bot
+BOT_DIR=/home/USER/bot
 CLEAR_ALLOWED_CHAT_IDS=
 ```
 

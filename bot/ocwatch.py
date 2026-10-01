@@ -168,7 +168,7 @@ class Watch:
         """Cotation d'un titre : alerte si franchissement de niveau ou
         volume anormal.
 
-        Cible : « SLS » ou « SLS:7.07,10.20,15.88,16.07 » (niveaux optionnels,
+        Cible : « AAPL » ou « AAPL:180:200:240 » (niveaux optionnels,
         séparés par des virgules ou des deux-points). L'état retourné ne
         change que sur un événement pertinent (changement de zone ou volume
         ≥ 2x la moyenne 20 j), pas à chaque variation de prix.

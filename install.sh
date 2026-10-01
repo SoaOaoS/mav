@@ -287,14 +287,45 @@ A[TELEGRAM_TOKEN]="$(ask_env_required "Token du bot (via @BotFather)" "TELEGRAM_
 A[ALLOWED_CHAT_IDS]="$(ask_env_required "Votre chat ID Telegram (numérique)" "ALLOWED_CHAT_IDS")"
 A[CLEAR_ALLOWED_CHAT_IDS]="$(ask_env "Chat IDs autorisés à /clear (vide = désactivé)" "CLEAR_ALLOWED_CHAT_IDS")"
 
-# Moteur opencode
+# Provider LLM (moteur opencode)
 echo
-info "— Moteur opencode —"
-A[OPENCODE_URL]="$(ask "URL du serveur opencode" "${MAV_OPENCODE_URL:-http://127.0.0.1:4096}")"
-A[OPENCODE_MODEL]="$(ask_env_required "Modèle par défaut (provider/model)" "OPENCODE_MODEL")"
-A[OPENCODE_AGENT]="$(ask "Agent par défaut" "${MAV_OPENCODE_AGENT:-research}")"
-A[OPENCODE_SERVER_USERNAME]="$(ask "Utilisateur du serveur opencode (optionnel)" "")"
-A[OPENCODE_SERVER_PASSWORD]="$(ask "Mot de passe du serveur opencode (optionnel)" "" secret)"
+info "— Modèle (provider LLM) —"
+info "  Providers supportés : ollama, anthropic (Claude), openai, custom"
+A[PROVIDER]="$(ask_choice "Provider" "ollama|anthropic|openai|custom" "${MAV_PROVIDER:-ollama}")"
+
+case "${A[PROVIDER]}" in
+  ollama)
+    A[PROVIDER_BASEURL]="$(ask "Endpoint Ollama" "${MAV_PROVIDER_BASEURL:-http://localhost:11434/v1}")"
+    A[PROVIDER_APIKEY]="$(ask "Clé API Ollama (vide si non requise)" "${MAV_PROVIDER_APIKEY:-}" secret)"
+    A[PROVIDER_ID]="ollama"; A[PROVIDER_NPM]="@ai-sdk/openai-compatible"
+    A[OPENCODE_MODEL]="$(ask_env_required "Modèle (ex. llama3.1, qwen2.5-coder)" "OPENCODE_MODEL")"
+    ;;
+  anthropic)
+    A[PROVIDER_BASEURL]="$(ask "Endpoint Anthropic (vide = défaut)" "${MAV_PROVIDER_BASEURL:-}")"
+    A[PROVIDER_APIKEY]="$(ask_env_required "Clé API Anthropic" "ANTHROPIC_API_KEY" secret)"
+    A[PROVIDER_ID]="anthropic"; A[PROVIDER_NPM]="@ai-sdk/anthropic"
+    A[OPENCODE_MODEL]="$(ask "Modèle Anthropic" "${MAV_OPENCODE_MODEL:-claude-sonnet-4-5}")"
+    ;;
+  openai)
+    A[PROVIDER_BASEURL]="$(ask "Endpoint OpenAI (vide = défaut)" "${MAV_PROVIDER_BASEURL:-}")"
+    A[PROVIDER_APIKEY]="$(ask_env_required "Clé API OpenAI" "OPENAI_API_KEY" secret)"
+    A[PROVIDER_ID]="openai"; A[PROVIDER_NPM]="@ai-sdk/openai"
+    A[OPENCODE_MODEL]="$(ask "Modèle OpenAI" "${MAV_OPENCODE_MODEL:-gpt-4o}")"
+    ;;
+  custom)
+    A[PROVIDER_ID]="$(ask_required "Identifiant du provider (ex. openrouter)" "custom")"
+    A[PROVIDER_BASEURL]="$(ask_required "Endpoint (baseURL, compatible OpenAI)" "")"
+    A[PROVIDER_APIKEY]="$(ask "Clé API (optionnel)" "" secret)"
+    A[PROVIDER_NPM]="@ai-sdk/openai-compatible"
+    A[OPENCODE_MODEL]="$(ask_env_required "Modèle" "OPENCODE_MODEL")"
+    ;;
+  *) die "Provider inconnu : ${A[PROVIDER]}" ;;
+esac
+A[OPENCODE_MODEL_REF]="${A[PROVIDER_ID]}/${A[OPENCODE_MODEL]}"
+A[OPENCODE_AGENT]="$(ask "Agent par défaut (vide = défaut opencode)" "${MAV_OPENCODE_AGENT:-}")"
+A[OPENCODE_URL]="http://127.0.0.1:${OPENCODE_PORT}"
+A[OPENCODE_SERVER_USERNAME]=""
+A[OPENCODE_SERVER_PASSWORD]=""
 
 # Postgres
 echo
@@ -311,7 +342,8 @@ A[MAV_API_BIND]="$(ask_required "IP d'écoute du dashboard (IP réseau de la mac
 A[MAV_API_PORT]="$(ask "Port HTTP" "${MAV_API_PORT:-80}")"
 A[MAV_TLS_PORT]="$(ask "Port HTTPS (vide = pas de TLS)" "${MAV_TLS_PORT:-443}")"
 A[MAV_CHAT_ID]="$(ask "Chat ID de rattachement des surveillances" "${MAV_CHAT_ID:-${A[ALLOWED_CHAT_IDS]}}")"
-A[MAV_DASH_AGENT]="$(ask "Agent par défaut du dashboard" "${MAV_DASH_AGENT:-${A[OPENCODE_AGENT]}}")"
+A[MAV_DASH_AGENT]="$(ask "Agent par défaut du dashboard (vide = défaut)" "${MAV_DASH_AGENT:-}")"
+A[VAPID_EMAIL]="$(ask "Email de contact (notifications Web Push)" "${MAV_VAPID_EMAIL:-}")"
 
 # Comportement du bot
 echo
@@ -343,7 +375,7 @@ cat <<EOF
   ${B}Dashboard${R}      ${A[INSTALL_HOME]}/workspace/mav-dashboard
   ${B}Postgres${R}       ${A[POSTGRES_USER]}@127.0.0.1:${A[POSTGRES_PORT]}/${A[POSTGRES_DB]}
   ${B}Dashboard URL${R}  http${A[MAV_TLS_PORT]:+s}://${A[MAV_API_BIND]}${A[MAV_TLS_PORT]:+:${A[MAV_TLS_PORT]}}
-  ${B}Modèle${R}         ${A[OPENCODE_MODEL]}
+  ${B}Modèle${R}         ${A[OPENCODE_MODEL_REF]}
   ${B}Heures calmes${R}  ${A[NOTIFY_QUIET]}
 EOF
 
@@ -481,6 +513,54 @@ ok "OK."
 
 # ------------------------------------------------------------------ 8. env files
 step "Fichiers de configuration"
+
+# 8a. config opencode de l'utilisateur (provider + modèle).
+OPENCODE_CFG_DIR="${A[INSTALL_HOME]}/.config/opencode"
+OPENCODE_CFG="$OPENCODE_CFG_DIR/opencode.json"
+if [[ $DRY_RUN -eq 0 ]]; then
+  mkdir -p "$OPENCODE_CFG_DIR"
+  # On complète un fichier existant sans écraser les autres clés.
+  OPENCODE_CFG="$OPENCODE_CFG" python3 - <<PY
+import json, os
+from pathlib import Path
+p = Path(os.environ["OPENCODE_CFG"])
+cfg = {}
+if p.is_file():
+    try: cfg = json.loads(p.read_text())
+    except Exception: cfg = {}
+provider = {
+    "npm": "${A[PROVIDER_NPM]}",
+    "name": "${A[PROVIDER_ID]}",
+    "options": {},
+    "models": {"${A[OPENCODE_MODEL]}": {"name": "${A[OPENCODE_MODEL]}"}},
+}
+base = "${A[PROVIDER_BASEURL]}"
+if base: provider["options"]["baseURL"] = base
+key = "${A[PROVIDER_APIKEY]}"
+if key:
+    envname = {"anthropic":"ANTHROPIC_API_KEY","openai":"OPENAI_API_KEY"}.get("${A[PROVIDER_ID]}")
+    provider["options"]["apiKey"] = "{env:%s}" % envname if envname else key
+cfg.setdefault("provider", {})["${A[PROVIDER_ID]}"] = provider
+cfg["model"] = "${A[OPENCODE_MODEL_REF]}"
+if "${A[OPENCODE_AGENT]}": cfg["agent"] = cfg.get("agent", {})
+p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
+print("opencode.json écrit")
+PY
+  # Env du moteur : la clé API y est lue (lue par le service, pas dans le JSON).
+  ENV_SERVER="/etc/mav-server.env"
+  {
+    echo "# Mav — env du moteur opencode (généré)"
+    case "${A[PROVIDER_ID]}" in
+      anthropic) echo "ANTHROPIC_API_KEY=${A[PROVIDER_APIKEY]}" ;;
+      openai)    echo "OPENAI_API_KEY=${A[PROVIDER_APIKEY]}" ;;
+      ollama)    [[ -n "${A[PROVIDER_APIKEY]}" ]] && echo "OLLAMA_API_KEY=${A[PROVIDER_APIKEY]}" ;;
+    esac
+  } > "$ENV_SERVER"
+  chmod 600 "$ENV_SERVER"
+  chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$OPENCODE_CFG_DIR"
+fi
+ok "Config opencode + clé API en place."
+
 if [[ $DRY_RUN -eq 0 ]]; then
   cat > "$ENV_BOT" <<EOF
 # Mav — configuration du bot (généré par install.sh)
@@ -489,7 +569,7 @@ TELEGRAM_TOKEN=${A[TELEGRAM_TOKEN]}
 ALLOWED_CHAT_IDS=${A[ALLOWED_CHAT_IDS]}
 CLEAR_ALLOWED_CHAT_IDS=${A[CLEAR_ALLOWED_CHAT_IDS]}
 OPENCODE_URL=${A[OPENCODE_URL]}
-OPENCODE_MODEL=${A[OPENCODE_MODEL]}
+OPENCODE_MODEL=${A[OPENCODE_MODEL_REF]}
 OPENCODE_AGENT=${A[OPENCODE_AGENT]}
 OPENCODE_SERVER_USERNAME=${A[OPENCODE_SERVER_USERNAME]}
 OPENCODE_SERVER_PASSWORD=${A[OPENCODE_SERVER_PASSWORD]}
@@ -502,6 +582,7 @@ MEMORY_TOP=${A[MEMORY_TOP]}
 WATCH_INTERVAL=${A[WATCH_INTERVAL]}
 NOTIFY_QUIET=${A[NOTIFY_QUIET]}
 NOTIFY_DEDUP_WINDOW=21600
+MAV_VAPID_SUB=mailto:${A[VAPID_EMAIL]:-admin@localhost}
 JOB_RETRIES=${A[JOB_RETRIES]}
 STATE_FILE=$BOT_DIR/sessions.json
 MEMORY_FILE=$BOT_DIR/memory.json
@@ -522,7 +603,7 @@ MAV_STATIC=$DASH_DIR
 BOT_DIR=$BOT_DIR
 MAV_ATTACH=/tmp/mav-dashboard/attachments
 OPENCODE_URL=${A[OPENCODE_URL]}
-OPENCODE_MODEL=${A[OPENCODE_MODEL]}
+OPENCODE_MODEL=${A[OPENCODE_MODEL_REF]}
 MAV_DASH_AGENT=${A[MAV_DASH_AGENT]}
 MAV_CHAT_ID=${A[MAV_CHAT_ID]}
 MAV_API_BIND=${A[MAV_API_BIND]}
@@ -532,6 +613,7 @@ MAV_TLS_CERT=$CERT_DIR/server.crt
 MAV_TLS_KEY=$CERT_DIR/server.key
 MAV_PUSH_FILE=$BOT_DIR/push_subs.json
 MAV_USER_HOME=${A[INSTALL_HOME]}
+MAV_VAPID_SUB=mailto:${A[VAPID_EMAIL]:-admin@localhost}
 PG_DSN=$PG_DSN
 EOF
   chmod 600 "$ENV_DASH"
