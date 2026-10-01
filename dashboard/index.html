@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="description" content="Mav — ton compagnon IA" />
+    <title>Mav</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#2f6f5e" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="icons/icon-192.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="512x512"
+      href="icons/icon-512.png"
+    />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Mav" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;450;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/style.css" />
+  </head>
+  <body>
+    <!-- ============ EN-TÊTE MOBILE ============ -->
+    <header class="mobile-top" id="mobileTop">
+      <div class="mobile-top-left">
+        <div class="orb small" aria-hidden="true"></div>
+        <span class="mobile-title" id="mobileTitle">Mav</span>
+      </div>
+      <div class="mobile-top-actions">
+        <button class="mobile-icon" id="mobileNotify" title="Notifications">
+          <span class="nav-ico" data-ico="bell"></span>
+        </button>
+        <button
+          class="mobile-icon"
+          id="mobileNotifyTest"
+          title="Tester les notifications"
+        >
+          <span class="nav-ico" data-ico="bolt"></span>
+        </button>
+        <button class="mobile-icon" id="mobileNew" title="Nouvelle discussion">
+          <span class="nav-ico" data-ico="plus"></span>
+        </button>
+        <button class="mobile-icon" id="mobileSearch" title="Rechercher">
+          <span class="nav-ico" data-ico="search"></span>
+        </button>
+      </div>
+    </header>
+
+    <div class="app">
+      <!-- ============ SIDEBAR ============ -->
+      <aside class="sidebar">
+        <div class="profile">
+          <div class="orb" aria-hidden="true"></div>
+          <div class="profile-text">
+            <div class="profile-name">Mav</div>
+            <div class="profile-tag">Ton compagnon IA</div>
+          </div>
+        </div>
+
+        <button class="side-search" id="searchOpen">
+          <span class="nav-ico" data-ico="search"></span>
+          <span>Rechercher…</span>
+          <kbd>⌘K</kbd>
+        </button>
+
+        <nav class="nav">
+          <button class="nav-item is-active" data-view="home">
+            <span class="nav-ico" data-ico="home"></span> Accueil
+          </button>
+          <button class="nav-item" data-view="chat">
+            <span class="nav-ico" data-ico="chat"></span> Discussions
+          </button>
+          <button class="nav-item" data-view="jobs">
+            <span class="nav-ico" data-ico="bolt"></span> Automatisations
+            <span class="nav-count" id="navJobsCount">3</span>
+          </button>
+          <button class="nav-item" data-view="memory">
+            <span class="nav-ico" data-ico="heart"></span> Souvenirs
+          </button>
+          <button class="nav-item" data-view="watch">
+            <span class="nav-ico" data-ico="eye"></span> Surveillance
+          </button>
+          <button class="nav-item" data-view="system">
+            <span class="nav-ico" data-ico="cpu"></span> Infra
+          </button>
+        </nav>
+
+        <div class="side-block">
+          <div class="side-title">Connexions</div>
+          <ul class="conn" id="connList"></ul>
+        </div>
+
+        <div class="side-tools">
+          <button class="side-tool" id="notifyToggle" title="Notifications">
+            <span class="nav-ico" data-ico="bell"></span>
+          </button>
+          <button class="side-tool" id="voiceToggle" title="Lecture vocale">
+            <span class="nav-ico" data-ico="speaker"></span>
+          </button>
+        </div>
+
+        <div class="side-foot">
+          <span class="dot-online"></span> Disponible ·
+          <span id="clock">--:--</span>
+        </div>
+      </aside>
+
+      <!-- ============ CONTENT ============ -->
+      <main class="content">
+        <!-- HOME -->
+        <section class="view is-active" id="view-home">
+          <header class="hello">
+            <h1 id="greeting">Bonjour Raphaël</h1>
+            <p id="greetingSub">
+              Content de te revoir. Qu'est-ce qu'on fait aujourd'hui ?
+            </p>
+          </header>
+
+          <form class="composer composer-hero" id="heroForm" autocomplete="off">
+            <label class="attach" title="Joindre un fichier">
+              <span class="nav-ico" data-ico="paperclip"></span>
+              <input type="file" id="heroFile" multiple hidden />
+            </label>
+            <input
+              type="text"
+              id="heroInput"
+              placeholder="Écris à Mav… « prépare un point sur mes mails »"
+              aria-label="Message"
+            />
+            <button
+              type="button"
+              class="mic-btn"
+              id="heroMic"
+              aria-label="Dicter"
+            >
+              <span class="nav-ico" data-ico="mic"></span>
+            </button>
+            <button type="submit" class="send" aria-label="Envoyer">
+              <span class="nav-ico" data-ico="send"></span>
+            </button>
+          </form>
+          <div class="chips" id="heroChips">
+            <button class="chip" data-cmd="statut">
+              Où en est le système ?
+            </button>
+            <button class="chip" data-cmd="automatisations">
+              Mes automatisations
+            </button>
+            <button class="chip" data-cmd="souvenirs">
+              Qu'est-ce que tu retiens ?
+            </button>
+            <button class="chip" data-cmd="surveillance">Des alertes ?</button>
+          </div>
+
+          <div class="stats" id="stats"></div>
+
+          <div class="cards two">
+            <section class="card">
+              <div class="card-head">
+                <h2>Aujourd'hui</h2>
+                <span class="card-sub">Ce que j'ai fait pour toi</span>
+              </div>
+              <ul class="timeline" id="today"></ul>
+            </section>
+            <section class="card">
+              <div class="card-head">
+                <h2>Automatisations</h2>
+                <button class="link" data-goto="jobs">Tout voir</button>
+              </div>
+              <ul class="mini-jobs" id="homeJobs"></ul>
+            </section>
+          </div>
+
+          <section class="card job-results-card">
+            <div class="card-head">
+              <h2>Résultats des jobs</h2>
+              <span class="card-sub">Les derniers rapports générés</span>
+            </div>
+            <div class="job-results" id="jobResults"></div>
+          </section>
+        </section>
+
+        <!-- CHAT -->
+        <section class="view" id="view-chat">
+          <div class="chat-layout">
+            <aside class="conv-sidebar">
+              <button class="new-conv" id="newConv">
+                <span class="nav-ico" data-ico="plus"></span> Nouvelle
+                discussion
+              </button>
+              <div class="conv-list" id="convList"></div>
+            </aside>
+
+            <div class="card chat-card">
+              <div class="chat-head">
+                <div class="chat-head-left">
+                  <h2 id="chatTitle">Nouvelle discussion</h2>
+                  <span class="chat-agent" id="chatAgentLabel"></span>
+                </div>
+                <div class="chat-head-actions">
+                  <button
+                    class="icon-btn"
+                    id="exportBtn"
+                    title="Exporter en markdown"
+                  >
+                    <span class="nav-ico" data-ico="download"></span>
+                  </button>
+                  <button class="icon-btn" id="summaryBtn" title="Résumer">
+                    <span class="nav-ico" data-ico="sparkle"></span>
+                  </button>
+                  <button class="icon-btn" id="renameBtn" title="Renommer">
+                    <span class="nav-ico" data-ico="edit"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="messages" id="messages"></div>
+              <div class="typing" id="typing" hidden>
+                <span></span><span></span><span></span>
+              </div>
+              <form class="composer" id="chatForm" autocomplete="off">
+                <label class="attach" title="Joindre un fichier">
+                  <span class="nav-ico" data-ico="paperclip"></span>
+                  <input type="file" id="chatFileInput" multiple hidden />
+                </label>
+                <input
+                  type="text"
+                  id="chatInput"
+                  placeholder="Écris un message…"
+                  aria-label="Message"
+                />
+                <button
+                  type="button"
+                  class="mic-btn"
+                  id="chatMic"
+                  aria-label="Dicter"
+                >
+                  <span class="nav-ico" data-ico="mic"></span>
+                </button>
+                <button
+                  type="submit"
+                  class="send"
+                  id="sendBtn"
+                  aria-label="Envoyer"
+                >
+                  <span class="nav-ico" data-ico="send"></span>
+                </button>
+                <button
+                  type="button"
+                  class="stop-btn"
+                  id="stopBtn"
+                  hidden
+                  aria-label="Arrêter"
+                >
+                  <span class="nav-ico" data-ico="stop"></span>
+                </button>
+              </form>
+              <div class="attachments" id="chatAttachments" hidden></div>
+              <div class="chips" id="chatChips">
+                <button class="chip" data-cmd="statut">Statut</button>
+                <button class="chip" data-cmd="automatisations">
+                  Automatisations
+                </button>
+                <button class="chip" data-cmd="souvenirs">Souvenirs</button>
+                <button class="chip" data-cmd="surveillance">
+                  Surveillance
+                </button>
+                <button class="chip" data-cmd="marches">Marchés</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- JOBS -->
+        <section class="view" id="view-jobs">
+          <header class="view-head">
+            <h1>Automatisations</h1>
+            <p>Ce que je fais pour toi, sans que tu aies à demander.</p>
+          </header>
+          <div class="jobs" id="jobsList"></div>
+        </section>
+
+        <!-- MEMORY -->
+        <section class="view" id="view-memory">
+          <header class="view-head">
+            <h1>Souvenirs</h1>
+            <p>Les choses que je retiens d'une conversation à l'autre.</p>
+          </header>
+          <div class="search-inline">
+            <span class="nav-ico" data-ico="search"></span>
+            <input
+              type="search"
+              id="memorySearch"
+              placeholder="Chercher dans la mémoire et les documents…"
+            />
+          </div>
+          <div class="card">
+            <ul class="memory" id="memoryList"></ul>
+          </div>
+        </section>
+
+        <!-- WATCH -->
+        <section class="view" id="view-watch">
+          <header class="view-head">
+            <h1>Surveillance</h1>
+            <p>
+              Je surveille ça pour toi et je te préviens seulement quand ça
+              change.
+            </p>
+          </header>
+          <form class="watch-add" id="watchForm">
+            <select id="watchKind" aria-label="Type">
+              <option value="web">web</option>
+              <option value="mail">mail</option>
+              <option value="github">github</option>
+              <option value="moodle">moodle</option>
+              <option value="proxmox">proxmox</option>
+              <option value="health">health</option>
+            </select>
+            <input
+              type="text"
+              id="watchTarget"
+              placeholder="URL, requête, owner/repo…"
+            />
+            <button type="submit">Ajouter</button>
+          </form>
+          <div class="watch" id="watchList"></div>
+        </section>
+
+        <!-- SYSTEM / INFRA -->
+        <section class="view" id="view-system">
+          <header class="view-head">
+            <h1>Infra</h1>
+            <p>L'hyperviseur GAIA et ses machines, en direct de Proxmox.</p>
+          </header>
+          <div class="infra-nodes" id="infraNodes"></div>
+          <div class="infra-vms" id="infraVms"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ============ NAVBAR BASSE (mobile) ============ -->
+    <nav class="tabbar" id="tabbar">
+      <button class="tab is-active" data-view="home">
+        <span class="nav-ico" data-ico="home"></span>
+        <span class="tab-label">Accueil</span>
+      </button>
+      <button class="tab" data-view="chat">
+        <span class="nav-ico" data-ico="chat"></span>
+        <span class="tab-label">Discussions</span>
+      </button>
+      <button class="tab" data-view="jobs">
+        <span class="nav-ico" data-ico="bolt"></span>
+        <span class="tab-label">Autos</span>
+      </button>
+      <button class="tab" data-view="memory">
+        <span class="nav-ico" data-ico="heart"></span>
+        <span class="tab-label">Souvenirs</span>
+      </button>
+      <button class="tab" data-view="system">
+        <span class="nav-ico" data-ico="cpu"></span>
+        <span class="tab-label">Infra</span>
+      </button>
+    </nav>
+
+    <!-- ============ COMMAND PALETTE ============ -->
+    <div class="palette" id="palette" hidden>
+      <div class="palette-box">
+        <div class="palette-input">
+          <span class="nav-ico" data-ico="search"></span>
+          <input
+            type="text"
+            id="paletteInput"
+            placeholder="Chercher une discussion, un souvenir, une action…"
+            autocomplete="off"
+          />
+        </div>
+        <div class="palette-results" id="paletteResults"></div>
+      </div>
+    </div>
+
+    <!-- Bandeau d'installation PWA -->
+    <div class="install-banner" id="installBanner" hidden>
+      <div class="install-text">
+        <strong>Installer Mav</strong>
+        <span>Ajoute-la à ton écran d'accueil, comme une appli.</span>
+      </div>
+      <div class="install-actions">
+        <button class="install-btn" id="installBtn">Installer</button>
+        <button class="install-close" id="installClose" aria-label="Plus tard">
+          ×
+        </button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <script src="assets/vendor/lightweight-charts.js"></script>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

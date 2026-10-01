@@ -1,0 +1,10 @@
+# venv
+venv/
+__pycache__/
+*.pyc
+
+# données locales
+sessions.json
+memory.json
+jobs_state.json
+.env

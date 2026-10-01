@@ -1,0 +1,52 @@
+[
+  {
+    "name": "revue-dev-matinale",
+    "time": "08:00",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "chat_id": 7674111325,
+    "agent": "research",
+    "prompt": "Fais le point : PR ouvertes sur mes repos GitHub, CI en échec, dépendances vulnérables. Sois bref et factuel.",
+    "enabled": true,
+    "description": "Point rapide sur le code : PRs ouvertes, CI en échec, dépendances vulnérables"
+  },
+  {
+    "name": "briefing-marches-9h",
+    "time": "09:00",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "chat_id": 7674111325,
+    "agent": "research",
+    "prompt": "Tu es le stagiaire d'un manager de hedge fund. Rédige un briefing macro et marchés du matin, en français, structuré et détaillé, comme un rapport exécutif. Utilise les outils Stocktwits (get_trending_symbols sur equities et crypto, get_symbol_pulse sur SPY, QQQ, GLD, SLV, USO.X, TLT, NVDA, BTC.X, et les symboles qui ressortent) pour des données temps réel. Couvre : 1) Macro et géopolitique (ce qui pilote la journée), 2) Matières premières (pétrole, or, argent), 3) Taux et obligations, 4) Actions par secteur avec les mouvements marquants, 5) Crypto, 6) Une synthèse pour le desk avec les niveaux clés à surveiller. Donne les prix et variations chiffrés. Sois précis et factuel, pas de blabla.\n\nPour les indices et valeurs phares, insère des graphiques en écrivant sur une ligne la directive [[chart:SYMBOLE:1mo]] (ou 5d / 3mo / 1y). Exemple seul sur sa ligne : [[chart:SPY:1mo]]. Mets-en pour SPY, QQQ, et 2-3 valeurs marquantes (ex. NVDA, GLD, BTC-USD). Ces directives sont rendues en graphiques interactifs dans le dashboard.",
+    "enabled": true,
+    "description": "Rapport exécutif macro + marchés (stocks, crypto, taux, matières premières)"
+  },
+  {
+    "name": "bilan-marches-us-22h",
+    "time": "22:00",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "chat_id": 7674111325,
+    "agent": "research",
+    "prompt": "Tu es le stagiaire d'un manager de hedge fund. À la clôture de Wall Street, rédige le bilan de la journée des marchés US, en français, structuré et détaillé, comme un rapport exécutif de fin de séance. Utilise les outils Stocktwits (get_trending_symbols sur equities et crypto, get_symbol_pulse sur SPY, QQQ, DIA, IWM, GLD, SLV, USO.X, TLT, VIX, NVDA, AAPL, MSFT, TSLA, BTC.X, et les symboles qui ressortent) pour les données temps réel de clôture. Couvre : 1) Clôture des indices (S&P 500, Nasdaq, Dow, Russell 2000) avec niveaux et variation du jour, 2) Secteurs en tête et en queue, 3) Mouvements marquants sur les valeurs phares et les news du jour, 4) Taux et obligations (TLT, rendement 10 ans), 5) Matières premières (pétrole, or, argent), 6) Volatilité (VIX) et ce que ça dit du régime de marché, 7) À quoi s'attendre pour la séance suivante / les niveaux clés à surveiller. Donne les prix et variations chiffrés. Sois précis et factuel, pas de blabla.\n\nPour les indices et valeurs phares, insère des graphiques en écrivant sur une ligne la directive [[chart:SYMBOLE:1mo]] (ou 5d / 3mo / 1y). Exemple seul sur sa ligne : [[chart:SPY:1mo]]. Mets-en pour SPY, QQQ, et 2-3 valeurs marquantes (ex. NVDA, GLD, BTC-USD). Ces directives sont rendues en graphiques interactifs dans le dashboard.",
+    "enabled": true,
+    "description": "Bilan de fin de séance des marchés US (clôture 16h ET)"
+  },
+  {
+    "name": "flash-biotech-9h",
+    "time": "09:05",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "chat_id": 7674111325,
+    "agent": "research",
+    "prompt": "Tu es analyste biotech/santé dans un fonds. Rédige le flash biotech du matin, en français, structuré et factuel, comme un rapport de desk.\n\nÉTAPE 1 — Données. Exécute en bash : python3 /home/opencode/bot/biotech_brief.py  (le script met ~10 s). Il te renvoie : les cotations des ETF santé/biotech (XBI, IBB, XLV, IHI, ARKG, XPH), des grands labos et des biotechs innovantes (prix, variation du jour et sur 5 jours), les approbations FDA récentes (NDA/BLA originaux), les essais cliniques récemment mis à jour (promoteurs industriels, phases 1-3), et les rappels FDA récents. Ne réinvente aucune donnée : utilise UNIQUEMENT ce que le script renvoie.\n\nÉTAPE 2 — Rédaction. Structure ainsi : 1) En-tête : état du secteur (XBI/IBB) et ambiance générale (risk-on / risk-off santé). 2) Grands labos : mouvements marquants chiffrés. 3) Biotechs innovantes : mouvements marquants chiffrés, notamment les variations > 5 %. 4) Catalyseurs : approbations FDA et résultats/essais cliniques notables du jour. 5) Rappels/sécurité : uniquement les faits marquants (classe I ou volume important). 6) À suivre : niveaux clés et catalyseurs des prochains jours.\n\nDonne les prix et variations chiffrés. Si une section n'a rien d'important, dis-le en une ligne plutôt que de remplir. Pas de blabla, pas de conseil d'investissement. Termine par une ligne « Bilan : … ».\n\nPour les ETF et valeurs phares, insère des graphiques en écrivant sur une ligne la directive [[chart:SYMBOLE:1mo]] (ou 5d / 3mo). Exemple seul sur sa ligne : [[chart:XBI:1mo]]. Mets-en pour XBI, IBB, et 2-3 valeurs marquantes.",
+    "enabled": true,
+    "description": "Flash biotech du matin : ETF santé, labos, biotechs, approbations et essais FDA"
+  },
+  {
+    "name": "bilan-biotech-22h",
+    "time": "22:05",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "chat_id": 7674111325,
+    "agent": "research",
+    "prompt": "Tu es analyste biotech/santé dans un fonds. À la clôture de Wall Street, rédige le bilan biotech complet de la séance, en français, structuré et factuel, comme un rapport exécutif de fin de journée.\n\nÉTAPE 1 — Données. Exécute en bash : python3 /home/opencode/bot/biotech_brief.py  (le script met ~10 s). Il te renvoie : les cotations des ETF santé/biotech (XBI, IBB, XLV, IHI, ARKG, XPH), des grands labos et des biotechs innovantes (prix, variation du jour et sur 5 jours), les approbations FDA récentes (NDA/BLA originaux), les essais cliniques récemment mis à jour (promoteurs industriels, phases 1-3), et les rappels FDA récents. Ne réinvente aucune donnée : utilise UNIQUEMENT ce que le script renvoie.\n\nÉTAPE 2 — Rédaction. Structure ainsi : 1) Clôture du secteur : XBI et IBB (niveau et variation du jour), régime de marché (risk-on / risk-off). 2) Performance des sous-segments : biotech (XBI/IBB), santé large (XLV), dispositifs médicaux (IHI), génomique (ARKG), pharma (XPH). 3) Grands labos : mouvements marquants chiffrés, en tête et en queue. 4) Biotechs innovantes : plus forts mouvements chiffrés, notamment variations > 5 %, et ce qui les explique si l'info est disponible. 5) Catalyseurs du jour : approbations FDA, essais cliniques notables (recrutement, complétion, mise à jour). 6) Sécurité/rappels : faits marquants uniquement. 7) À suivre pour la séance suivante : niveaux clés, catalyseurs attendus.\n\nDonne les prix et variations chiffrés. Si une section n'a rien d'important, dis-le en une ligne. Pas de blabla, pas de conseil d'investissement. Termine par une ligne « Bilan : … ».\n\nPour les ETF et valeurs phares, insère des graphiques en écrivant sur une ligne la directive [[chart:SYMBOLE:1mo]] (ou 5d / 3mo). Exemple seul sur sa ligne : [[chart:XBI:1mo]]. Mets-en pour XBI, IBB, et 2-3 valeurs marquantes.",
+    "enabled": true,
+    "description": "Bilan biotech de fin de séance : ETF, labos, biotechs, catalyseurs FDA"
+  }
+]

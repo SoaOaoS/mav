@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.log
+*.pid
+
+# Secrets
+certs/
+
+# venv dédié au backend
+server/venv/
