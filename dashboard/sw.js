@@ -1,7 +1,7 @@
 /* Service worker Mav — PWA.
-   Stratégie : RÉSEAU D'ABORD pour la coquille (HTML/CSS/JS/icônes), afin que
-   les mises à jour arrivent toujours ; le cache ne sert que de secours hors
-   ligne. JAMAIS de cache pour /api/* (état temps réel de l'agent).
+   Strategy: NETWORK-FIRST for the shell (HTML/CSS/JS/icons), so updates
+   always arrive; the cache is only an offline fallback. NEVER cache
+   /api/* (the agent's live state).
 */
 
 const CACHE = "mav-shell-v11";
@@ -39,7 +39,7 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Recharge immédiate quand on demande au SW de prendre la main.
+// Immediate reload when the SW is asked to take over.
 self.addEventListener("message", (e) => {
   if (e.data === "skip-waiting") self.skipWaiting();
 });
@@ -54,7 +54,7 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Réseau d'abord ; en cas d'échec réseau, on retombe sur le cache.
+  // Network first; on network failure, fall back to the cache.
   e.respondWith(
     fetch(req)
       .then((res) => {
@@ -86,7 +86,7 @@ self.addEventListener("push", (event) => {
   } catch (_) {}
   event.waitUntil(
     (async () => {
-      // Affiche la notification d'abord (priorité absolue).
+      // Show the notification first (absolute priority).
       await self.registration.showNotification(data.title || "Mav", {
         body: data.body || "",
         icon: "icons/icon-192.png",
@@ -94,7 +94,7 @@ self.addEventListener("push", (event) => {
         data: { url: data.url || "./" },
         tag: data.tag || undefined,
       });
-      // Accusé de réception (diagnostic) : ne doit jamais bloquer l'affichage.
+      // Acknowledgement (diagnostics): must never block display.
       try {
         const ctl = new AbortController();
         setTimeout(() => ctl.abort(), 4000);
@@ -122,8 +122,8 @@ self.addEventListener("notificationclick", (event) => {
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((list) => {
-        // Un onglet Mav est déjà ouvert : on lui demande d'ouvrir le détail
-        // (message direct, plus fiable que navigate selon les navigateurs).
+        // A Mav tab is already open: ask it to open the detail
+        // (direct message, more reliable than navigate across browsers).
         for (const c of list) {
           if ("focus" in c) {
             try {

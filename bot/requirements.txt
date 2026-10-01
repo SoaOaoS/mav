@@ -1,6 +1,6 @@
 httpx>=0.27
 python-telegram-bot>=21.0
 
-# Mémoire, veille, notifications (optionnels mais recommandés) :
+# Memory, watch, notifications (optional but recommended):
 psycopg2-binary>=2.9
 pywebpush>=2.0

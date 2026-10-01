@@ -1,7 +1,7 @@
 {
   "name": "Mav — ton compagnon IA",
   "short_name": "Mav",
-  "description": "Parlote avec Mav, suis tes automatisations, ta mémoire et ta veille.",
+  "description": "Chat with Mav, follow your automations, memory and watch.",
   "lang": "fr",
   "start_url": "./?src=pwa",
   "scope": "./",

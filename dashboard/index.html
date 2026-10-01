@@ -56,7 +56,7 @@
         >
           <span class="nav-ico" data-ico="bolt"></span>
         </button>
-        <button class="mobile-icon" id="mobileNew" title="Nouvelle discussion">
+        <button class="mobile-icon" id="mobileNew" title="New conversation">
           <span class="nav-ico" data-ico="plus"></span>
         </button>
         <button class="mobile-icon" id="mobileSearch" title="Rechercher">
@@ -84,20 +84,20 @@
 
         <nav class="nav">
           <button class="nav-item is-active" data-view="home">
-            <span class="nav-ico" data-ico="home"></span> Accueil
+            <span class="nav-ico" data-ico="home"></span> Home
           </button>
           <button class="nav-item" data-view="chat">
-            <span class="nav-ico" data-ico="chat"></span> Discussions
+            <span class="nav-ico" data-ico="chat"></span> Conversations
           </button>
           <button class="nav-item" data-view="jobs">
-            <span class="nav-ico" data-ico="bolt"></span> Automatisations
+            <span class="nav-ico" data-ico="bolt"></span> Automations
             <span class="nav-count" id="navJobsCount">3</span>
           </button>
           <button class="nav-item" data-view="memory">
-            <span class="nav-ico" data-ico="heart"></span> Souvenirs
+            <span class="nav-ico" data-ico="heart"></span> Memories
           </button>
           <button class="nav-item" data-view="watch">
-            <span class="nav-ico" data-ico="eye"></span> Surveillance
+            <span class="nav-ico" data-ico="eye"></span> Watch
           </button>
           <button class="nav-item" data-view="system">
             <span class="nav-ico" data-ico="cpu"></span> Infra
@@ -129,7 +129,7 @@
         <!-- HOME -->
         <section class="view is-active" id="view-home">
           <header class="hello">
-            <h1 id="greeting">Bonjour Raphaël</h1>
+            <h1 id="greeting">Hello</h1>
             <p id="greetingSub">
               Content de te revoir. Qu'est-ce qu'on fait aujourd'hui ?
             </p>
@@ -143,7 +143,7 @@
             <input
               type="text"
               id="heroInput"
-              placeholder="Écris à Mav… « prépare un point sur mes mails »"
+              placeholder="Write to Mav… 'prepare a summary of my mail'"
               aria-label="Message"
             />
             <button
@@ -159,16 +159,16 @@
             </button>
           </form>
           <div class="chips" id="heroChips">
-            <button class="chip" data-cmd="statut">
-              Où en est le système ?
+            <button class="chip" data-cmd="status">
+              How is the system doing?
             </button>
-            <button class="chip" data-cmd="automatisations">
-              Mes automatisations
+            <button class="chip" data-cmd="automations">
+              My automations
             </button>
-            <button class="chip" data-cmd="souvenirs">
-              Qu'est-ce que tu retiens ?
+            <button class="chip" data-cmd="memories">
+              What do you remember?
             </button>
-            <button class="chip" data-cmd="surveillance">Des alertes ?</button>
+            <button class="chip" data-cmd="watch">Any alerts?</button>
           </div>
 
           <div class="stats" id="stats"></div>
@@ -183,7 +183,7 @@
             </section>
             <section class="card">
               <div class="card-head">
-                <h2>Automatisations</h2>
+                <h2>Automations</h2>
                 <button class="link" data-goto="jobs">Tout voir</button>
               </div>
               <ul class="mini-jobs" id="homeJobs"></ul>
@@ -192,8 +192,8 @@
 
           <section class="card job-results-card">
             <div class="card-head">
-              <h2>Résultats des jobs</h2>
-              <span class="card-sub">Les derniers rapports générés</span>
+              <h2>Job results</h2>
+              <span class="card-sub">The latest generated reports</span>
             </div>
             <div class="job-results" id="jobResults"></div>
           </section>
@@ -213,7 +213,7 @@
             <div class="card chat-card">
               <div class="chat-head">
                 <div class="chat-head-left">
-                  <h2 id="chatTitle">Nouvelle discussion</h2>
+                  <h2 id="chatTitle">New conversation</h2>
                   <span class="chat-agent" id="chatAgentLabel"></span>
                 </div>
                 <div class="chat-head-actions">
@@ -224,7 +224,7 @@
                   >
                     <span class="nav-ico" data-ico="download"></span>
                   </button>
-                  <button class="icon-btn" id="summaryBtn" title="Résumer">
+                  <button class="icon-btn" id="summaryBtn" title="Summarize">
                     <span class="nav-ico" data-ico="sparkle"></span>
                   </button>
                   <button class="icon-btn" id="renameBtn" title="Renommer">
@@ -268,22 +268,22 @@
                   class="stop-btn"
                   id="stopBtn"
                   hidden
-                  aria-label="Arrêter"
+                  aria-label="Stop"
                 >
                   <span class="nav-ico" data-ico="stop"></span>
                 </button>
               </form>
               <div class="attachments" id="chatAttachments" hidden></div>
               <div class="chips" id="chatChips">
-                <button class="chip" data-cmd="statut">Statut</button>
-                <button class="chip" data-cmd="automatisations">
-                  Automatisations
+                <button class="chip" data-cmd="status">Status</button>
+                <button class="chip" data-cmd="automations">
+                  Automations
                 </button>
-                <button class="chip" data-cmd="souvenirs">Souvenirs</button>
-                <button class="chip" data-cmd="surveillance">
-                  Surveillance
+                <button class="chip" data-cmd="memories">Memories</button>
+                <button class="chip" data-cmd="watch">
+                  Watch
                 </button>
-                <button class="chip" data-cmd="marches">Marchés</button>
+                <button class="chip" data-cmd="markets">Markets</button>
               </div>
             </div>
           </div>
@@ -292,8 +292,8 @@
         <!-- JOBS -->
         <section class="view" id="view-jobs">
           <header class="view-head">
-            <h1>Automatisations</h1>
-            <p>Ce que je fais pour toi, sans que tu aies à demander.</p>
+            <h1>Automations</h1>
+            <p>What I do for you, without you having to ask.</p>
           </header>
           <div class="jobs" id="jobsList"></div>
         </section>
@@ -301,15 +301,15 @@
         <!-- MEMORY -->
         <section class="view" id="view-memory">
           <header class="view-head">
-            <h1>Souvenirs</h1>
-            <p>Les choses que je retiens d'une conversation à l'autre.</p>
+            <h1>Memories</h1>
+            <p>The things I remember from one conversation to the next.</p>
           </header>
           <div class="search-inline">
             <span class="nav-ico" data-ico="search"></span>
             <input
               type="search"
               id="memorySearch"
-              placeholder="Chercher dans la mémoire et les documents…"
+              placeholder="Search memory and documents…"
             />
           </div>
           <div class="card">
@@ -320,9 +320,9 @@
         <!-- WATCH -->
         <section class="view" id="view-watch">
           <header class="view-head">
-            <h1>Surveillance</h1>
+            <h1>Watch</h1>
             <p>
-              Je surveille ça pour toi et je te préviens seulement quand ça
+              I watch this for you and only ping you when it
               change.
             </p>
           </header>
@@ -338,9 +338,9 @@
             <input
               type="text"
               id="watchTarget"
-              placeholder="URL, requête, owner/repo…"
+              placeholder="URL, query, owner/repo…"
             />
-            <button type="submit">Ajouter</button>
+            <button type="submit">Add</button>
           </form>
           <div class="watch" id="watchList"></div>
         </section>
@@ -361,11 +361,11 @@
     <nav class="tabbar" id="tabbar">
       <button class="tab is-active" data-view="home">
         <span class="nav-ico" data-ico="home"></span>
-        <span class="tab-label">Accueil</span>
+        <span class="tab-label">Home</span>
       </button>
       <button class="tab" data-view="chat">
         <span class="nav-ico" data-ico="chat"></span>
-        <span class="tab-label">Discussions</span>
+        <span class="tab-label">Chats</span>
       </button>
       <button class="tab" data-view="jobs">
         <span class="nav-ico" data-ico="bolt"></span>
@@ -373,7 +373,7 @@
       </button>
       <button class="tab" data-view="memory">
         <span class="nav-ico" data-ico="heart"></span>
-        <span class="tab-label">Souvenirs</span>
+        <span class="tab-label">Memories</span>
       </button>
       <button class="tab" data-view="system">
         <span class="nav-ico" data-ico="cpu"></span>
@@ -389,7 +389,7 @@
           <input
             type="text"
             id="paletteInput"
-            placeholder="Chercher une discussion, un souvenir, une action…"
+            placeholder="Search a conversation, a memory, an action…"
             autocomplete="off"
           />
         </div>
@@ -401,7 +401,7 @@
     <div class="install-banner" id="installBanner" hidden>
       <div class="install-text">
         <strong>Installer Mav</strong>
-        <span>Ajoute-la à ton écran d'accueil, comme une appli.</span>
+        <span>Add it to your home screen, like an app.</span>
       </div>
       <div class="install-actions">
         <button class="install-btn" id="installBtn">Installer</button>

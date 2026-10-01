@@ -1,9 +1,9 @@
 -- ============================================================================
--- Mav — schéma Postgres (idempotent, rejouable sans risque)
--- Appliqué par install.sh au premier démarrage de la base.
+-- Mav — Postgres schema (idempotent, safe to re-run)
+-- Applied by install.sh on first database start.
 -- ============================================================================
 
--- ---------------------------------------------------------------- mémoire
+-- ----------------------------------------------------------------- memory
 CREATE TABLE IF NOT EXISTS conversations (
     id          bigserial PRIMARY KEY,
     chat_id     bigint  NOT NULL,

@@ -1,9 +1,9 @@
-# Environnements virtuels
+# Virtual environments
 venv/
 __pycache__/
 *.pyc
 
-# Données locales du bot
+# Bot local data
 bot/sessions.json
 bot/memory.json
 bot/jobs_state.json
@@ -11,13 +11,13 @@ bot/push_subs.json
 bot/*.log
 bot/*.pid
 
-# Secrets / générés
+# Secrets / generated
 *.env
 certs/
 dashboard/certs/
 vapid_private.pem
 vapid_public.txt
 
-# Divers
+# Misc
 .DS_Store
 *.swp

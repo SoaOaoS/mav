@@ -6,5 +6,5 @@ __pycache__/
 # Secrets
 certs/
 
-# venv dédié au backend
+# backend venv
 server/venv/
