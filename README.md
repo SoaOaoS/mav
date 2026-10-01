@@ -23,15 +23,24 @@ toi-même : modèle, agents, MCP), et **Postgres** pour la mémoire.
 
 ## Installation
 
-Sur une machine Debian/Ubuntu fraîche :
+**En une ligne** (télécharge et lance l'assistant) :
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash
+```
+
+Ou, si tu préfères cloner d'abord :
+
+```bash
+git clone https://github.com/SoaOaoS/mav.git
+cd mav
 sudo ./install.sh
 ```
 
-Un assistant te guide : identité, token Telegram, moteur opencode, Postgres,
-dashboard, comportement du bot. Tu peux tout valider par défaut là où c'est
-possible. Puis il fait le reste — dépendances, base, certificats, services.
+Sur une machine Debian/Ubuntu fraîche, un assistant te guide : identité, token
+Telegram, moteur opencode, Postgres, dashboard, comportement du bot. Tu peux
+tout valider par défaut là où c'est possible. Puis il fait le reste —
+dépendances, base, certificats, services.
 
 Autres modes :
 
@@ -40,6 +49,10 @@ sudo ./install.sh --yes        # tout par défaut, sans question
 sudo ./install.sh --dry-run    # montre ce qui serait fait, ne touche à rien
 sudo ./install.sh --uninstall  # retire services, configs et conteneur
 ```
+
+En mode `--yes`, tu peux fournir les valeurs par variables d'environnement
+(pratique pour automatiser) : `MAV_TELEGRAM_TOKEN`, `MAV_ALLOWED_CHAT_IDS`,
+`MAV_OPENCODE_MODEL`, `MAV_API_BIND`, `MAV_POSTGRES_PASSWORD`, etc.
 
 > L'installeur est **idempotent** : tu peux le relancer pour mettre à jour
 > sans rien casser.
@@ -107,8 +120,8 @@ Commandes du bot (sur Telegram) : `/ask`, `/new`, `/agent`, `/stop`,
 
 ```
 mav/
+├── get.sh                  # bootstrap « curl | bash »
 ├── install.sh              # l'installeur unifié (le wizard)
-├── docker-compose.yml.tpl  # Postgres (template)
 ├── scripts/schema.sql      # schéma complet de la base
 ├── systemd/                # templates des 3 services
 ├── bot/                    # le bot Telegram (oc*.py)
