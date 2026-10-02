@@ -10,7 +10,7 @@ WorkingDirectory=__HOME__/workspace
 Environment=HOME=__HOME__
 Environment=OPENCODE_DISABLE_AUTOUPDATE=1
 EnvironmentFile=-__ENV_SERVER__
-ExecStart=__HOME__/.opencode/bin/opencode serve --hostname 127.0.0.1 --port __PORT__
+ExecStart=__OPENCODE_BIN__ serve --hostname 127.0.0.1 --port __PORT__
 Restart=always
 RestartSec=5
 

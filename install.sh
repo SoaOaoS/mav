@@ -224,25 +224,54 @@ install_opencode() {
   # The opencode engine, in the user's HOME (official binary).
   local home="$1" user="$2"
   step "Moteur opencode"
+
+  # Already present in the user's expected location?
   if [[ -x "$home/.opencode/bin/opencode" ]]; then
-    ok "opencode already installed ($("$home/.opencode/bin/opencode" --version 2>/dev/null || echo '?'))"
+    OPENCODE_BIN="$home/.opencode/bin/opencode"
+    ok "opencode already installed ($("$OPENCODE_BIN" --version 2>/dev/null || echo '?'))"
     return
   fi
+
   if [[ $DRY_RUN -eq 1 ]]; then
     info "[dry-run] would install opencode into $home"
+    OPENCODE_BIN="$home/.opencode/bin/opencode"
     return
   fi
-  if command -v opencode >/dev/null 2>&1; then
-    ok "opencode already present in PATH."
-    return
-  fi
+
+  # Try the official installer as the user.
   info "Downloading opencode (agent engine)…"
-  if ! su - "$user" -c 'curl -fsSL https://opencode.ai/install | bash' >/dev/null 2>&1; then
-    warn "Automatic opencode install failed."
-    warn "Install it manually then re-run: https://opencode.ai/docs"
-    return
+  su - "$user" -c 'curl -fsSL https://opencode.ai/install | bash' >/dev/null 2>&1 || true
+
+  # Locate the binary wherever it actually ended up: the user's own install,
+  # the login-shell PATH, or a system-wide install. This makes the installer
+  # work whether opencode was installed by us, by the user by hand, or by root.
+  OPENCODE_BIN="$(resolve_opencode_bin "$home" "$user")"
+  if [[ -n "$OPENCODE_BIN" ]]; then
+    ok "opencode found at $OPENCODE_BIN"
+  else
+    warn "opencode not found. Install it, then re-run this installer:"
+    warn "  curl -fsSL https://opencode.ai/install | bash"
+    OPENCODE_BIN="$home/.opencode/bin/opencode"
   fi
-  ok "opencode installed."
+}
+
+# Find the opencode binary. Returns an absolute path, or empty if absent.
+resolve_opencode_bin() {
+  local home="$1" user="$2" p
+  # 1. Standard per-user install location.
+  for p in "$home/.opencode/bin/opencode"; do
+    [[ -x "$p" ]] && { echo "$p"; return; }
+  done
+  # 2. The target user's login PATH (covers custom install dirs).
+  p="$(su - "$user" -c 'command -v opencode' 2>/dev/null | tail -1 | tr -d '\r')"
+  [[ -n "$p" && -x "$p" ]] && { echo "$p"; return; }
+  # 3. Our own PATH and common system locations.
+  p="$(command -v opencode 2>/dev/null || true)"
+  [[ -n "$p" && -x "$p" ]] && { echo "$p"; return; }
+  for p in /usr/local/bin/opencode /usr/bin/opencode /root/.opencode/bin/opencode; do
+    [[ -x "$p" ]] && { echo "$p"; return; }
+  done
+  echo ""
 }
 
 # ------------------------------------------------------------------ uninstall
@@ -634,6 +663,7 @@ tpl() { sed -e "s|__USER__|${A[INSTALL_USER]}|g" \
             -e "s|__DASH_DIR__|$DASH_DIR|g" \
             -e "s|__DASH_USER__|root|g" \
             -e "s|__PORT__|${OPENCODE_PORT:-4096}|g" \
+            -e "s|__OPENCODE_BIN__|${OPENCODE_BIN:-$A[INSTALL_HOME]/.opencode/bin/opencode}|g" \
             -e "s|__ENV_BOT__|$ENV_BOT|g" \
             -e "s|__ENV_DASH__|$ENV_DASH|g" \
             -e "s|__ENV_SERVER__|$ENV_SERVER|g" "$1"; }
