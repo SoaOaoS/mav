@@ -483,8 +483,8 @@ A[CLEAR_ALLOWED_CHAT_IDS]="$(ask_env "Chat IDs allowed to /clear (empty = disabl
 # Provider LLM (moteur opencode)
 echo
 info "— Model (LLM provider) —"
-info "  Supported providers: ollama, anthropic (Claude), openai, custom"
-A[PROVIDER]="$(ask_choice "Provider" "ollama|anthropic|openai|custom" "${MAV_PROVIDER:-ollama}")"
+info "  Supported providers: ollama, ollama-cloud, anthropic (Claude), openai, custom"
+A[PROVIDER]="$(ask_choice "Provider" "ollama|ollama-cloud|anthropic|openai|custom" "${MAV_PROVIDER:-ollama}")"
 
 case "${A[PROVIDER]}" in
   ollama)
@@ -492,6 +492,16 @@ case "${A[PROVIDER]}" in
     A[PROVIDER_APIKEY]="$(ask "Ollama API key (empty if not required)" "${MAV_PROVIDER_APIKEY:-}" secret)"
     A[PROVIDER_ID]="ollama"; A[PROVIDER_NPM]="@ai-sdk/openai-compatible"
     A[OPENCODE_MODEL]="$(ask_env_required "Model (e.g. llama3.1, qwen2.5-coder)" "OPENCODE_MODEL")"
+    ;;
+  ollama-cloud)
+    # Native opencode provider, authenticated once with:
+    #   opencode auth login ollama-cloud
+    # The key then lives in ~/.local/share/opencode/auth.json (not in our env
+    # file), so we only set the model and never redefine the provider.
+    A[PROVIDER_BASEURL]=""; A[PROVIDER_APIKEY]=""
+    A[PROVIDER_ID]="ollama-cloud"; A[PROVIDER_NPM]=""
+    info "  Auth: run 'opencode auth login ollama-cloud' if you have not yet."
+    A[OPENCODE_MODEL]="$(ask "Ollama Cloud model" "${MAV_OPENCODE_MODEL:-deepseek-v4.1-flash}")"
     ;;
   anthropic)
     A[PROVIDER_BASEURL]="$(ask "Anthropic endpoint (empty = default)" "${MAV_PROVIDER_BASEURL:-}")"
@@ -773,9 +783,28 @@ pid = "${A[PROVIDER_ID]}"
 model = "${A[OPENCODE_MODEL]}"
 base = "${A[PROVIDER_BASEURL]}"
 key = "${A[PROVIDER_APIKEY]}"
-if pid in ("anthropic", "openai"):
-    # Native provider: key via env var, no redefinition.
+# Providers opencode knows natively must never be redefined as an
+# openai-compatible custom provider: that drops the endpoint/auth and the
+# engine fails with "Unauthorized". Besides the well-known ones, honour any
+# provider already registered via opencode auth login (auth.json), e.g.
+# ollama-cloud.
+native = {"anthropic", "openai", "ollama-cloud"}
+auth = Path("${A[INSTALL_HOME]}") / ".local/share/opencode/auth.json"
+try:
+    if auth.is_file():
+        native |= set(json.loads(auth.read_text()).keys())
+except Exception:
     pass
+if pid in native:
+    # Undo a stale empty override a previous update may have written for this
+    # native provider (empty options == our broken auto-generated block), but
+    # keep any real user override that carries options.
+    blocks = cfg.get("provider") or {}
+    blk = blocks.get(pid)
+    if isinstance(blk, dict) and not (blk.get("options") or {}):
+        blocks.pop(pid, None)
+        if not blocks:
+            cfg.pop("provider", None)
 else:
     envname = {"ollama": "OLLAMA_API_KEY"}.get(pid)
     provider = {

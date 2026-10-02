@@ -150,12 +150,13 @@ Three systemd services:
 
 The wizard lets you pick:
 
-| Provider      | What you need                    | Model (example)             |
-| ------------- | -------------------------------- | --------------------------- |
-| **ollama**    | a running Ollama (local/remote)  | `llama3.1`, `qwen2.5-coder` |
-| **anthropic** | an `ANTHROPIC_API_KEY`           | `claude-sonnet-4-5`         |
-| **openai**    | an `OPENAI_API_KEY`              | `gpt-4o`                    |
-| **custom**    | OpenAI-compatible endpoint + key | depends on your provider    |
+| Provider         | What you need                      | Model (example)             |
+| ---------------- | ---------------------------------- | --------------------------- |
+| **ollama**       | a running Ollama (local/remote)    | `llama3.1`, `qwen2.5-coder` |
+| **ollama-cloud** | `opencode auth login ollama-cloud` | `deepseek-v4.1-flash`       |
+| **anthropic**    | an `ANTHROPIC_API_KEY`             | `claude-sonnet-4-5`         |
+| **openai**       | an `OPENAI_API_KEY`                | `gpt-4o`                    |
+| **custom**       | OpenAI-compatible endpoint + key   | depends on your provider    |
 
 ## What you configure yourself
 
@@ -164,6 +165,12 @@ The installer writes a minimal opencode config
 your API key in the engine's environment. Everything else — custom agents, MCP
 servers, skills — stays in your hands, under `~/.config/opencode/`. Mav runs on
 _your_ agent.
+
+Native providers (`ollama-cloud`, `anthropic`, `openai`) are never redefined:
+opencode already knows their endpoint, and the key is read from where opencode
+expects it (`auth.json` for `ollama-cloud` after `opencode auth login`, or the
+env for the others). Re-running the installer with `--update` leaves them
+untouched.
 
 ## Useful commands
 
