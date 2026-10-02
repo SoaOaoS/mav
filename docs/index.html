@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mav — your personal AI companion</title>
+    <meta
+      name="description"
+      content="Mav is a personal AI companion: a Telegram bot and a web dashboard, with persistent memory, automatic watch, scheduled jobs and self-service agent configuration. Installed in one command."
+    />
+    <meta property="og:title" content="Mav — your personal AI companion" />
+    <meta
+      property="og:description"
+      content="A Telegram bot + web dashboard that acts, remembers, watches and reaches out. One command to install."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-halos" aria-hidden="true">
+      <span class="halo h1"></span>
+      <span class="halo h2"></span>
+      <span class="halo h3"></span>
+    </div>
+
+    <header class="nav glass">
+      <a class="brand" href="index.html">
+        <span class="orb"></span>
+        <span class="brand-name">Mav</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="docs.html">Docs</a>
+        <a
+          class="nav-gh"
+          href="https://github.com/SoaOaoS/mav"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+            />
+          </svg>
+          GitHub
+        </a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="pill">Open source · MIT</span>
+          <h1>
+            Your own AI companion,<br />
+            that acts while you&#39;re away.
+          </h1>
+          <p class="lede">
+            Mav lives on your machine: a <strong>Telegram bot</strong> and a
+            <strong>web dashboard</strong> that remember, watch, schedule and
+            reach out. It runs on <em>your</em> model — local or cloud.
+          </p>
+          <div class="cta">
+            <div class="install glass">
+              <code id="installCmd"
+                >curl -fsSL
+                https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo
+                bash</code
+              >
+              <button class="copy-btn" id="copyBtn" title="Copy">Copy</button>
+            </div>
+            <a class="btn ghost" href="docs.html">Read the docs →</a>
+          </div>
+          <ul class="hero-points">
+            <li>One command to install</li>
+            <li>Your model, your keys</li>
+            <li>Self-hosted, private</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual">
+          <div class="mock glass">
+            <div class="mock-top">
+              <span class="dot r"></span><span class="dot y"></span
+              ><span class="dot g"></span>
+              <span class="mock-title">Mav · Dashboard</span>
+            </div>
+            <div class="mock-body">
+              <aside class="mock-side">
+                <div class="ms active"><i class="ico home"></i> Home</div>
+                <div class="ms"><i class="ico chat"></i> Conversations</div>
+                <div class="ms"><i class="ico bolt"></i> Automations</div>
+                <div class="ms"><i class="ico heart"></i> Memories</div>
+                <div class="ms"><i class="ico eye"></i> Watch</div>
+                <div class="ms"><i class="ico cpu"></i> Infra</div>
+                <div class="ms active2">
+                  <i class="ico sliders"></i> Settings
+                </div>
+              </aside>
+              <div class="mock-main">
+                <div class="mock-card engine">
+                  <span class="pulse"></span>
+                  <div>
+                    <strong>Engine online</strong>
+                    <small>v1.18 · 14 agents · 12 MCP servers</small>
+                  </div>
+                  <span class="mock-pill">Restart</span>
+                </div>
+                <div class="mock-card">
+                  <div class="mock-line">
+                    <span>Assistant · today</span>
+                  </div>
+                  <div class="bubble mav">
+                    Morning brief ready. XLE is up 1.8%, I flagged one PR that
+                    needs review, and the disk is at 82%.
+                  </div>
+                  <div class="bubble me">
+                    watch the deploy, ping me if it fails
+                  </div>
+                  <div class="bubble mav typing">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <span class="float f1 glass">Alert → opened a chat</span>
+          <span class="float f2 glass">Remembers across sessions</span>
+        </div>
+      </section>
+
+      <!-- FEATURES -->
+      <section id="features" class="section">
+        <header class="section-head">
+          <h2>Everything a personal agent should do</h2>
+          <p>Not a toy. A companion that works while you sleep.</p>
+        </header>
+        <div class="grid cards">
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 20l1-3.3A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z"/></svg></div>
+            <h3>Two ways to talk</h3>
+            <p>
+              Message it on Telegram or open the dashboard. Both hit the same
+              brain, with streamed answers and a stop button.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3a3 3 0 0 0-2.9 4A3 3 0 0 0 6 13a3 3 0 0 0 1.5 5.6A3 3 0 0 0 12 21V4a3 3 0 0 0-3-1Z"/><path d="M15 3a3 3 0 0 1 2.9 4A3 3 0 0 1 18 13a3 3 0 0 1-1.5 5.6A3 3 0 0 1 12 21"/></svg></div>
+            <h3>Persistent memory</h3>
+            <p>
+              Every exchange, fact and preference is stored in Postgres and
+              recalled at the start of new sessions. It knows you.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></div>
+            <h3>Watch that only pings on change</h3>
+            <p>
+              Pages, mailboxes, GitHub repos, servers, stocks. It alerts when
+              something actually changes — never on a loop.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></div>
+            <h3>Scheduled jobs</h3>
+            <p>
+              A morning brief, a market close, a weekly report. Recurring
+              prompts with retries and a full report in the dashboard.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+            <h3>Push you can act on</h3>
+            <p>
+              Tap a notification and Mav opens a chat that explains the alert —
+              context, why it matters, what to watch next.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5a3.5 3.5 0 0 0-4.6 4.6L4 17v3h3l5.9-5.9a3.5 3.5 0 0 0 4.6-4.6l-2.3 2.3-2-2 2.3-2.3Z"/></svg></div>
+            <h3>Your agents, your rules</h3>
+            <p>
+              Edit the agent instructions and your MCP servers right in the
+              dashboard. Create new agents. Restart the engine in one click.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8v9a4 4 0 0 1-8 0Z"/><path d="M13 5h8v9a4 4 0 0 1-8 0Z"/><path d="M6 9h.01M9 9h.01M16 9h.01M19 9h.01"/></svg></div>
+            <h3>An orchestrator built in</h3>
+            <p>
+              A default agent that analyses a request, convenes the right
+              specialists, has them challenge each other, then synthesises.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+            <h3>Private by design</h3>
+            <p>
+              Self-hosted. Your data stays on your machine. No account, no
+              cloud, no telemetry — just your model.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- HOW -->
+      <section id="how" class="section how">
+        <header class="section-head">
+          <h2>Running in three steps</h2>
+          <p>From a fresh machine to a working companion in minutes.</p>
+        </header>
+        <ol class="steps">
+          <li class="glass">
+            <span class="step-n">1</span>
+            <h3>Install</h3>
+            <p>
+              One command. A wizard asks a few things once, then installs
+              Postgres, certificates, services and a <code>mav</code> command.
+            </p>
+            <code class="mini">curl -fsSL …/get.sh | sudo bash</code>
+          </li>
+          <li class="glass">
+            <span class="step-n">2</span>
+            <h3>Plug your model</h3>
+            <p>
+              Pick Ollama (local), Claude, OpenAI or any OpenAI-compatible
+              endpoint. Your key, your endpoint, your model.
+            </p>
+            <code class="mini">provider: ollama · model: llama3.1</code>
+          </li>
+          <li class="glass">
+            <span class="step-n">3</span>
+            <h3>Talk, and let it work</h3>
+            <p>
+              Message it on Telegram or open the dashboard. Set a watch, add a
+              job, and it starts coming to you.
+            </p>
+            <code class="mini">mav update · mav status · mav logs</code>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ARCH -->
+      <section class="section arch">
+        <div class="arch-grid">
+          <div class="arch-copy">
+            <h2>Simple, self-contained architecture</h2>
+            <p>
+              An opencode engine does the thinking. A Telegram bridge and a web
+              dashboard sit on top. Postgres holds the memory. All yours.
+            </p>
+            <ul class="ticks">
+              <li>Three systemd services, nothing more</li>
+              <li>Postgres in Docker, schema applied automatically</li>
+              <li>TLS + Web Push set up for you</li>
+              <li>Idempotent installer and painless updates</li>
+            </ul>
+          </div>
+          <pre class="arch-pre glass"><code>Telegram ─┐
+          ├─▶ mav-bot ─────┐
+Browser ──┴─▶ mav-dashboard ┤
+                            ▼
+                    opencode engine
+                            │
+                            ▼
+                  Postgres (Docker)</code></pre>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="final-cta glass">
+        <div class="orb big" aria-hidden="true"></div>
+        <h2>Give it a home.</h2>
+        <p>Open source, MIT-licensed, yours to keep.</p>
+        <div class="cta center">
+          <div class="install glass">
+            <code
+              >curl -fsSL
+              https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo
+              bash</code
+            >
+            <button class="copy-btn" data-copy title="Copy">Copy</button>
+          </div>
+          <a class="btn" href="docs.html">Documentation</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="brand">
+        <span class="orb small"></span><span class="brand-name">Mav</span>
+      </div>
+      <nav>
+        <a href="docs.html">Docs</a>
+        <a href="https://github.com/SoaOaoS/mav" target="_blank" rel="noopener"
+          >GitHub</a
+        >
+        <a
+          href="https://github.com/SoaOaoS/mav/blob/main/LICENSE"
+          target="_blank"
+          rel="noopener"
+          >License</a
+        >
+      </nav>
+      <p class="dim">Open source · MIT · Built to be yours.</p>
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>

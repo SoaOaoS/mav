@@ -343,7 +343,7 @@
         <section class="view" id="view-system">
           <header class="view-head">
             <h1>Infra</h1>
-            <p>The GAIA hypervisor and its machines, live from Proxmox.</p>
+            <p>Your hypervisor and its machines, live from Proxmox.</p>
           </header>
           <div class="infra-nodes" id="infraNodes"></div>
           <div class="infra-vms" id="infraVms"></div>
@@ -381,6 +381,7 @@
             <button class="settings-tab is-active" data-stab="agents">
               AGENTS.md
             </button>
+            <button class="settings-tab" data-stab="agentfiles">Agents</button>
             <button class="settings-tab" data-stab="mcp">MCP servers</button>
           </div>
 
@@ -404,6 +405,40 @@
               This file is loaded at the start of every session. Restart the
               engine to apply it.
             </p>
+          </div>
+
+          <!-- Agent files -->
+          <div class="settings-panel" id="panel-agentfiles">
+            <div class="editor-bar">
+              <span class="editor-path" id="agentFilesPath"></span>
+              <div class="editor-actions">
+                <span class="editor-status" id="agentFilesStatus"></span>
+                <button class="ghost-btn" id="agentNew">New agent</button>
+              </div>
+            </div>
+            <p class="editor-hint">
+              Your own specialised agents. Each is a Markdown file (YAML
+              frontmatter + prompt) that opencode loads as a subagent you can
+              call by name. Restart the engine to make them available.
+            </p>
+            <div class="agent-cards" id="agentCards"></div>
+
+            <div class="agent-editor-wrap" id="agentEditorWrap" hidden>
+              <div class="editor-bar">
+                <span class="editor-path" id="agentEditName"></span>
+                <div class="editor-actions">
+                  <button class="ghost-btn" id="agentCancel">Cancel</button>
+                  <button class="danger-btn" id="agentDelete">Delete</button>
+                  <button class="btn-primary" id="agentSave">Save</button>
+                </div>
+              </div>
+              <textarea
+                class="code-editor"
+                id="agentEditor"
+                spellcheck="false"
+                placeholder="---&#10;description: What this agent does&#10;mode: subagent&#10;---&#10;&#10;You are…"
+              ></textarea>
+            </div>
           </div>
 
           <!-- MCP editor -->

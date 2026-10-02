@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mav — Documentation</title>
+    <meta
+      name="description"
+      content="Mav documentation: installation, architecture, configuration, agents, MCP, the bot API and the dashboard API."
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-halos" aria-hidden="true">
+      <span class="halo h1"></span>
+      <span class="halo h2"></span>
+      <span class="halo h3"></span>
+    </div>
+
+    <header class="nav glass">
+      <a class="brand" href="index.html">
+        <span class="orb"></span><span class="brand-name">Mav</span>
+      </a>
+      <nav class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="docs.html" class="active">Docs</a>
+        <a
+          class="nav-gh"
+          href="https://github.com/SoaOaoS/mav"
+          target="_blank"
+          rel="noopener"
+        >
+          GitHub
+        </a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="docs-layout">
+        <aside class="docs-nav glass">
+          <div class="nav-group">Getting started</div>
+          <a href="#install">Installation</a>
+          <a href="#update">Updating</a>
+          <a href="#requirements">Requirements</a>
+          <div class="nav-group">Concepts</div>
+          <a href="#architecture">Architecture</a>
+          <a href="#services">Services</a>
+          <a href="#providers">Model providers</a>
+          <a href="#agents">Agents</a>
+          <a href="#orchestrator">Orchestrator</a>
+          <a href="#mcp">MCP servers</a>
+          <div class="nav-group">Using Mav</div>
+          <a href="#bot">Telegram commands</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#push">Notifications</a>
+          <a href="#watch">Watch &amp; jobs</a>
+          <div class="nav-group">Reference</div>
+          <a href="#config">Configuration files</a>
+          <a href="#api-dashboard">Dashboard API</a>
+          <a href="#database">Database schema</a>
+          <a href="#troubleshooting">Troubleshooting</a>
+        </aside>
+
+        <article class="docs-body">
+          <h1
+            style="
+              font-family: var(--display);
+              font-size: 2.2rem;
+              margin: 0 0 0.4rem;
+            "
+          >
+            Documentation
+          </h1>
+          <p style="color: var(--ink-2); margin-top: 0">
+            Everything you need to install, run and extend Mav.
+          </p>
+
+          <section id="install">
+            <h2>Installation</h2>
+            <p>On a fresh Debian/Ubuntu machine:</p>
+            <pre><code>curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash</code></pre>
+            <p>Or clone and run the installer directly:</p>
+            <pre><code>git clone https://github.com/SoaOaoS/mav.git
+cd mav
+sudo ./install.sh</code></pre>
+            <p>
+              A wizard asks a few things <strong>once</strong> — contact email,
+              Telegram token, model provider, Postgres, dashboard — then does
+              everything else: dependencies, database, TLS certificates, VAPID
+              keys, three systemd services, and a health check.
+            </p>
+            <div class="docs-note">
+              The installer never touches your opencode agent config beyond a
+              minimal provider block. Your MCP servers, custom agents and skills
+              are yours.
+            </div>
+            <h3>Installer modes</h3>
+            <table>
+              <tr>
+                <th>Mode</th>
+                <th>What it does</th>
+              </tr>
+              <tr>
+                <td><code>./install.sh</code></td>
+                <td>Install, or detect an existing install and update it</td>
+              </tr>
+              <tr>
+                <td><code>./install.sh --update</code></td>
+                <td>Update, keeping your config</td>
+              </tr>
+              <tr>
+                <td><code>./install.sh --yes</code></td>
+                <td>All defaults, no questions</td>
+              </tr>
+              <tr>
+                <td><code>./install.sh --dry-run</code></td>
+                <td>Show what would happen, change nothing</td>
+              </tr>
+              <tr>
+                <td><code>./install.sh --uninstall</code></td>
+                <td>Remove services, configs and the container</td>
+              </tr>
+            </table>
+          </section>
+
+          <section id="update">
+            <h2>Updating</h2>
+            <p>
+              Updating never re-asks your settings. The installer remembers your
+              configuration in the generated env files, and installs a
+              <code>mav</code> command:
+            </p>
+            <pre><code>mav update        # update code and services, keep your config
+mav reconfigure   # re-run the wizard to change settings
+mav status        # service status
+mav logs          # follow the bot logs
+mav uninstall</code></pre>
+            <p>
+              Even simpler: just re-run the installer. If an install exists, it
+              asks a single question —
+              <code>[U] update (keep my config)</code> or
+              <code>[R] reconfigure</code> — defaulting to update.
+            </p>
+          </section>
+
+          <section id="requirements">
+            <h2>Requirements</h2>
+            <ul>
+              <li>A Debian or Ubuntu machine (tested on Debian 13).</li>
+              <li>Root access (the installer uses <code>sudo</code>).</li>
+              <li>
+                A <strong>model</strong>: Ollama (local), Claude, OpenAI, or any
+                OpenAI-compatible endpoint.
+              </li>
+              <li>
+                A Telegram bot token from
+                <a href="https://t.me/BotFather" target="_blank" rel="noopener"
+                  >@BotFather</a
+                >.
+              </li>
+              <li>Docker is installed automatically if missing.</li>
+            </ul>
+          </section>
+
+          <section id="architecture">
+            <h2>Architecture</h2>
+            <p>Mav is three small pieces plus a database.</p>
+            <pre><code>Telegram ─┐
+          ├─▶ mav-bot ──────┐
+Browser ──┴─▶ mav-dashboard ┤
+                            ▼
+                   opencode engine (:4096)
+                            │
+                            ▼
+                  Postgres (Docker)</code></pre>
+            <ul>
+              <li>
+                <strong>opencode</strong> is the agent engine. It runs the
+                model, the agents and the tools. You configure it yourself.
+              </li>
+              <li>
+                <strong>mav-bot</strong> is the Telegram bridge. It also runs
+                the watch loop and the job scheduler.
+              </li>
+              <li>
+                <strong>mav-dashboard</strong> serves the web UI and the HTTP
+                API.
+              </li>
+              <li>
+                <strong>Postgres</strong> stores memory, watch items,
+                notifications and the RAG index.
+              </li>
+            </ul>
+          </section>
+
+          <section id="services">
+            <h2>Services</h2>
+            <table>
+              <tr>
+                <th>Service</th>
+                <th>Role</th>
+              </tr>
+              <tr>
+                <td><code>mav-server</code></td>
+                <td>opencode engine on <code>127.0.0.1:4096</code></td>
+              </tr>
+              <tr>
+                <td><code>mav-bot</code></td>
+                <td>Telegram bridge + watch + jobs</td>
+              </tr>
+              <tr>
+                <td><code>mav-dashboard</code></td>
+                <td>Web interface (HTTP/HTTPS)</td>
+              </tr>
+            </table>
+            <pre><code>systemctl status mav-server mav-bot mav-dashboard
+journalctl -u mav-bot -f
+journalctl -u mav-dashboard -f</code></pre>
+          </section>
+
+          <section id="providers">
+            <h2>Model providers</h2>
+            <p>The wizard lets you pick one:</p>
+            <table>
+              <tr>
+                <th>Provider</th>
+                <th>What you need</th>
+                <th>Example model</th>
+              </tr>
+              <tr>
+                <td><strong>ollama</strong></td>
+                <td>A running Ollama</td>
+                <td><code>llama3.1</code>, <code>qwen2.5-coder</code></td>
+              </tr>
+              <tr>
+                <td><strong>anthropic</strong></td>
+                <td>An <code>ANTHROPIC_API_KEY</code></td>
+                <td><code>claude-sonnet-4-5</code></td>
+              </tr>
+              <tr>
+                <td><strong>openai</strong></td>
+                <td>An <code>OPENAI_API_KEY</code></td>
+                <td><code>gpt-4o</code></td>
+              </tr>
+              <tr>
+                <td><strong>custom</strong></td>
+                <td>An OpenAI-compatible endpoint + key</td>
+                <td>depends</td>
+              </tr>
+            </table>
+            <p>
+              The installer writes a minimal
+              <code>~/.config/opencode/opencode.json</code> with your provider
+              and puts the API key in the engine's environment
+              (<code>/etc/mav-server.env</code>).
+            </p>
+          </section>
+
+          <section id="agents">
+            <h2>Agents</h2>
+            <p>
+              An agent is a Markdown file with YAML frontmatter and a prompt, in
+              <code>~/.config/opencode/agent/</code>. The installer ships a set
+              of generic templates (dev, research, writer, ops, finance,
+              reviewer, orchestrator) without overwriting anything you already
+              have.
+            </p>
+            <pre><code>---
+description: Short description of what this agent does
+mode: subagent
+---
+
+You are &lt;role&gt;. &lt;What you do and how.&gt;
+
+Rules:
+- &lt;rule&gt;</code></pre>
+            <p>
+              You can create, edit and delete agents from the dashboard
+              (Settings → Agents), or by hand. Restart the engine to make them
+              available:
+            </p>
+            <pre><code>mav update     # or: systemctl restart mav-server</code></pre>
+          </section>
+
+          <section id="orchestrator">
+            <h2>Orchestrator</h2>
+            <p>
+              Mav ships with an <strong>orchestrator</strong> agent. Its default
+              behaviour is not to answer everything itself, but to:
+            </p>
+            <ol>
+              <li>analyse the request and decide the plan;</li>
+              <li>
+                convene the right specialists with opencode's
+                <code>task</code> tool;
+              </li>
+              <li>have them challenge each other when they disagree;</li>
+              <li>synthesise one clear answer, honest about uncertainty.</li>
+            </ol>
+            <p>
+              Default pairings: code → <code>dev</code> + <code>reviewer</code>;
+              research → <code>research</code> + <code>reviewer</code>; writing
+              → <code>writer</code> + <code>research</code>; finance →
+              <code>finance</code> + <code>research</code>; ops →
+              <code>ops</code> + <code>reviewer</code>. Edit
+              <code>agents/orchestrator.md</code> to change the policy.
+            </p>
+          </section>
+
+          <section id="mcp">
+            <h2>MCP servers</h2>
+            <p>
+              MCP (Model Context Protocol) servers give your agent extra tools —
+              GitHub, Notion, a database, your own services. They live under the
+              <code>mcp</code> key of <code>opencode.json</code> and are fully
+              yours: the installer sets none.
+            </p>
+            <p>
+              Manage them in the dashboard (Settings → MCP servers), where
+              secrets are masked on read and preserved on write, or edit the
+              config directly:
+            </p>
+            <pre><code>{
+  "mcp": {
+    "my-server": {
+      "type": "remote",
+      "url": "https://example.com/mcp",
+      "enabled": true
+    }
+  }
+}</code></pre>
+            <div class="docs-note">
+              Restart the engine after changing MCP servers. The dashboard has a
+              one-click <strong>Restart engine</strong> button, or use
+              <code>systemctl restart mav-server</code>.
+            </div>
+          </section>
+
+          <section id="bot">
+            <h2>Telegram commands</h2>
+            <table>
+              <tr>
+                <th>Command</th>
+                <th>Description</th>
+              </tr>
+              <tr>
+                <td><code>/ask &lt;question&gt;</code></td>
+                <td>Ask a question (or just type a message)</td>
+              </tr>
+              <tr>
+                <td><code>/new</code></td>
+                <td>Start a new session</td>
+              </tr>
+              <tr>
+                <td><code>/agent [name]</code></td>
+                <td>Show or switch the agent</td>
+              </tr>
+              <tr>
+                <td><code>/stop</code></td>
+                <td>Abort the running task</td>
+              </tr>
+              <tr>
+                <td><code>/memory</code> / <code>/forget</code></td>
+                <td>Memory status / clear it</td>
+              </tr>
+              <tr>
+                <td><code>/watch</code></td>
+                <td>List, add or remove watch items</td>
+              </tr>
+              <tr>
+                <td><code>/jobs</code> / <code>/run &lt;name&gt;</code></td>
+                <td>List scheduled jobs / run one now</td>
+              </tr>
+              <tr>
+                <td><code>/rag</code></td>
+                <td>Full-text search or index documents</td>
+              </tr>
+              <tr>
+                <td><code>/notify</code></td>
+                <td>Toggle push / Telegram notifications</td>
+              </tr>
+            </table>
+          </section>
+
+          <section id="dashboard">
+            <h2>Dashboard</h2>
+            <p>The web interface has six views:</p>
+            <ul>
+              <li>
+                <strong>Home</strong> — greeting, quick actions, today's
+                summary;
+              </li>
+              <li>
+                <strong>Conversations</strong> — a ChatGPT-style manager and a
+                streamed chat;
+              </li>
+              <li><strong>Automations</strong> — scheduled jobs, run/pause;</li>
+              <li>
+                <strong>Memories</strong> — everything Mav remembers, with
+                search;
+              </li>
+              <li><strong>Watch</strong> — watched sources, add/remove;</li>
+              <li>
+                <strong>Infra</strong> — your Proxmox nodes and VMs, live;
+              </li>
+              <li>
+                <strong>Settings</strong> — engine status, AGENTS.md, agents and
+                MCP, with a restart button.
+              </li>
+            </ul>
+            <div class="docs-note">
+              No authentication: expose it over a VPN or a private network, not
+              the public internet.
+            </div>
+          </section>
+
+          <section id="push">
+            <h2>Notifications</h2>
+            <p>
+              Mav reaches out through <strong>Web Push</strong> and
+              <strong>Telegram</strong>. Subscribe to push from the dashboard
+              (the bell button). Each notification carries a link: tapping it
+              opens the dashboard and asks Mav to explain the alert.
+            </p>
+            <ul>
+              <li>Quiet hours (default 23:00–07:00) suppress pushes.</li>
+              <li>Duplicate keys prevent the same alert being sent twice.</li>
+              <li>
+                Job notifications are short summaries; the full report stays in
+                the dashboard.
+              </li>
+            </ul>
+          </section>
+
+          <section id="watch">
+            <h2>Watch &amp; jobs</h2>
+            <p>
+              <strong>Watch</strong> polls a source and alerts only on a change
+              of state. Types: <code>web</code> (page changes),
+              <code>mail</code> (unread matches), <code>github</code> (open
+              PRs), <code>proxmox</code> (VMs), <code>health</code> (services),
+              <code>stock</code> (level crossings and abnormal volume).
+            </p>
+            <pre><code>/watch add stock AAPL:180:200:240
+/watch add github myorg/myrepo
+/watch add web https://example.com/status</code></pre>
+            <p>
+              <strong>Jobs</strong> run a prompt on a schedule. Define them in
+              <code>jobs.json</code> in the bot directory, with a fixed time or
+              an interval. A job that replies nothing to report is never sent.
+            </p>
+          </section>
+
+          <section id="config">
+            <h2>Configuration files</h2>
+            <table>
+              <tr>
+                <th>File</th>
+                <th>Purpose</th>
+              </tr>
+              <tr>
+                <td><code>/etc/mav.env</code></td>
+                <td>Bot: token, chat ids, engine, Postgres, watch</td>
+              </tr>
+              <tr>
+                <td><code>/etc/mav-dashboard.env</code></td>
+                <td>Dashboard: bind IP/ports, TLS, database</td>
+              </tr>
+              <tr>
+                <td><code>/etc/mav-server.env</code></td>
+                <td>Engine: your model API key</td>
+              </tr>
+              <tr>
+                <td><code>~/.config/opencode/opencode.json</code></td>
+                <td>Model provider, MCP servers</td>
+              </tr>
+              <tr>
+                <td><code>~/.config/opencode/AGENTS.md</code></td>
+                <td>Global agent instructions</td>
+              </tr>
+              <tr>
+                <td><code>~/.config/opencode/agent/*.md</code></td>
+                <td>Your agents</td>
+              </tr>
+            </table>
+          </section>
+
+          <section id="api-dashboard">
+            <h2>Dashboard API</h2>
+            <p>Selected routes served by <code>mav_api.py</code>:</p>
+            <table>
+              <tr>
+                <th>Method</th>
+                <th>Route</th>
+                <th>Purpose</th>
+              </tr>
+              <tr>
+                <td>GET</td>
+                <td><code>/api/status</code></td>
+                <td>Engine health, metrics, counters</td>
+              </tr>
+              <tr>
+                <td>GET</td>
+                <td><code>/api/stream</code></td>
+                <td>SSE: streamed answer</td>
+              </tr>
+              <tr>
+                <td>GET</td>
+                <td>
+                  <code>/api/sessions</code> / <code>/api/session?id=</code>
+                </td>
+                <td>Conversations</td>
+              </tr>
+              <tr>
+                <td>GET</td>
+                <td><code>/api/config</code></td>
+                <td>Agents + MCP + engine snapshot</td>
+              </tr>
+              <tr>
+                <td>GET</td>
+                <td><code>/api/config/agent-files</code></td>
+                <td>List agent files</td>
+              </tr>
+              <tr>
+                <td>POST</td>
+                <td><code>/api/config/agents</code></td>
+                <td>Save AGENTS.md</td>
+              </tr>
+              <tr>
+                <td>POST</td>
+                <td><code>/api/config/agent-file</code></td>
+                <td>Create/update an agent file</td>
+              </tr>
+              <tr>
+                <td>POST</td>
+                <td><code>/api/config/mcp</code></td>
+                <td>Save MCP servers</td>
+              </tr>
+              <tr>
+                <td>POST</td>
+                <td><code>/api/config/restart</code></td>
+                <td>Restart the engine</td>
+              </tr>
+              <tr>
+                <td>POST</td>
+                <td><code>/api/push/subscribe</code></td>
+                <td>Register a push subscription</td>
+              </tr>
+            </table>
+          </section>
+
+          <section id="database">
+            <h2>Database schema</h2>
+            <p>
+              Applied automatically from <code>scripts/schema.sql</code>.
+              Idempotent and safe to re-run.
+            </p>
+            <table>
+              <tr>
+                <th>Table</th>
+                <th>Holds</th>
+              </tr>
+              <tr>
+                <td><code>conversations</code></td>
+                <td>Finished exchanges (memory)</td>
+              </tr>
+              <tr>
+                <td><code>facts</code></td>
+                <td>Durable facts about you</td>
+              </tr>
+              <tr>
+                <td><code>preferences</code></td>
+                <td>Settings per chat</td>
+              </tr>
+              <tr>
+                <td><code>watch_items</code></td>
+                <td>Watched sources and their state</td>
+              </tr>
+              <tr>
+                <td><code>documents</code></td>
+                <td>RAG index (tsvector)</td>
+              </tr>
+              <tr>
+                <td><code>notifications</code></td>
+                <td>Notification history + dedup</td>
+              </tr>
+            </table>
+          </section>
+
+          <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
+            <h3>The engine is offline</h3>
+            <pre><code>systemctl status mav-server
+journalctl -u mav-server -n 50</code></pre>
+            <p>
+              Check the model provider: a wrong key or endpoint is the usual
+              cause.
+            </p>
+            <h3>The bot doesn't reply</h3>
+            <pre><code>journalctl -u mav-bot -n 50</code></pre>
+            <p>
+              An invalid Telegram token or a chat id not in the allowlist are
+              the common ones.
+            </p>
+            <h3>The dashboard doesn't answer</h3>
+            <pre><code>journalctl -u mav-dashboard -n 50
+curl -k https://&lt;your-ip&gt;/api/status</code></pre>
+            <h3>Start over cleanly</h3>
+            <pre><code>mav uninstall
+docker volume rm mav_pgdata      # also wipes the memory</code></pre>
+          </section>
+
+          <p
+            style="color: var(--ink-3); font-size: 0.85rem; padding-top: 1.5rem"
+          >
+            Mav is open source under the MIT license —
+            <a
+              href="https://github.com/SoaOaoS/mav"
+              target="_blank"
+              rel="noopener"
+              >github.com/SoaOaoS/mav</a
+            >.
+          </p>
+        </article>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="brand">
+        <span class="orb small"></span><span class="brand-name">Mav</span>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="https://github.com/SoaOaoS/mav" target="_blank" rel="noopener"
+          >GitHub</a
+        >
+        <a
+          href="https://github.com/SoaOaoS/mav/blob/main/LICENSE"
+          target="_blank"
+          rel="noopener"
+          >License</a
+        >
+      </nav>
+      <p class="dim">Open source · MIT</p>
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>

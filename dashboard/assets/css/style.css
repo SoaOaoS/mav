@@ -2785,3 +2785,44 @@ body.is-thinking .orb::before {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Settings: agent files ---------- */
+.agent-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.6rem;
+  margin: 0.2rem 0 0.9rem;
+}
+.agent-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.5));
+}
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.agent-card-head strong {
+  font-size: 0.9rem;
+}
+.agent-card-head .ghost-btn {
+  margin-left: auto;
+}
+.agent-editor-wrap {
+  margin-top: 0.4rem;
+}
+.danger-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.42rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(217, 83, 79, 0.5);
+  background: transparent;
+  color: #c0392b;
+  cursor: pointer;
+}
+.danger-btn:hover {
+  background: rgba(217, 83, 79, 0.1);
+}

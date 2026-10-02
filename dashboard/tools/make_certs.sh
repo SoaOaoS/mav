@@ -3,16 +3,16 @@
 # Adjust SAN if the IP or hostname change.
 #
 # Variables :
-#   MAV_SAN_IP   one or more IPs, comma-separated  (e.g. 192.168.1.32,10.0.0.7)
-#   MAV_SAN_DNS  one or more names, comma-separated  (e.g. mav.local,opc.local)
+#   MAV_SAN_IP   one or more IPs, comma-separated  (e.g. 192.168.1.10,10.0.0.7)
+#   MAV_SAN_DNS  one or more names, comma-separated  (e.g. mav.local,myserver.local)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)/certs"
 mkdir -p "$DIR"
 cd "$DIR"
 
-SAN_IP="${MAV_SAN_IP:-192.168.1.32}"
-SAN_DNS="${MAV_SAN_DNS:-mav.local,opc.local}"
+SAN_IP="${MAV_SAN_IP:-127.0.0.1}"
+SAN_DNS="${MAV_SAN_DNS:-mav.local}"
 
 # Build the subjectAltName list: every entry must carry its type.
 # "IP:a,DNS:b,DNS:c", not "IP:a,DNS:b,c" (openssl refuses).

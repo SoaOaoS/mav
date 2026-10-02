@@ -304,7 +304,7 @@ class Watch:
         import json as _json  # noqa: PLC0415
         import urllib.request  # noqa: PLC0415
 
-        host = os.environ.get("PROXMOX_HOST", "192.168.1.28")
+        host = os.environ.get("PROXMOX_HOST", "")
         token = os.environ.get("PROXMOX_TOKEN_VALUE", "")
         token_name = os.environ.get("PROXMOX_TOKEN_NAME", "mcp")
         user = os.environ.get("PROXMOX_USER", "root@pam")

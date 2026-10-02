@@ -111,20 +111,10 @@ def write_json(path: Path, data) -> None:
     tmp = Path(path).with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1))
     tmp.replace(path)
-    # This file is shared with the bot (running under another account). The
-    # dashboard runs as root: give ownership back so the bot can also write to
-    # it (cleaning up dead subscriptions).
-    try:
-        if path.name == "push_subs.json":
-            import grp
-            import pwd
-
-            uid = pwd.getpwnam("opencode").pw_uid
-            gid = grp.getgrnam("opencode").gr_gid
-            os.chown(path, uid, gid)
-            os.chmod(path, 0o664)
-    except Exception:
-        pass
+    # This file may be shared with the bot (running under another account).
+    # The dashboard often runs as root: give ownership back so both can write.
+    if path.name == "push_subs.json":
+        _chown_user(path)
 
 
 def sys_metrics() -> dict:
@@ -222,6 +212,11 @@ DEFAULT_SERVER_UNITS = ["mav-server", "opencode-server"]
 
 
 def _config_dir() -> Path:
+    # If OPENCODE_CONFIG points to a file, the config dir is its parent — even
+    # if the file does not exist yet.
+    env = os.environ.get("OPENCODE_CONFIG")
+    if env:
+        return Path(env).parent
     return _opencode_config_path().parent
 
 
@@ -377,7 +372,9 @@ def _chown_user(path: Path) -> None:
         else:
             return
         os.chown(path, uid, gid)
-        os.chmod(path, 0o664)
+        # Only tighten files; never strip the execute bit from a directory.
+        if path.is_file():
+            os.chmod(path, 0o664)
     except Exception:
         pass
 
@@ -470,6 +467,123 @@ def config_snapshot() -> dict:
     }
 
 
+# --------------------------------------------------------------- agent files
+# User-defined agents: one Markdown file (YAML frontmatter + prompt) per agent
+# in ~/.config/opencode/agent/. The dashboard lists, creates, edits and
+# deletes them; restarting the engine makes opencode pick them up.
+
+def agents_dir() -> Path:
+    env = os.environ.get("MAV_AGENTS_DIR")
+    if env:
+        return Path(env)
+    return _config_dir() / "agent"
+
+
+AGENT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
+
+
+def _parse_frontmatter(text: str) -> dict:
+    """Tiny YAML frontmatter reader (description/mode/model/… scalar keys)."""
+    meta = {}
+    if not text.startswith("---"):
+        return meta
+    end = text.find("\n---", 3)
+    if end == -1:
+        return meta
+    for line in text[3:end].strip().splitlines():
+        if ":" in line and not line.startswith((" ", "\t", "-")):
+            k, _, v = line.partition(":")
+            meta[k.strip()] = v.strip()
+    return meta
+
+
+def list_agent_files() -> dict:
+    d = agents_dir()
+    out = []
+    try:
+        files = sorted(d.glob("*.md"))
+    except Exception:
+        files = []
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        meta = _parse_frontmatter(text)
+        out.append({
+            "name": f.stem,
+            "description": meta.get("description", ""),
+            "mode": meta.get("mode", "subagent"),
+            "model": meta.get("model", ""),
+            "bytes": len(text),
+        })
+    return {"dir": str(d), "agents": out}
+
+
+def read_agent_file(name: str) -> dict:
+    if not AGENT_NAME_RE.match(name or ""):
+        return {"error": "invalid name", "name": name, "text": ""}
+    p = agents_dir() / f"{name}.md"
+    try:
+        return {"name": name, "path": str(p), "text": p.read_text(encoding="utf-8"), "exists": p.is_file()}
+    except FileNotFoundError:
+        return {"name": name, "path": str(p), "text": "", "exists": False}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc), "name": name, "text": ""}
+
+
+def write_agent_file(name: str, text: str) -> dict:
+    if not AGENT_NAME_RE.match(name or ""):
+        return {"ok": False, "error": "invalid agent name (a-z, 0-9, - _)"}
+    if not isinstance(text, str):
+        return {"ok": False, "error": "text required"}
+    d = agents_dir()
+    p = d / f"{name}.md"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        if p.is_file():
+            try:
+                bak = p.with_suffix(".md.bak")
+                bak.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+                _chown_user(bak)
+            except Exception:
+                pass
+        p.write_text(text, encoding="utf-8")
+        _chown_user(p)
+        _chown_user(d)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    _agents_cache["at"] = 0.0
+    return {"ok": True, "name": name, "path": str(p)}
+
+
+def delete_agent_file(name: str) -> dict:
+    if not AGENT_NAME_RE.match(name or ""):
+        return {"ok": False, "error": "invalid name"}
+    p = agents_dir() / f"{name}.md"
+    try:
+        if p.is_file():
+            p.unlink()
+        _agents_cache["at"] = 0.0
+        return {"ok": True, "name": name}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+AGENT_TEMPLATE = """---
+description: Short description of what this agent does
+mode: subagent
+---
+
+You are <role>. <What you do and how.>
+
+Rules:
+- <rule>
+- <rule>
+"""
+
+
+
 
 def _proxmox_conf() -> dict:
     """Read Proxmox credentials from the opencode config, without exposing them."""
@@ -477,7 +591,7 @@ def _proxmox_conf() -> dict:
         cfg = json.loads(_opencode_config_path().read_text())
         env = cfg.get("mcp", {}).get("proxmox", {}).get("environment", {})
         return {
-            "host": env.get("PROXMOX_HOST", "192.168.1.28"),
+            "host": env.get("PROXMOX_HOST", ""),
             "user": env.get("PROXMOX_USER", "root@pam"),
             "token_name": env.get("PROXMOX_TOKEN_NAME", "mcp"),
             "token": env.get("PROXMOX_TOKEN_VALUE", ""),
@@ -1729,6 +1843,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, read_mcp())
             if path == "/api/config/engine":
                 return self._send(200, engine_status())
+            if path == "/api/config/agent-files":
+                return self._send(200, list_agent_files())
+            if path == "/api/config/agent-file":
+                return self._send(200, read_agent_file(p.get("name", "")))
             if path == "/api/sessions":
                 return self._send(200, {"sessions": list_sessions()})
             if path == "/api/session":
@@ -1906,6 +2024,15 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/config/restart":
                 res = restart_engine()
                 return self._send(200, res)
+            if path == "/api/config/agent-file":
+                res = write_agent_file(
+                    (payload.get("name") or "").strip(),
+                    payload.get("text", ""),
+                )
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/config/agent-file/delete":
+                res = delete_agent_file((payload.get("name") or "").strip())
+                return self._send(200 if res.get("ok") else 400, res)
             return self._send(404, {"error": "not found"})
         except Exception as exc:  # noqa: BLE001
             return self._send(500, {"error": str(exc)})

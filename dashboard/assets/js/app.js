@@ -41,10 +41,10 @@ const MOCK = {
       text: "2 open PRs to review, CI green, no critical vulnerable dependency.",
     },
   ],
-  agents: ["research", "dev", "finance", "ops", "writer"],
+  agents: ["general", "dev", "research", "writer"],
   today: [
-    { t: "09:00", text: "Market recap sent." },
-    { t: "08:00", text: "Morning review done." },
+    { t: "09:00", text: "Daily brief sent." },
+    { t: "08:00", text: "Inbox review done." },
   ],
   memory: { conversations: [], facts: [], preferences: [] },
   watch: { items: [] },
@@ -52,33 +52,33 @@ const MOCK = {
     available: true,
     nodes: [
       {
-        name: "GAIA",
+        name: "node-1",
         status: "online",
         cpu: 7,
-        mem_pct: 12,
-        disk_used: 9460129792,
-        disk_total: 100861726720,
+        mem_pct: 34,
+        disk_used: 42000000000,
+        disk_total: 120000000000,
         uptime: 662853,
       },
     ],
     vms: [
       {
-        vmid: 113,
-        name: "OPC",
+        vmid: 101,
+        name: "app-server",
         status: "running",
         cpu: 12,
         mem: 4e9,
         maxmem: 16e9,
-        node: "GAIA",
+        node: "node-1",
       },
       {
-        vmid: 100,
-        name: "NGINX-PROXY-MANAGER",
+        vmid: 102,
+        name: "proxy",
         status: "running",
         cpu: 3,
         mem: 1e9,
         maxmem: 1e9,
-        node: "GAIA",
+        node: "node-1",
       },
     ],
     running: 2,
@@ -715,6 +715,110 @@ function loadSettings() {
   loadEngine();
   loadAgents();
   loadMcp();
+  loadAgentFiles();
+}
+
+/* ---------- Settings: user agent files ---------- */
+let EDIT_AGENT = null;
+
+async function loadAgentFiles() {
+  if (!LIVE) return;
+  try {
+    const d = await api.get("config/agent-files");
+    $("#agentFilesPath").textContent = d.dir || "";
+    renderAgentCards(d.agents || []);
+  } catch (_) {
+    setStatus("agentFilesStatus", "load failed", "err");
+  }
+}
+
+function renderAgentCards(agents) {
+  const box = $("#agentCards");
+  if (!agents.length) {
+    box.innerHTML = `<div class="mcp-empty">No custom agent yet.</div>`;
+    return;
+  }
+  box.innerHTML = agents
+    .map(
+      (a) => `
+      <div class="agent-card" data-name="${esc(a.name)}">
+        <div class="agent-card-head">
+          <strong>${esc(a.name)}</strong>
+          <span class="mcp-badge">${esc(a.mode || "subagent")}</span>
+          <button class="ghost-btn agent-card-edit" data-edit="${esc(a.name)}">Edit</button>
+        </div>
+        ${a.description ? `<div class="mcp-detail">${esc(a.description)}</div>` : ""}
+      </div>`,
+    )
+    .join("");
+  box
+    .querySelectorAll("[data-edit]")
+    .forEach((b) =>
+      b.addEventListener("click", () => editAgent(b.dataset.edit)),
+    );
+}
+
+async function editAgent(name) {
+  if (!LIVE) return;
+  try {
+    const d = await api.get(
+      `config/agent-file?name=${encodeURIComponent(name)}`,
+    );
+    EDIT_AGENT = name;
+    $("#agentEditName").textContent = d.path || name;
+    $("#agentEditor").value = d.text || "";
+    $("#agentEditorWrap").hidden = false;
+    $("#agentDelete").hidden = false;
+    $("#agentEditor").focus();
+  } catch (_) {
+    toast("Could not load the agent.");
+  }
+}
+
+function newAgent() {
+  EDIT_AGENT = "";
+  $("#agentEditName").textContent = "new agent";
+  $("#agentEditor").value =
+    "---\ndescription: What this agent does\nmode: subagent\n---\n\nYou are…\n";
+  $("#agentEditorWrap").hidden = false;
+  $("#agentDelete").hidden = true;
+  $("#agentEditor").focus();
+}
+
+async function saveAgent() {
+  const name = (EDIT_AGENT || "").trim();
+  if (!name) {
+    // Derive the name from the filename field via a prompt fallback.
+    const chosen = window.prompt("Agent name (a-z, 0-9, - _):", "");
+    if (!chosen) return;
+    EDIT_AGENT = chosen.trim().toLowerCase();
+  }
+  setStatus("agentFilesStatus", "saving…");
+  try {
+    await api.post("config/agent-file", {
+      name: EDIT_AGENT,
+      text: $("#agentEditor").value,
+    });
+    setStatus("agentFilesStatus", "saved", "ok");
+    toast("Agent saved. Restart the engine to use it.");
+    $("#agentEditorWrap").hidden = true;
+    loadAgentFiles();
+  } catch (_) {
+    setStatus("agentFilesStatus", "save failed", "err");
+  }
+}
+
+async function deleteAgent() {
+  if (!EDIT_AGENT) return;
+  if (!window.confirm(`Delete agent "${EDIT_AGENT}"?`)) return;
+  try {
+    await api.post("config/agent-file/delete", { name: EDIT_AGENT });
+    toast("Agent deleted.");
+    $("#agentEditorWrap").hidden = true;
+    loadAgentFiles();
+  } catch (_) {
+    toast("Delete failed.");
+  }
 }
 
 function initSettings() {
@@ -734,6 +838,12 @@ function initSettings() {
   $("#mcpReload").addEventListener("click", loadMcp);
   $("#engineRestart").addEventListener("click", restartEngine);
   $("#engineRefresh").addEventListener("click", loadEngine);
+  $("#agentNew").addEventListener("click", newAgent);
+  $("#agentSave").addEventListener("click", saveAgent);
+  $("#agentDelete").addEventListener("click", deleteAgent);
+  $("#agentCancel").addEventListener("click", () => {
+    $("#agentEditorWrap").hidden = true;
+  });
   // Live engine status while the settings view is open.
   engine.timer = setInterval(() => {
     if (

@@ -554,7 +554,7 @@ A[JOB_RETRIES]="$(ask "Auto-retries for failed jobs" "1")"
 # Proxmox (optional)
 echo
 info "— Proxmox (optional, press Enter to skip) —"
-A[PROXMOX_HOST]="$(ask "Proxmox host (e.g. 192.168.1.28)" "")"
+A[PROXMOX_HOST]="$(ask "Proxmox host (e.g. 10.0.0.10, empty to skip)" "")"
 A[PROXMOX_USER]="$(ask "Proxmox user" "root@pam")"
 A[PROXMOX_TOKEN_NAME]="$(ask "API token name" "mcp")"
 A[PROXMOX_TOKEN_VALUE]="$(ask "API token value" "" secret)"
@@ -615,9 +615,9 @@ run mkdir -p "$BOT_DIR" "$DASH_DIR" "${A[INSTALL_HOME]}/workspace" "$(dirname "$
 if [[ $DRY_RUN -eq 0 ]]; then
   cp -a "$SCRIPT_DIR/bot/." "$BOT_DIR/"
   cp -a "$SCRIPT_DIR/dashboard/." "$DASH_DIR/"
-  # Rewrite inherited absolute paths (jobs.json may reference example scripts).
+  # Rewrite inherited absolute paths: example jobs may reference /home/USER/bot.
   if [[ -f "$BOT_DIR/jobs.json" ]]; then
-    sed -i "s|/home/opencode/bot|$BOT_DIR|g" "$BOT_DIR/jobs.json"
+    sed -i -E "s|/home/[^/ ]+/bot|$BOT_DIR|g" "$BOT_DIR/jobs.json"
   fi
   chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$BOT_DIR" "$DASH_DIR"
   chown "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "${A[INSTALL_HOME]}/workspace" 2>/dev/null || true
@@ -801,6 +801,20 @@ PY
     esac
   } > "$ENV_SERVER"
   chmod 600 "$ENV_SERVER"
+
+  # Install the generic agent templates (orchestrator + specialists) if the
+  # user has none yet. Existing agent files are left untouched.
+  AGENT_DIR="$OPENCODE_CFG_DIR/agent"
+  mkdir -p "$AGENT_DIR"
+  if [[ -d "$SCRIPT_DIR/agents" ]]; then
+    for tpl in "$SCRIPT_DIR"/agents/*.md; do
+      [[ -e "$tpl" ]] || continue
+      base="$(basename "$tpl")"
+      if [[ ! -f "$AGENT_DIR/$base" ]]; then
+        cp "$tpl" "$AGENT_DIR/$base"
+      fi
+    done
+  fi
   chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$OPENCODE_CFG_DIR"
 fi
 ok "opencode config + API key in place."
