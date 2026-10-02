@@ -29,9 +29,11 @@ OPENCODE_PORT="${MAV_OPENCODE_PORT:-4096}"
 ASSUME_YES=0
 DRY_RUN=0
 DO_UNINSTALL=0
+DO_UPDATE=0
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) ASSUME_YES=1 ;;
+    --update|-u) DO_UPDATE=1 ;;
     --dry-run) DRY_RUN=1 ;;
     --uninstall) DO_UNINSTALL=1 ;;
     -h|--help)
@@ -39,7 +41,8 @@ for arg in "$@"; do
 Mav — unified installer (Telegram bot + web dashboard + Postgres + services)
 
 Usage :
-  sudo ./install.sh              install / update
+  sudo ./install.sh              install (or re-run the wizard)
+  sudo ./install.sh --update     update code/services, keep existing config
   sudo ./install.sh --yes        all defaults, no questions
   sudo ./install.sh --dry-run    show what would happen, change nothing
   sudo ./install.sh --uninstall  remove services, configs and container
@@ -145,6 +148,131 @@ ask_choice() {
 gen_password() {
   openssl rand -base64 18 2>/dev/null | tr -d '/+=' | cut -c1-20 || \
     tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20
+}
+
+# --------------------------------------------------------------- update mode
+# On re-run, the answers live in the generated env files. We reconstruct the
+# wizard answers from them so `--update` never asks a question.
+
+# Read one KEY=value from a file (keeps spaces, strips surrounding quotes).
+env_get() {
+  local file="$1" key="$2" line
+  [[ -f "$file" ]] || { echo ""; return; }
+  line="$(grep -E "^${key}=" "$file" | tail -1)"
+  [[ -z "$line" ]] && { echo ""; return; }
+  line="${line#*=}"
+  line="${line%$'\r'}"
+  # strip one layer of surrounding quotes
+  line="${line%\"}"; line="${line#\"}"
+  line="${line%\'}"; line="${line#\'}"
+  echo "$line"
+}
+
+# True if an install already exists (any of the env files present).
+detect_existing_install() {
+  [[ -f "$ENV_BOT" || -f "$ENV_DASH" || -f "/etc/systemd/system/$BOT_UNIT.service" ]]
+}
+
+config_home_for_user() {
+  local u="$1"
+  local h
+  h="$(getent passwd "$u" 2>/dev/null | cut -d: -f6)"
+  echo "${h:-/home/$u}"
+}
+
+# Rebuild the A[] answers from the existing env files. Used by --update.
+load_existing_config() {
+  local bot_home dash_bind
+  A[INSTALL_USER]="${MAV_INSTALL_USER:-$(env_get "$ENV_BOT" MAV_INSTALL_USER)}"
+  BOT_DIR="$(env_get "$ENV_BOT" BOT_DIR)"
+  if [[ -z "${A[INSTALL_USER]}" ]]; then
+    # Infer from the BOT_DIR owner, else the service User=, else current SUDO_USER.
+    if [[ -n "$BOT_DIR" ]]; then
+      A[INSTALL_USER]="$(stat -c '%U' "$BOT_DIR" 2>/dev/null || true)"
+    fi
+    : "${A[INSTALL_USER]:=${SUDO_USER:-mav}}"
+  fi
+  [[ "${A[INSTALL_USER]}" == "root" ]] && A[INSTALL_USER]="mav"
+  A[INSTALL_HOME]="$(config_home_for_user "${A[INSTALL_USER]}")"
+
+  # Telegram + engine
+  A[TELEGRAM_TOKEN]="$(env_get "$ENV_BOT" TELEGRAM_TOKEN)"
+  A[ALLOWED_CHAT_IDS]="$(env_get "$ENV_BOT" ALLOWED_CHAT_IDS)"
+  A[CLEAR_ALLOWED_CHAT_IDS]="$(env_get "$ENV_BOT" CLEAR_ALLOWED_CHAT_IDS)"
+  A[OPENCODE_MODEL_REF]="$(env_get "$ENV_BOT" OPENCODE_MODEL)"
+  A[OPENCODE_AGENT]="$(env_get "$ENV_BOT" OPENCODE_AGENT)"
+  A[OPENCODE_SERVER_USERNAME]="$(env_get "$ENV_BOT" OPENCODE_SERVER_USERNAME)"
+  A[OPENCODE_SERVER_PASSWORD]="$(env_get "$ENV_BOT" OPENCODE_SERVER_PASSWORD)"
+  A[ANSWER_MODE]="$(env_get "$ENV_BOT" ANSWER_MODE)"
+  A[PLAIN_TEXT_IS_ASK]="$(env_get "$ENV_BOT" PLAIN_TEXT_IS_ASK)"
+  A[SHOW_PROGRESS]="$(env_get "$ENV_BOT" SHOW_PROGRESS)"
+  A[IDLE_TIMEOUT]="$(env_get "$ENV_BOT" IDLE_TIMEOUT)"
+  A[MEMORY]="$(env_get "$ENV_BOT" MEMORY)"
+  A[MEMORY_TOP]="$(env_get "$ENV_BOT" MEMORY_TOP)"
+  A[WATCH_INTERVAL]="$(env_get "$ENV_BOT" WATCH_INTERVAL)"
+  A[NOTIFY_QUIET]="$(env_get "$ENV_BOT" NOTIFY_QUIET)"
+  A[JOB_RETRIES]="$(env_get "$ENV_BOT" JOB_RETRIES)"
+  A[PROXMOX_HOST]="$(env_get "$ENV_BOT" PROXMOX_HOST)"
+  A[PROXMOX_USER]="$(env_get "$ENV_BOT" PROXMOX_USER)"
+  A[PROXMOX_TOKEN_NAME]="$(env_get "$ENV_BOT" PROXMOX_TOKEN_NAME)"
+  A[PROXMOX_TOKEN_VALUE]="$(env_get "$ENV_BOT" PROXMOX_TOKEN_VALUE)"
+
+  # Provider: inferred from the model ref (provider/model) + opencode config.
+  A[OPENCODE_MODEL]="${A[OPENCODE_MODEL_REF]#*/}"
+  A[PROVIDER_ID]="${A[OPENCODE_MODEL_REF]%%/*}"
+  case "${A[PROVIDER_ID]}" in
+    anthropic) A[PROVIDER_NPM]="@ai-sdk/anthropic" ;;
+    openai)    A[PROVIDER_NPM]="@ai-sdk/openai" ;;
+    *)         A[PROVIDER_NPM]="@ai-sdk/openai-compatible" ;;
+  esac
+  # Base URL + API key from the existing opencode config / server env.
+  A[PROVIDER_BASEURL]="$(python3 - "$(config_dir_guess)" "${A[PROVIDER_ID]}" 2>/dev/null <<'PY' || true
+import json, sys, pathlib
+cfg = pathlib.Path(sys.argv[1]) / "opencode.json"
+if cfg.is_file():
+    try:
+        d = json.loads(cfg.read_text())
+        p = (d.get("provider") or {}).get(sys.argv[2]) or {}
+        print((p.get("options") or {}).get("baseURL", ""))
+    except Exception:
+        pass
+PY
+)"
+  A[PROVIDER_APIKEY]=""
+  case "${A[PROVIDER_ID]}" in
+    anthropic) A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" ANTHROPIC_API_KEY)" ;;
+    openai)    A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" OPENAI_API_KEY)" ;;
+    ollama)    A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" OLLAMA_API_KEY)" ;;
+  esac
+
+  # Postgres
+  local dsn; dsn="$(env_get "$ENV_DASH" PG_DSN)"
+  : "${dsn:=$(env_get "$ENV_BOT" PG_DSN)}"
+  A[POSTGRES_USER]="$(echo "$dsn" | sed -n 's/.*user=\([^ ]*\).*/\1/p')"
+  A[POSTGRES_PASSWORD]="$(echo "$dsn" | sed -n 's/.*password=\([^ ]*\).*/\1/p')"
+  A[POSTGRES_DB]="$(echo "$dsn" | sed -n 's/.*dbname=\([^ ]*\).*/\1/p')"
+  A[POSTGRES_PORT]="$(echo "$dsn" | sed -n 's/.*port=\([^ ]*\).*/\1/p')"
+  : "${A[POSTGRES_USER]:=mav}"
+  : "${A[POSTGRES_DB]:=mav}"
+  : "${A[POSTGRES_PORT]:=5432}"
+
+  # Dashboard
+  A[MAV_API_BIND]="$(env_get "$ENV_DASH" MAV_API_BIND)"
+  A[MAV_API_PORT]="$(env_get "$ENV_DASH" MAV_API_PORT)"
+  A[MAV_TLS_PORT]="$(env_get "$ENV_DASH" MAV_TLS_PORT)"
+  A[MAV_CHAT_ID]="$(env_get "$ENV_DASH" MAV_CHAT_ID)"
+  A[MAV_DASH_AGENT]="$(env_get "$ENV_DASH" MAV_DASH_AGENT)"
+  A[VAPID_EMAIL]="$(env_get "$ENV_BOT" MAV_VAPID_SUB)"
+  A[VAPID_EMAIL]="${A[VAPID_EMAIL]#mailto:}"
+  : "${A[MAV_API_BIND]:=0.0.0.0}"
+  : "${A[MAV_API_PORT]:=80}"
+  : "${A[MAV_TLS_PORT]:=443}"
+  : "${A[OPENCODE_MODEL_REF]:=${MAV_OPENCODE_MODEL:-}}"
+}
+
+# Where opencode's user config lives (for reading baseURL on update).
+config_dir_guess() {
+  echo "${MAV_USER_HOME:-${A[INSTALL_HOME]:-}}/.config/opencode"
 }
 
 banner() {
@@ -300,7 +428,42 @@ require_root
 require_debian
 if [[ $DO_UNINSTALL -eq 1 ]]; then uninstall; fi
 
+# Smart default: if an install already exists and the user did not explicitly
+# ask to reconfigure, behave like --update (no questions, keep the config).
+# This makes "just run install.sh again" painless.
+if [[ $DO_UPDATE -eq 0 && $ASSUME_YES -eq 0 ]]; then
+  if detect_existing_install; then
+    printf "\n${YEL}An existing install was found.${R}\n"
+    printf "  ${DIM}[U]${R} update it (keep my config)   ${DIM}[R]${R} reconfigure from scratch\n"
+    printf "${CYA}?${R} [U/R] : "
+    read -r _ans || _ans=""
+    case "${_ans:-U}" in
+      [Rr]*) : ;;                 # keep DO_UPDATE=0 -> wizard
+      *)     DO_UPDATE=1 ;;       # update by default
+    esac
+  fi
+fi
+
+# ------------------------------------------------------------------ 0. update
+# --update (or re-running on an existing install with --yes) skips the wizard
+# and reuses the saved configuration. No questions asked.
+if [[ $DO_UPDATE -eq 1 ]]; then
+  if ! detect_existing_install; then
+    die "No existing install found. Run without --update to set one up first."
+  fi
+  step "Update (reusing existing configuration)"
+  load_existing_config
+  _tls=""
+  if [[ -n "${A[MAV_TLS_PORT]}" ]]; then _tls=" + TLS ${A[MAV_TLS_PORT]}"; fi
+  info "User:     ${A[INSTALL_USER]} (${A[INSTALL_HOME]})"
+  info "Model:    ${A[OPENCODE_MODEL_REF]:-—}"
+  info "Chat IDs: ${A[ALLOWED_CHAT_IDS]:-—}"
+  info "Dashboard bind: ${A[MAV_API_BIND]}:${A[MAV_API_PORT]}${_tls}"
+  ASSUME_YES=1   # never prompt during an update
+fi
+
 # ------------------------------------------------------------------ 1. wizard
+if [[ $DO_UPDATE -eq 0 ]]; then
 step "Configuration (answer, or accept the defaults)"
 
 DEFAULT_USER="${SUDO_USER:-$(logname 2>/dev/null || echo 'mav')}"
@@ -395,6 +558,12 @@ A[PROXMOX_HOST]="$(ask "Proxmox host (e.g. 192.168.1.28)" "")"
 A[PROXMOX_USER]="$(ask "Proxmox user" "root@pam")"
 A[PROXMOX_TOKEN_NAME]="$(ask "API token name" "mcp")"
 A[PROXMOX_TOKEN_VALUE]="$(ask "API token value" "" secret)"
+fi  # end wizard (skipped in --update)
+
+# Always derivable, no need to ask.
+A[OPENCODE_URL]="http://127.0.0.1:${OPENCODE_PORT}"
+[[ -z "${A[OPENCODE_MODEL_REF]:-}" ]] && [[ -n "${A[OPENCODE_MODEL]:-}" ]] && \
+  A[OPENCODE_MODEL_REF]="${A[PROVIDER_ID]:-}/${A[OPENCODE_MODEL]}"
 
 # ------------------------------------------------------------------ summary
 step "Summary"
@@ -452,6 +621,46 @@ if [[ $DRY_RUN -eq 0 ]]; then
   fi
   chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$BOT_DIR" "$DASH_DIR"
   chown "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "${A[INSTALL_HOME]}/workspace" 2>/dev/null || true
+
+  # Keep a persistent copy of the installer so `mav update` works later, even
+  # when the original run came from a temporary directory (curl | bash).
+  MAV_SRC="${A[INSTALL_HOME]}/.mav"
+  rm -rf "$MAV_SRC"
+  mkdir -p "$MAV_SRC"
+  cp -a "$SCRIPT_DIR/." "$MAV_SRC/"
+  chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$MAV_SRC"
+  # A tiny CLI: `mav update`, `mav reconfigure`, `mav uninstall`, `mav status`.
+  cat > /usr/local/bin/mav <<CLI
+#!/usr/bin/env bash
+# Mav control command (generated by install.sh)
+SRC="$MAV_SRC"
+if [[ ! -f "\$SRC/install.sh" ]]; then
+  echo "Mav installer source not found (\$SRC)." >&2
+  exit 1
+fi
+case "\${1:-}" in
+  update|up)       exec sudo bash "\$SRC/install.sh" --update ;;
+  reconfigure|config) exec sudo bash "\$SRC/install.sh" ;;
+  uninstall|remove)   exec sudo bash "\$SRC/install.sh" --uninstall ;;
+  status|st)
+    systemctl status $SERVER_UNIT $BOT_UNIT $DASH_UNIT --no-pager 2>/dev/null || true
+    ;;
+  logs)  exec journalctl -u "$BOT_UNIT" -f ;;
+  ""|-h|--help|help)
+    cat <<'EOF'
+Mav — control command
+
+  mav update        update the code and services, keep your config
+  mav reconfigure   re-run the setup wizard (change settings)
+  mav uninstall     remove services, configs and the container
+  mav status        show the service status
+  mav logs          follow the bot logs
+EOF
+    ;;
+  *) echo "Unknown command: \$1 (try: mav help)" >&2; exit 2 ;;
+esac
+CLI
+  chmod 755 /usr/local/bin/mav
 fi
 ok "Fichiers en place."
 
@@ -599,6 +808,7 @@ ok "opencode config + API key in place."
 if [[ $DRY_RUN -eq 0 ]]; then
   cat > "$ENV_BOT" <<EOF
 # Mav — bot configuration (generated by install.sh)
+MAV_INSTALL_USER=${A[INSTALL_USER]}
 BOT_DIR=$BOT_DIR
 TELEGRAM_TOKEN=${A[TELEGRAM_TOKEN]}
 ALLOWED_CHAT_IDS=${A[ALLOWED_CHAT_IDS]}

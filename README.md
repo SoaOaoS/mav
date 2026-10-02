@@ -57,6 +57,33 @@ Telegram token, model provider, Postgres, dashboard. Accept the defaults where
 it makes sense. Then it does the rest — dependencies, database, certificates,
 services.
 
+## Updating
+
+No need to re-answer everything. The installer installs a small `mav` command
+and remembers your configuration, so updates are one word:
+
+```bash
+mav update        # update the code and services, keep your config
+mav reconfigure   # re-run the wizard to change settings
+mav status        # show the service status
+mav logs          # follow the bot logs
+mav uninstall     # remove services, configs and the container
+```
+
+Or, from the installer directly:
+
+```bash
+sudo ./install.sh --update     # same as `mav update`
+```
+
+`--update` reads your existing configuration (`/etc/mav.env`,
+`/etc/mav-dashboard.env`, `/etc/mav-server.env`) and **asks nothing** — it just
+refreshes the code, the venvs, the schema and the services.
+
+Even simpler: **just re-run the installer**. If it detects an existing install,
+it asks one question — `[U] update it (keep my config)` or `[R] reconfigure from
+scratch` — and defaults to updating.
+
 Other modes:
 
 ```bash
