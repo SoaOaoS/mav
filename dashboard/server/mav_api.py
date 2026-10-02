@@ -343,24 +343,41 @@ def _merge_secrets(new_obj, old_obj):
 
 
 def _chown_user(path: Path) -> None:
-    """The engine runs as the install user; the dashboard may run as root."""
-    home = os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME")
-    user = os.environ.get("MAV_INSTALL_USER")
+    """Give the file back to the install user (the engine runs as that user,
+    the dashboard may run as root)."""
     try:
+        import grp  # noqa: PLC0415
         import pwd  # noqa: PLC0415
 
-        if not user and home:
-            # infer from the home directory owner
-            import os as _os  # noqa: PLC0415
-
-            uid = _os.stat(home).st_uid
-            user = pwd.getpwuid(uid).pw_name
+        user = os.environ.get("MAV_INSTALL_USER")
+        home = os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME")
+        uid = None
+        if not user and home and Path(home).exists():
+            uid = os.stat(home).st_uid
+        elif not user:
+            # Infer from the existing file, else its directory, else the
+            # bot data dir (whose owner is the install user).
+            for cand in (
+                Path(os.environ.get("BOT_DIR", "")),
+                path.parent,
+                path,
+            ):
+                try:
+                    if cand and str(cand) and Path(cand).exists():
+                        uid = os.stat(cand).st_uid
+                        break
+                except Exception:
+                    continue
         if user:
-            import grp  # noqa: PLC0415
-
-            uid = pwd.getpwnam(user).pw_uid
-            gid = grp.getgrnam(user).gr_gid
-            os.chown(path, uid, gid)
+            rec = pwd.getpwnam(user)
+            uid, gid = rec.pw_uid, rec.pw_gid
+        elif uid is not None:
+            rec = pwd.getpwuid(uid)
+            gid = rec.pw_gid
+        else:
+            return
+        os.chown(path, uid, gid)
+        os.chmod(path, 0o664)
     except Exception:
         pass
 
@@ -428,23 +445,16 @@ def write_mcp(mcp: dict) -> dict:
 
 
 def restart_engine() -> dict:
-    """Restart the engine unit and wait until it answers again."""
+    """Restart the engine without blocking: issue the restart and return
+    immediately. The caller polls /api/config/engine until it is back.
+
+    `systemctl` alone can take minutes because the bot holds a long-lived SSE
+    connection, so the graceful stop waits. `--no-block` returns at once."""
     unit = server_unit()
-    code, out = _run(["systemctl", "restart", unit], timeout=45)
+    code, out = _run(["systemctl", "restart", "--no-block", unit], timeout=15)
     if code != 0:
         return {"ok": False, "error": out.strip(), "unit": unit}
-    # Wait up to ~20s for the engine to become healthy.
-    deadline = time.time() + 20
-    while time.time() < deadline:
-        time.sleep(1)
-        try:
-            h = http_json(f"{OPENCODE_URL}/global/health", timeout=3)
-            if h and h.get("healthy"):
-                _agents_cache["at"] = 0.0  # force agent list refresh
-                return {"ok": True, "unit": unit, **engine_status()}
-        except Exception:
-            continue
-    return {"ok": True, "unit": unit, "slow": True, **engine_status()}
+    return {"ok": True, "restarting": True, "unit": unit}
 
 
 def config_snapshot() -> dict:

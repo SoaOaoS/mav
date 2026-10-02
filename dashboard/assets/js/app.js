@@ -683,13 +683,29 @@ async function restartEngine() {
   toast("Restarting the engine…");
   try {
     const r = await api.post("config/restart", {});
-    renderEngine(r);
-    if (r.online) toast("Engine back online.");
-    else if (r.ok) toast("Restarted — engine still starting.");
-    else toast("Restart failed: " + (r.error || "?"));
+    if (!r.ok) {
+      toast("Restart failed: " + (r.error || "?"));
+      return;
+    }
+    // The restart is asynchronous: poll until the engine is back online.
+    let tries = 0;
+    const poll = setInterval(async () => {
+      tries++;
+      await loadEngine();
+      const online = $("#engineDot").classList.contains("is-ok");
+      if (online || tries >= 40) {
+        clearInterval(poll);
+        btn.disabled = false;
+        btn.textContent = "Restart engine";
+        toast(
+          online
+            ? "Engine back online."
+            : "Engine did not come back — check the service.",
+        );
+      }
+    }, 3000);
   } catch (_) {
     toast("Restart failed.");
-  } finally {
     btn.disabled = false;
     btn.textContent = "Restart engine";
   }
