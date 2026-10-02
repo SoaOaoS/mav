@@ -603,6 +603,25 @@ journalctl -u mav-server -n 50</code></pre>
               Check the model provider: a wrong key or endpoint is the usual
               cause.
             </p>
+            <h3><code>status=203/EXEC</code></h3>
+            <p>
+              systemd could not execute the command. For the engine, Mav uses a
+              launcher that resolves the opencode binary at runtime — so this
+              only happens if opencode is truly missing. Install it and restart:
+            </p>
+            <pre><code>curl -fsSL https://opencode.ai/install | bash
+sudo systemctl restart mav-server</code></pre>
+            <p>
+              Installed opencode elsewhere? Point the launcher at it via
+              <code>MAV_OPENCODE_BIN</code> in <code>/etc/mav-server.env</code>.
+            </p>
+            <h3>A reboot shows a failed unit</h3>
+            <p>
+              Run <code>systemctl --failed</code> and
+              <code>journalctl -b -p err</code> to see what failed. Mav's own
+              units are ordered after the network and are idempotent; the engine
+              launcher retries until opencode is available.
+            </p>
             <h3>The bot doesn't reply</h3>
             <pre><code>journalctl -u mav-bot -n 50</code></pre>
             <p>
