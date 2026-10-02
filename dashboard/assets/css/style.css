@@ -586,7 +586,8 @@ body.is-thinking .orb::before {
   margin-bottom: 1rem;
 }
 .composer input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border: none;
   outline: none;
   background: none;
@@ -2117,8 +2118,23 @@ body.is-thinking .orb::before {
   .msg {
     max-width: 88%;
   }
+  /* Keep file attach reachable on phones so a photo can be sent. */
   .attach {
-    display: none;
+    display: grid;
+    width: 38px;
+    height: 38px;
+  }
+  .attach .nav-ico {
+    width: 19px;
+    height: 19px;
+  }
+  .composer {
+    gap: 0.4rem;
+    padding: 0.32rem 0.32rem 0.32rem 0.7rem;
+  }
+  .mic-btn {
+    width: 38px;
+    height: 38px;
   }
   .chat-card .composer {
     margin: 0 0.8rem 0.5rem;

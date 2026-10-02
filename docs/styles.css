@@ -872,13 +872,81 @@ main {
   font-size: 0.9rem;
   color: var(--accent-2);
 }
+/* Collapsible table of contents trigger — hidden on desktop. */
+.docs-nav-toggle {
+  display: none;
+}
+
 @media (max-width: 860px) {
   .docs-layout {
-    grid-template-columns: 1fr;
-    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.9rem;
+    padding: 1rem 0 3rem;
   }
+  .docs-body {
+    max-width: none;
+    min-width: 0;
+  }
+  .docs-body section {
+    padding: 1.3rem 0;
+    scroll-margin-top: 84px;
+  }
+  .docs-body h2 {
+    font-size: 1.45rem;
+  }
+  .docs-body pre {
+    font-size: 0.76rem;
+    padding: 0.85rem 0.9rem;
+  }
+  /* Wide reference tables scroll instead of stretching the page. */
+  .docs-body table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* The TOC turns into a compact drawer so the content appears first. */
   .docs-nav {
     position: static;
+    padding: 0.3rem 0.5rem;
+  }
+  .docs-nav .nav-group,
+  .docs-nav a {
+    display: none;
+  }
+  .docs-nav.is-open {
+    padding: 0.6rem 0.7rem 0.8rem;
+  }
+  .docs-nav.is-open .nav-group {
+    display: block;
+  }
+  .docs-nav.is-open a {
+    display: block;
+  }
+  .docs-nav-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--accent-2);
+    background: none;
+    border: none;
+    padding: 0.7rem 0.5rem;
+    cursor: pointer;
+  }
+  .docs-nav-toggle::after {
+    content: "\2304";
+    font-size: 1rem;
+    line-height: 1;
+    transition: transform var(--dur) var(--ease);
+  }
+  .docs-nav.is-open .docs-nav-toggle::after {
+    transform: rotate(180deg);
   }
 }
 

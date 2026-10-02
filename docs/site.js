@@ -38,6 +38,23 @@
     });
   });
 
+  // Mobile: collapse the docs table of contents so the content comes first.
+  const navToggle = document.getElementById("docsNavToggle");
+  const docsNav = document.querySelector(".docs-nav");
+  if (navToggle && docsNav) {
+    navToggle.addEventListener("click", () => {
+      const open = docsNav.classList.toggle("is-open");
+      navToggle.setAttribute("aria-expanded", String(open));
+    });
+    // Tapping a link closes the drawer.
+    docsNav.querySelectorAll("a").forEach((a) => {
+      a.addEventListener("click", () => {
+        docsNav.classList.remove("is-open");
+        navToggle.setAttribute("aria-expanded", "false");
+      });
+    });
+  }
+
   // Reveal-on-scroll for a touch of life. Fail-safe: everything is revealed
   // after a short delay no matter what, so content can never stay hidden.
   const reveal = (el) => {
