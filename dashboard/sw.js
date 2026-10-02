@@ -49,7 +49,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // Jamais de cache pour l'API ni pour un autre domaine.
+  // Never cache the API or any other origin.
   if (url.pathname.includes("/api/") || url.origin !== self.location.origin) {
     return;
   }
@@ -80,7 +80,7 @@ self.addEventListener("fetch", (e) => {
 
 /* ---------- Web Push ---------- */
 self.addEventListener("push", (event) => {
-  let data = { title: "Mav", body: "Nouvelle alerte.", url: "./" };
+  let data = { title: "Mav", body: "New alert.", url: "./" };
   try {
     if (event.data) data = Object.assign(data, event.data.json());
   } catch (_) {}

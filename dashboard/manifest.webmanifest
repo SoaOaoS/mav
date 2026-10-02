@@ -1,8 +1,8 @@
 {
-  "name": "Mav — ton compagnon IA",
+  "name": "Mav — your personal AI companion",
   "short_name": "Mav",
   "description": "Chat with Mav, follow your automations, memory and watch.",
-  "lang": "fr",
+  "lang": "en",
   "start_url": "./?src=pwa",
   "scope": "./",
   "display": "standalone",

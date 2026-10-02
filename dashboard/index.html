@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="description" content="Mav — ton compagnon IA" />
+    <meta name="description" content="Mav — your personal AI companion" />
     <title>Mav</title>
 
     <!-- PWA -->
@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="assets/css/style.css" />
   </head>
   <body>
-    <!-- ============ EN-TÊTE MOBILE ============ -->
+    <!-- ============ MOBILE HEADER ============ -->
     <header class="mobile-top" id="mobileTop">
       <div class="mobile-top-left">
         <div class="orb small" aria-hidden="true"></div>
@@ -72,7 +72,7 @@
           <div class="orb" aria-hidden="true"></div>
           <div class="profile-text">
             <div class="profile-name">Mav</div>
-            <div class="profile-tag">Ton compagnon IA</div>
+            <div class="profile-tag">Your AI companion</div>
           </div>
         </div>
 
@@ -133,13 +133,11 @@
         <section class="view is-active" id="view-home">
           <header class="hello">
             <h1 id="greeting">Hello</h1>
-            <p id="greetingSub">
-              Content de te revoir. Qu'est-ce qu'on fait aujourd'hui ?
-            </p>
+            <p id="greetingSub">Good to see you. What are we doing today?</p>
           </header>
 
           <form class="composer composer-hero" id="heroForm" autocomplete="off">
-            <label class="attach" title="Joindre un fichier">
+            <label class="attach" title="Attach a file">
               <span class="nav-ico" data-ico="paperclip"></span>
               <input type="file" id="heroFile" multiple hidden />
             </label>
@@ -157,7 +155,7 @@
             >
               <span class="nav-ico" data-ico="mic"></span>
             </button>
-            <button type="submit" class="send" aria-label="Envoyer">
+            <button type="submit" class="send" aria-label="Send">
               <span class="nav-ico" data-ico="send"></span>
             </button>
           </form>
@@ -177,15 +175,15 @@
           <div class="cards two">
             <section class="card">
               <div class="card-head">
-                <h2>Aujourd'hui</h2>
-                <span class="card-sub">Ce que j'ai fait pour toi</span>
+                <h2>Today</h2>
+                <span class="card-sub">What I did for you</span>
               </div>
               <ul class="timeline" id="today"></ul>
             </section>
             <section class="card">
               <div class="card-head">
                 <h2>Automations</h2>
-                <button class="link" data-goto="jobs">Tout voir</button>
+                <button class="link" data-goto="jobs">View all</button>
               </div>
               <ul class="mini-jobs" id="homeJobs"></ul>
             </section>
@@ -205,8 +203,7 @@
           <div class="chat-layout">
             <aside class="conv-sidebar">
               <button class="new-conv" id="newConv">
-                <span class="nav-ico" data-ico="plus"></span> Nouvelle
-                discussion
+                <span class="nav-ico" data-ico="plus"></span> New conversation
               </button>
               <div class="conv-list" id="convList"></div>
             </aside>
@@ -228,7 +225,7 @@
                   <button class="icon-btn" id="summaryBtn" title="Summarize">
                     <span class="nav-ico" data-ico="sparkle"></span>
                   </button>
-                  <button class="icon-btn" id="renameBtn" title="Renommer">
+                  <button class="icon-btn" id="renameBtn" title="Rename">
                     <span class="nav-ico" data-ico="edit"></span>
                   </button>
                 </div>
@@ -238,14 +235,14 @@
                 <span></span><span></span><span></span>
               </div>
               <form class="composer" id="chatForm" autocomplete="off">
-                <label class="attach" title="Joindre un fichier">
+                <label class="attach" title="Attach a file">
                   <span class="nav-ico" data-ico="paperclip"></span>
                   <input type="file" id="chatFileInput" multiple hidden />
                 </label>
                 <input
                   type="text"
                   id="chatInput"
-                  placeholder="Écris un message…"
+                  placeholder="Write a message…"
                   aria-label="Message"
                 />
                 <button
@@ -260,7 +257,7 @@
                   type="submit"
                   class="send"
                   id="sendBtn"
-                  aria-label="Envoyer"
+                  aria-label="Send"
                 >
                   <span class="nav-ico" data-ico="send"></span>
                 </button>
@@ -471,7 +468,7 @@
       </main>
     </div>
 
-    <!-- ============ NAVBAR BASSE (mobile) ============ -->
+    <!-- ============ BOTTOM NAVBAR (mobile) ============ -->
     <nav class="tabbar" id="tabbar">
       <button class="tab is-active" data-view="home">
         <span class="nav-ico" data-ico="home"></span>
@@ -515,7 +512,7 @@
       </div>
     </div>
 
-    <!-- Bandeau d'installation PWA -->
+    <!-- PWA install banner -->
     <div class="install-banner" id="installBanner" hidden>
       <div class="install-text">
         <strong>Installer Mav</strong>

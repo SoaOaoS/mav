@@ -7,14 +7,14 @@
 /* ---------- Fallback data (mock) ---------- */
 const MOCK = {
   connections: [
-    { name: "Moteur opencode", state: "ok", label: "en ligne" },
+    { name: "opencode engine", state: "ok", label: "online" },
     { name: "Memory store", state: "ok", label: "connected" },
-    { name: "Telegram", state: "ok", label: "pont actif" },
+    { name: "Telegram", state: "ok", label: "bridge active" },
   ],
   jobs: [
     {
-      name: "Revue du matin",
-      description: "Point technique avant 8h.",
+      name: "Morning review",
+      description: "Technical check before 8am.",
       time: "08:00",
       days: ["mon", "tue", "wed", "thu", "fri"],
       agent: "research",
@@ -236,7 +236,7 @@ function setMobileTitle(view) {
 $("#mobileNew").addEventListener("click", () => newSession());
 $("#mobileSearch").addEventListener("click", () => openPalette());
 
-/* ---------- Rendu ---------- */
+/* ---------- Rendering ---------- */
 function renderStatus(st) {
   STATUS = st;
   if (!st) return;
@@ -248,10 +248,10 @@ function renderStatus(st) {
         : "My engine is not responding right now.";
 
   $("#stats").innerHTML = [
-    { v: st.jobs_active ?? "—", k: "automatisations actives" },
+    { v: st.jobs_active ?? "—", k: "active automations" },
     { v: st.conversations ?? "—", k: "stored exchanges" },
-    { v: st.facts ?? "—", k: "faits retenus" },
-    { v: st.watch_items ?? "—", k: "surveillances" },
+    { v: st.facts ?? "—", k: "stored facts" },
+    { v: st.watch_items ?? "—", k: "watch items" },
   ]
     .map(
       (s) =>
@@ -286,7 +286,7 @@ function renderMiniJobs(jobs) {
     <li>
       <span class="jname">${esc(j.name)}</span>
       <span class="jwhen">${j.every_minutes ? `${j.every_minutes} min` : esc(j.time)}</span>
-      <span class="pill ${j.enabled ? "on" : "off"}">${j.enabled ? "actif" : "pause"}</span>
+      <span class="pill ${j.enabled ? "on" : "off"}">${j.enabled ? "active" : "paused"}</span>
     </li>`,
     )
     .join("");
@@ -333,8 +333,8 @@ function renderJobs(jobs) {
       </div>
       <div class="job-actions">
         <div class="jtime">${j.every_minutes ? `${j.every_minutes} min` : esc(j.time)}<small>${esc(fmtDays(j.days))}${j.last_run ? ` · ${esc(j.last_run)}` : ""}</small></div>
-        <button class="job-act" data-run="${esc(j.name)}">Lancer</button>
-        <button class="job-act ${j.enabled ? "" : "off"}" data-toggle="${esc(j.name)}" data-enabled="${j.enabled ? "1" : "0"}">${j.enabled ? "Actif" : "Pause"}</button>
+        <button class="job-act" data-run="${esc(j.name)}">Run</button>
+        <button class="job-act ${j.enabled ? "" : "off"}" data-toggle="${esc(j.name)}" data-enabled="${j.enabled ? "1" : "0"}">${j.enabled ? "Enabled" : "Paused"}</button>
       </div>
     </div>`,
     )
@@ -397,7 +397,7 @@ function renderWatch(watch) {
 function renderInfra(px) {
   if (!px || !px.available) {
     $("#infraNodes").innerHTML =
-      `<div class="node-card"><h3>Proxmox</h3><div class="node-row">Indisponible</div></div>`;
+      `<div class="node-card"><h3>Proxmox</h3><div class="node-row">Unavailable</div></div>`;
     $("#infraVms").innerHTML = "";
     return;
   }
@@ -438,7 +438,7 @@ $("#jobsList").addEventListener("click", async (e) => {
         `Job "${run.dataset.run}" started — the report will land on Telegram.`,
       );
     } catch (_) {
-      toast("Échec du lancement.");
+      toast("Failed to start.");
     }
     return;
   }
@@ -453,7 +453,7 @@ $("#jobsList").addEventListener("click", async (e) => {
       renderMiniJobs(j.jobs || []);
       toast(enabled ? "Automation enabled." : "Automation paused.");
     } catch (_) {
-      toast("Échec.");
+      toast("Failed.");
     }
   }
 });
@@ -472,7 +472,7 @@ $("#watchForm").addEventListener("submit", async (e) => {
     renderWatch(w);
     toast("Watch item added.");
   } catch (_) {
-    toast("Échec de l'ajout.");
+    toast("Failed to add.");
   }
 });
 $("#watchList").addEventListener("click", async (e) => {
@@ -871,7 +871,7 @@ function renderAgentSelect() {
   const label = $("#chatAgentLabel");
   if (!label) return;
   label.innerHTML = `
-    <button type="button" class="agent-btn" id="agentBtn" title="Choisir l'agent">
+    <button type="button" class="agent-btn" id="agentBtn" title="Choose agent">
       <span class="agent-dot"></span>
       <span class="agent-name">${esc(CURRENT_AGENT || "agent")}</span>
       <span class="agent-caret">▾</span>
@@ -907,7 +907,7 @@ document.addEventListener("click", () => {
   if (btn) btn.classList.remove("is-open");
 });
 
-/* ---------- Chat & gestionnaire de sessions ---------- */
+/* ---------- Chat & conversation manager ---------- */
 const messages = $("#messages");
 let CURRENT_SESSION = null;
 let CONVS = [];
@@ -975,8 +975,8 @@ function renderTable(lines) {
   return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-// Rendu en ligne (gras, italique, code, liens, images).
-// Échappe le HTML puis applique les transformations markdown.
+// Inline rendering (bold, italic, code, links, images).
+// Escape HTML, then apply the markdown transformations.
 function inline(s) {
   let t = escapeHtml(s);
   t = t.replace(/`([^`\n]+)`/g, '<code class="md-inline">$1</code>');
@@ -1085,7 +1085,7 @@ function mdToHtml(src) {
         i++;
         continue;
       }
-      // Placeholder de graphique.
+      // Chart placeholder.
       m = line.match(/^\u0000CHART(\d+)\u0000$/);
       if (m) {
         flushPara();
@@ -1122,7 +1122,7 @@ function mdToHtml(src) {
         continue;
       }
 
-      // Citation (bloc de lignes > ...).
+      // Quote (block of lines starting with >).
       if (/^\s*>\s?/.test(raw)) {
         flushPara();
         const inner = [];
@@ -1156,7 +1156,7 @@ function mdToHtml(src) {
         continue;
       }
 
-      // Ligne de texte -> paragraphe.
+      // Text line -> paragraph.
       para.push(fmt(raw));
       i++;
     }
@@ -1172,7 +1172,7 @@ function mdToHtml(src) {
   );
 }
 
-// Table des listes : construit l'arbre depuis l'indentation puis rend le HTML.
+// List tables: build the tree from indentation, then render the HTML.
 function renderList(items, fmt) {
   const root = { children: [] };
   const stack = [{ indent: -1, node: root }];
@@ -1208,14 +1208,14 @@ function renderListNodes(nodes, fmt) {
   return out;
 }
 
-/* ---------- Graphiques (lightweight-charts) ---------- */
+/* ---------- Charts (lightweight-charts) ---------- */
 function mountCharts(root) {
   if (typeof LightweightCharts === "undefined" || !root) return;
   root.querySelectorAll(".md-chart:not([data-mounted])").forEach((el) => {
     el.dataset.mounted = "1";
     const symbol = el.dataset.symbol;
     const range = el.dataset.range || "1mo";
-    el.innerHTML = `<div class="md-chart-head"><span class="md-chart-sym">${escapeHtml(symbol)}</span><span class="md-chart-load">chargement…</span></div><div class="md-chart-body"></div>`;
+    el.innerHTML = `<div class="md-chart-head"><span class="md-chart-sym">${escapeHtml(symbol)}</span><span class="md-chart-load">loading…</span></div><div class="md-chart-body"></div>`;
     const body = el.querySelector(".md-chart-body");
     const load = el.querySelector(".md-chart-load");
     fetch(
@@ -1308,7 +1308,7 @@ function addMsg(text, who) {
   return bubble;
 }
 
-/* Lightbox : clic sur une image du fil pour l'agrandir. */
+/* Lightbox: click an image in the thread to enlarge it. */
 const lightbox = document.createElement("div");
 lightbox.className = "lightbox";
 lightbox.hidden = true;
@@ -1356,7 +1356,7 @@ function renderConvList() {
     (c) => `
     <div class="conv-item ${c.id === CURRENT_SESSION ? "is-active" : ""}" data-id="${esc(c.id)}">
       <span class="ctitle">${esc(c.title)}</span>
-      <button class="cdel" data-del="${esc(c.id)}" title="Supprimer"><span class="nav-ico" data-ico="trash"></span></button>
+      <button class="cdel" data-del="${esc(c.id)}" title="Delete"><span class="nav-ico" data-ico="trash"></span></button>
     </div>`,
   ).join("");
 }
@@ -1431,7 +1431,7 @@ async function deleteSession(id) {
 async function renameSession() {
   if (!LIVE || !CURRENT_SESSION) return;
   const current = ($("#chatTitle").textContent || "").trim();
-  const name = prompt("Renommer la discussion :", current);
+  const name = prompt("Rename conversation:", current);
   if (!name || !name.trim()) return;
   try {
     await api.post("session/rename", {
@@ -1525,7 +1525,7 @@ $("#chatAttachments").addEventListener("click", (e) => {
 bindAttach("#chatFileInput");
 bindAttach("#heroFile");
 
-/* ---------- Envoi (streaming) ---------- */
+/* ---------- Sending (streaming) ---------- */
 function setStreaming(on) {
   streaming = on;
   thinking(on);
@@ -1616,9 +1616,9 @@ async function send(raw, cmd) {
         } catch (_) {}
       } else if (evName === "error") {
         finished = true;
-        let msg = "Je n'ai pas pu joindre mon moteur.";
+        let msg = "I could not reach my engine.";
         try {
-          msg = "Erreur : " + JSON.parse(data).message;
+          msg = "Error: " + JSON.parse(data).message;
         } catch (_) {}
         errorMsg = msg;
       }
@@ -1804,7 +1804,7 @@ async function togglePushNotify() {
     setNotifyUi(true);
     toast("Notifications enabled.");
   } catch (_) {
-    toast("Échec de l'activation.");
+    toast("Failed to enable.");
   }
 }
 
@@ -1815,12 +1815,12 @@ $("#mobileNotify").addEventListener("click", togglePushNotify);
 const testBtn = $("#mobileNotifyTest");
 if (testBtn) {
   testBtn.addEventListener("click", async () => {
-    if (!N.enabled) return toast("Active d'abord les notifications (cloche).");
+    if (!N.enabled) return toast("Enable notifications first (bell).");
     try {
       const r = await api.post("push/test", {});
       toast(r.sent ? "Test push sent." : "No subscriber to send to.");
     } catch (_) {
-      toast("Échec de l'envoi.");
+      toast("Failed to send.");
     }
   });
 }
@@ -1836,7 +1836,7 @@ if (testBtn) {
   } catch (_) {}
 })();
 
-/* ---------- Palette de commandes (⌘K) ---------- */
+/* ---------- Command palette (⌘K) ---------- */
 const palette = $("#palette");
 function openPalette() {
   palette.hidden = false;
@@ -1885,7 +1885,7 @@ $("#paletteInput").addEventListener("input", (e) => {
       try {
         const r = await api.get(`search?q=${encodeURIComponent(q)}`);
         (r.facts || []).forEach((f) =>
-          items.push({ kind: "Souvenir", text: f.fact }),
+          items.push({ kind: "Memory", text: f.fact }),
         );
         (r.documents || []).forEach((d) =>
           items.push({ kind: "Document", text: d.title }),
@@ -1927,7 +1927,7 @@ $("#paletteResults").addEventListener("click", (e) => {
 welcome();
 initSettings();
 
-/* ---------- Chargement ---------- */
+/* ---------- Loading ---------- */
 async function loadLive() {
   // Only the "status" probe decides whether we are live. Other calls fail
   // independently: a slow endpoint must not switch the whole UI to demo mode.
@@ -2001,7 +2001,7 @@ function notifParam() {
 async function maybeOpenNotif() {
   const id = notifParam();
   if (!id) return;
-  // Nettoie l'URL pour ne pas rejouer au prochain rechargement.
+  // Clean the URL so it does not replay on the next reload.
   try {
     history.replaceState(null, "", location.pathname);
   } catch (_) {}
@@ -2023,7 +2023,7 @@ async function openNotifById(id) {
   await newSession();
   setChatTitle("Alerte · " + String(n.title || "").slice(0, 40));
   const topic =
-    n.topic === "watch" ? "de veille" : n.topic === "job" ? "de job" : "";
+    n.topic === "watch" ? "watch" : n.topic === "job" ? "job" : "";
   const prompt =
     `Give me the details of this ${topic} alert you sent me.\n\n` +
     `Titre : ${n.title || ""}\n` +
@@ -2088,7 +2088,7 @@ if ("serviceWorker" in navigator) {
       reloaded = true;
       location.reload();
     });
-    // Le SW signale un clic sur une notification alors que l'app est ouverte.
+    // The SW reports a notification tap while the app is open.
     navigator.serviceWorker.addEventListener("message", (e) => {
       if (e.data && e.data.type === "open-notif" && e.data.id) {
         openNotifById(String(e.data.id));
