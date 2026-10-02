@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Pont opencode <-> Telegram, version asynchrone.
 
-Differences from v1:
+Différences avec la v1 :
   - prompt_async + flux SSE : plus aucun timeout HTTP, progression en direct
-  - cross-session memory injected automatically
-  - scheduled runs pushed to Telegram
+  - mémoire inter-sessions injectée automatiquement
+  - exécutions programmées poussées vers Telegram
 
 Commandes :
-  /ask <question>   ask a question (or just type)
+  /ask <question>   poser une question (ou simplement écrire)
   /new              nouvelle session
   /agent [nom]      afficher ou changer d'agent
   /stop             interrompre la tâche en cours
-  /memory           memory status
-  /forget           clear this chat's memory
-  /jobs             list scheduled runs
-  /run <name>       trigger a job immediately
+  /memory           état de la mémoire
+  /forget           effacer la mémoire de ce chat
+  /jobs             lister les exécutions programmées
+  /run <nom>        déclencher un job immédiatement
   /session          identifiant de session
   /id               identifiant de ce chat
 """
@@ -59,7 +59,7 @@ ALLOWED = {
     if x.strip()
 }
 
-# Allowlist of channels where /clear is allowed. Empty = /clear disabled everywhere.
+# Allowlist des channels où /clear est autorisé. Vide = /clear désactivé partout.
 CLEAR_ALLOWED = {
     int(x)
     for x in os.environ.get("CLEAR_ALLOWED_CHAT_IDS", "").replace(",", " ").split()
@@ -78,8 +78,8 @@ ANSWER_MODE = os.environ.get("ANSWER_MODE", "last").lower()
 PLAIN_TEXT_IS_ASK = os.environ.get("PLAIN_TEXT_IS_ASK", "1") == "1"
 SHOW_PROGRESS = os.environ.get("SHOW_PROGRESS", "1") == "1"
 
-# Safety net: if no event arrives within this delay, we give up. It is no
-# longer a request timeout, only a stuck-detection.
+# Filet de sécurité : si aucun événement n'arrive pendant ce délai, on rend la
+# main. Ce n'est plus un timeout de requête, seulement une détection de blocage.
 IDLE_TIMEOUT = float(os.environ.get("IDLE_TIMEOUT", "1800"))
 
 MEMORY_ENABLED = os.environ.get("MEMORY", "1") == "1"
@@ -105,7 +105,7 @@ scheduler: Scheduler | None = None
 watch: Watch | None = None
 locks: dict[int, asyncio.Lock] = {}
 
-# ----------------------------------------------------------------- chat state
+# ----------------------------------------------------------------- état chats
 
 
 def load_state() -> dict[str, dict]:
@@ -121,7 +121,7 @@ def save_state(state: dict[str, dict]) -> None:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         STATE_FILE.write_text(json.dumps(state, indent=1))
     except Exception as exc:  # noqa: BLE001
-        log.warning("state not persisted: %s", exc)
+        log.warning("état non persisté: %s", exc)
 
 
 def chat_state(chat_id: int) -> dict:
@@ -135,13 +135,13 @@ def update_chat(chat_id: int, **fields) -> None:
 
 
 def track_message(chat_id: int, message_id: int) -> None:
-    """Remember a message sent by the bot so /clear can delete it."""
+    """Mémorise un message envoyé par le bot pour permettre /clear."""
     state = load_state()
     chat = state.setdefault(str(chat_id), {})
     ids = chat.setdefault("messages", [])
     if message_id not in ids:
         ids.append(message_id)
-        chat["messages"] = ids[-500:]  # cap to avoid unbounded growth
+        chat["messages"] = ids[-500:]  # borne pour éviter une croissance infinie
     save_state(state)
 
 
@@ -157,6 +157,28 @@ async def session_alive(session_id: str) -> bool:
         return False
 
 
+async def session_msg_count(session_id: str) -> int:
+    """Number of messages in a session (for auto-rotation). -1 if unknown."""
+    try:
+        r = await http.get(
+            f"{OPENCODE_URL}/session/{session_id}/message", timeout=20
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if isinstance(data, list):
+                return len(data)
+    except Exception:
+        pass
+    return -1
+
+
+def session_max_messages() -> int:
+    try:
+        return int(os.environ.get("SESSION_MAX_MESSAGES", "120"))
+    except ValueError:
+        return 120
+
+
 async def new_session(title: str) -> str:
     r = await http.post(f"{OPENCODE_URL}/session", json={"title": title}, timeout=30)
     r.raise_for_status()
@@ -164,10 +186,22 @@ async def new_session(title: str) -> str:
 
 
 async def get_session(chat_id: int, force_new: bool = False) -> tuple[str, bool]:
-    """Retourne (session_id, est_nouvelle)."""
+    """Retourne (session_id, est_nouvelle).
+
+    La session est réutilisée tant qu'elle reste raisonnable. Au-delà de
+    SESSION_MAX_MESSAGES messages, elle est archivée et une nouvelle est
+    ouverte : sans ça, chaque réponse réinjecte un historique de plus en plus
+    énorme et finit par ne plus répondre du tout."""
     existing = chat_state(chat_id).get("session")
     if not force_new and existing and await session_alive(existing):
-        return existing, False
+        limit = session_max_messages()
+        n = await session_msg_count(existing)
+        if n < 0 or n < limit:
+            return existing, False
+        log.info(
+            "session %s du chat %s : %d messages >= %d, rotation",
+            existing, chat_id, n, limit,
+        )
     sid = await new_session(f"telegram-{chat_id}")
     update_chat(chat_id, session=sid)
     log.info("chat %s -> session %s", chat_id, sid)
@@ -208,7 +242,7 @@ def extract_answer(payload: dict) -> str:
 
 
 async def last_assistant_text(session_id: str) -> str:
-    """Fetch the final answer once the session is idle."""
+    """Récupère la réponse finale une fois la session au repos."""
     r = await http.get(f"{OPENCODE_URL}/session/{session_id}/message", timeout=60)
     r.raise_for_status()
     for entry in reversed(r.json()):
@@ -260,7 +294,7 @@ async def abort(session_id: str) -> None:
     await http.post(f"{OPENCODE_URL}/session/{session_id}/abort", timeout=15)
 
 
-# --------------------------------------------------------------- attachments
+# ------------------------------------------------------------- pièces jointes
 
 ATTACH_DIR = Path(os.environ.get("ATTACH_DIR", "/tmp/opencode/attachments"))
 
@@ -286,11 +320,11 @@ def guess_mime(name: str) -> str:
 async def download_attachment(
     bot, file_id: str, filename: str, mime: str
 ) -> dict | None:
-    """Download a Telegram file and return an opencode attachment."""
+    """Télécharge un fichier Telegram et retourne une pièce jointe opencode."""
     try:
         f = await bot.get_file(file_id)
     except Exception as exc:  # noqa: BLE001
-        log.warning("get_file failed: %s", exc)
+        log.warning("get_file échoué: %s", exc)
         return None
     safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename) or "fichier"
     ATTACH_DIR.mkdir(parents=True, exist_ok=True)
@@ -298,7 +332,7 @@ async def download_attachment(
     try:
         await f.download_to_drive(dest)
     except Exception as exc:  # noqa: BLE001
-        log.warning("download failed: %s", exc)
+        log.warning("téléchargement échoué: %s", exc)
         return None
     return {
         "url": f"file://{dest}",
@@ -308,7 +342,7 @@ async def download_attachment(
 
 
 def collect_attachments(update: Update) -> list[dict]:
-    """Extract attachments (photo/document) from a Telegram message."""
+    """Extrait les pièces jointes (photo/document) d'un message Telegram."""
     msg = update.message
     if not msg:
         return []
@@ -323,7 +357,7 @@ def collect_attachments(update: Update) -> list[dict]:
             }
         )
     if msg.photo:
-        # the largest resolution comes last
+        # la plus grande résolution est la dernière
         p = msg.photo[-1]
         out.append({"file_id": p.file_id, "filename": "photo.jpg", "mime": "image/jpeg"})
     return out
@@ -354,12 +388,12 @@ async def send_answer(bot, chat_id: int, text: str, reply_to: int | None = None)
             )
             track_message(chat_id, sent.message_id)
         except BadRequest as exc:
-            log.warning("HTML rejected (%s), falling back to plain text", exc)
+            log.warning("HTML refusé (%s), repli en texte brut", exc)
             plain = re.sub(r"<[^>]+>", "", chunk)
             plain = plain.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
             sent = await bot.send_message(chat_id=chat_id, text=plain[:TG_HARD])
             track_message(chat_id, sent.message_id)
-        reply_to = None  # only reply to the first chunk
+        reply_to = None  # ne répondre qu'au premier morceau
 
 
 async def send_bot(bot, chat_id: int, text: str, **kwargs) -> None:
@@ -380,7 +414,7 @@ async def run_prompt(
     status_msg=None,
     files: list[dict] | None = None,
 ) -> tuple[str, ProgressTracker]:
-    """Run the prompt, follow progress, return the final answer."""
+    """Lance le prompt, suit la progression, retourne la réponse finale."""
     queue = bus.subscribe(session_id)
     tracker = ProgressTracker()
 
@@ -408,7 +442,7 @@ async def run_command(
     agent: str | None = None,
     status_msg=None,
 ) -> tuple[str, ProgressTracker]:
-    """Run an opencode command, follow progress, return the answer."""
+    """Lance une commande opencode, suit la progression, retourne la réponse."""
     queue = bus.subscribe(session_id)
     tracker = ProgressTracker()
 
@@ -430,7 +464,7 @@ async def run_command(
 async def handle_debate(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not authorized(update):
         await update.message.reply_text(
-            f"Not authorized. This chat id: {update.effective_chat.id}"
+            f"Non autorisé. Identifiant de ce chat : {update.effective_chat.id}"
         )
         return
 
@@ -443,7 +477,7 @@ async def handle_debate(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lock = locks.setdefault(chat_id, asyncio.Lock())
     if lock.locked():
         await update.message.reply_text(
-            "A task is already running. Use /stop to interrupt it."
+            "Une tâche est déjà en cours. /stop pour l'interrompre."
         )
         return
 
@@ -452,7 +486,7 @@ async def handle_debate(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         status_msg = None
         if SHOW_PROGRESS:
             status_msg = await update.message.reply_text(
-                "🗣️ <b>starting the debate</b>…", parse_mode=ParseMode.HTML
+                "🗣️ <b>lancement du débat</b>…", parse_mode=ParseMode.HTML
             )
             track_message(chat_id, status_msg.message_id)
         try:
@@ -463,11 +497,11 @@ async def handle_debate(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.error("erreur HTTP /command debate: %s", exc)
             if status_msg:
                 await status_msg.edit_text(
-                    f"⚠️ opencode returned {exc.response.status_code}"
+                    f"⚠️ opencode a renvoyé {exc.response.status_code}"
                 )
             return
         except Exception as exc:  # noqa: BLE001
-            log.exception("debate command failed")
+            log.exception("échec de la commande debate")
             if status_msg:
                 await status_msg.edit_text(f"⚠️ {type(exc).__name__}: {exc}")
             return
@@ -482,7 +516,7 @@ async def handle_debate(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await send_bot(ctx.bot, chat_id, f"⚠️ {tracker.error}")
             return
         if not answer:
-            await send_bot(ctx.bot, chat_id, "(the debate returned nothing)")
+            await send_bot(ctx.bot, chat_id, "(le débat n'a rien renvoyé)")
             return
         await send_answer(ctx.bot, chat_id, answer, reply_to=update.message.message_id)
 
@@ -490,7 +524,7 @@ async def handle_debate(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not authorized(update):
         await update.message.reply_text(
-            f"Not authorized. This chat id: {update.effective_chat.id}"
+            f"Non autorisé. Identifiant de ce chat : {update.effective_chat.id}"
         )
         return
 
@@ -505,14 +539,14 @@ async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lock = locks.setdefault(chat_id, asyncio.Lock())
     if lock.locked():
         await update.message.reply_text(
-            "A task is already running. Use /stop to interrupt it."
+            "Une tâche est déjà en cours. /stop pour l'interrompre."
         )
         return
 
     async with lock:
         session_id, is_new = await get_session(chat_id)
 
-        # Attachments (photo/document): download before the prompt.
+        # Pièces jointes (photo/document) : téléchargement avant le prompt.
         attachments = collect_attachments(update)
         files: list[dict] = []
         if attachments:
@@ -522,14 +556,14 @@ async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     files.append(f)
             if files:
                 prompt += (
-                    "\n\n(attachment(s) provided by the user: "
+                    "\n\n(pièce(s) jointe(s) fournie(s) par l'utilisateur : "
                     + ", ".join(f["filename"] for f in files)
                     + ")"
                 )
         if not prompt.strip():
-            prompt = "Analyse the provided attachment and answer."
+            prompt = "Analyse la pièce jointe fournie et réponds."
 
-        # Memory: only inject at the start of a session, otherwise the
+        # Mémoire : on n'injecte qu'au démarrage d'une session, sinon le
         # contexte de la conversation en cours suffit et l'injection parasite.
         full_prompt = prompt
         recalled = 0
@@ -538,16 +572,16 @@ async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             if block:
                 recalled = block.count("] Q:")
                 full_prompt = f"{block}\n\n{prompt}"
-            # RAG: indexed documents relevant to the question.
+            # RAG : documents indexés pertinents pour la question.
             doc_block = rag.context_block(chat_id, prompt, MEMORY_TOP)
             if doc_block:
                 full_prompt = f"{doc_block}\n\n{full_prompt}"
 
         status_msg = None
         if SHOW_PROGRESS:
-            intro = "⏳ <b>starting</b>"
+            intro = "⏳ <b>démarrage</b>"
             if recalled:
-                intro += f"\n<i>{recalled} previous exchange(s) recalled</i>"
+                intro += f"\n<i>{recalled} échange(s) antérieur(s) rappelé(s)</i>"
             status_msg = await update.message.reply_text(
                 intro, parse_mode=ParseMode.HTML
             )
@@ -563,11 +597,11 @@ async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.error("erreur HTTP: %s", exc)
             if status_msg:
                 await status_msg.edit_text(
-                    f"⚠️ opencode returned {exc.response.status_code}"
+                    f"⚠️ opencode a renvoyé {exc.response.status_code}"
                 )
             return
         except Exception as exc:  # noqa: BLE001
-            log.exception("prompt failed")
+            log.exception("échec du prompt")
             if status_msg:
                 await status_msg.edit_text(f"⚠️ {type(exc).__name__}: {exc}")
             return
@@ -582,7 +616,7 @@ async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await send_bot(ctx.bot, chat_id, f"⚠️ {tracker.error}")
             return
         if not answer:
-            await send_bot(ctx.bot, chat_id, "(no textual answer produced)")
+            await send_bot(ctx.bot, chat_id, "(aucune réponse textuelle produite)")
             return
 
         await send_answer(ctx.bot, chat_id, answer, reply_to=update.message.message_id)
@@ -591,9 +625,9 @@ async def handle_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             memory.add(chat_id, prompt, answer, session_id)
 
 
-# --------------------------------------------------------------- scheduled jobs
+# ------------------------------------------------------------- jobs planifiés
 
-# Number of automatic retries when a job fails.
+# Nombre de relances automatiques en cas d'échec d'un job.
 JOB_RETRIES = int(os.environ.get("JOB_RETRIES", "1"))
 JOB_RETRY_DELAY = float(os.environ.get("JOB_RETRY_DELAY", "60"))
 
@@ -610,10 +644,10 @@ async def run_job(job: dict) -> None:
 
     header = f"🕗 <b>{job['name']}</b>"
     if tracker and tracker.error:
-        # Self-healing: retry once after a short delay.
+        # Self-healing : on relance une fois après un court délai.
         retries = int(job.get("retries", JOB_RETRIES))
         if retries > 0:
-            log.warning("job %s failed (%s), retrying in %.0fs",
+            log.warning("job %s en échec (%s), relance dans %.0fs",
                         job["name"], tracker.error, JOB_RETRY_DELAY)
             await asyncio.sleep(JOB_RETRY_DELAY)
             retry_job = dict(job, retries=retries - 1)
@@ -622,19 +656,19 @@ async def run_job(job: dict) -> None:
         await send_bot(
             app.bot,
             chat_id,
-            f"{header}\n⚠️ {tracker.error}\n<i>(failed after {JOB_RETRIES + 1} attempt(s))</i>",
+            f"{header}\n⚠️ {tracker.error}\n<i>(échec après {JOB_RETRIES + 1} tentative(s))</i>",
             parse_mode=ParseMode.HTML,
         )
         return
     if not answer:
         return
 
-    # A watch job replying "RAS" (nothing to report) must not spam: skip it.
+    # Un job de veille qui répond "RAS" ne doit pas spammer : on ne l'envoie pas.
     if answer.strip().upper() in ("RAS", "RAS.", "RIEN À SIGNALER", "TOUT EST NORMAL"):
         log.info("job %s : RAS, pas d'envoi", job["name"])
         return
 
-    # Telegram channel (can be disabled via /notify telegram off).
+    # Canal Telegram (désactivable via /notify telegram off).
     try:
         from ocnotify import telegram_enabled  # noqa: PLC0415
 
@@ -642,9 +676,9 @@ async def run_job(job: dict) -> None:
             await send_bot(app.bot, chat_id, header, parse_mode=ParseMode.HTML)
             await send_answer(app.bot, chat_id, answer)
     except Exception as exc:  # noqa: BLE001
-        log.warning("job Telegram send failed: %s", exc)
+        log.warning("envoi Telegram job échoué: %s", exc)
 
-    # Web Push: short summary (the full report stays in the dashboard).
+    # Web Push : résumé court (le rapport complet reste dans le dashboard).
     try:
         import time as _time  # noqa: PLC0415
 
@@ -659,7 +693,7 @@ async def run_job(job: dict) -> None:
             dedup_key=f"job:{job['name']}:{_time.strftime('%Y-%m-%d')}",
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("job push failed: %s", exc)
+        log.warning("push job échoué: %s", exc)
 
 
 # ---------------------------------------------------------------- commandes
@@ -672,7 +706,7 @@ async def cmd_id(update: Update, _ctx) -> None:
 async def cmd_start(update: Update, _ctx) -> None:
     if not authorized(update):
         await update.message.reply_text(
-            f"Not authorized. This chat id: {update.effective_chat.id}"
+            f"Non autorisé. Identifiant de ce chat : {update.effective_chat.id}"
         )
         return
     await update.message.reply_text(
@@ -681,10 +715,10 @@ async def cmd_start(update: Update, _ctx) -> None:
         "/new — nouvelle session\n"
         "/agent [nom] — changer d'agent\n"
         "/stop — interrompre\n"
-        "/memory — memory status\n"
-        "/forget — clear memory\n"
+        "/memory — état de la mémoire\n"
+        "/forget — effacer la mémoire\n"
         "/clear — effacer les messages du bot dans ce chat\n"
-        "/jobs — scheduled runs\n"
+        "/jobs — exécutions programmées\n"
         + ("\nUn message simple suffit, sans commande." if PLAIN_TEXT_IS_ASK else "")
     )
 
@@ -709,17 +743,17 @@ async def cmd_agent(update: Update, ctx) -> None:
     chat_id = update.effective_chat.id
     available = await list_agents()
     if not ctx.args:
-        current = agent_for(chat_id) or "(server default)"
+        current = agent_for(chat_id) or "(défaut du serveur)"
         await update.message.reply_text(
             f"Agent actuel : {current}\n"
             f"Disponibles : {', '.join(available) or 'inconnu'}\n\n"
-            "/agent <name> to switch, /agent default to reset."
+            "/agent <nom> pour changer, /agent default pour revenir au défaut."
         )
         return
     name = ctx.args[0].strip()
     if name in ("default", "reset", "-"):
         update_chat(chat_id, agent="")
-        await update.message.reply_text("Agent reset.")
+        await update.message.reply_text("Agent réinitialisé.")
         return
     if available and name not in available:
         await update.message.reply_text(
@@ -749,10 +783,10 @@ async def cmd_memory(update: Update, _ctx) -> None:
         return
     chat_id = update.effective_chat.id
     n = memory.count(chat_id)
-    state = "on" if MEMORY_ENABLED else "off"
+    state = "activée" if MEMORY_ENABLED else "désactivée"
     await update.message.reply_text(
-        f"Memory {state}: {n} exchange(s) stored.\n"
-        f"The {MEMORY_TOP} most relevant are injected at the start of a "
+        f"Mémoire {state} : {n} échange(s) mémorisé(s).\n"
+        f"Les {MEMORY_TOP} plus pertinents sont injectés au démarrage d'une "
         "nouvelle session.\n\n/forget pour tout effacer."
     )
 
@@ -761,7 +795,7 @@ async def cmd_forget(update: Update, _ctx) -> None:
     if not authorized(update):
         return
     removed = memory.clear(update.effective_chat.id)
-    await update.message.reply_text(f"{removed} exchange(s) cleared.")
+    await update.message.reply_text(f"{removed} échange(s) effacé(s).")
 
 
 async def cmd_clear(update: Update, ctx) -> None:
@@ -771,13 +805,13 @@ async def cmd_clear(update: Update, ctx) -> None:
 
     if not CLEAR_ALLOWED:
         await update.message.reply_text(
-            "/clear is disabled: no allowlist configured "
+            "/clear est désactivé : aucune allowlist configurée "
             "(variable CLEAR_ALLOWED_CHAT_IDS)."
         )
         return
     if chat_id not in CLEAR_ALLOWED:
         await update.message.reply_text(
-            f"/clear is restricted to allowed channels. {chat_id} is not "
+            f"/clear est réservé aux channels autorisés. {chat_id} n'est pas "
             "dans l'allowlist."
         )
         return
@@ -788,11 +822,11 @@ async def cmd_clear(update: Update, ctx) -> None:
     if not confirm:
         n = len(ids)
         if n == 0:
-            await update.message.reply_text("No bot message to delete.")
+            await update.message.reply_text("Aucun message du bot à effacer.")
             return
         await update.message.reply_text(
             f"⚠️ Effacer {n} message(s) du bot dans ce channel ?\n"
-            "Irreversible. Reply /clear confirm to proceed."
+            "Irréversible. Réponds /clear confirm pour valider."
         )
         return
 
@@ -803,13 +837,13 @@ async def cmd_clear(update: Update, ctx) -> None:
             await update.message.chat.delete_message(mid)
             deleted += 1
         except BadRequest:
-            failed += 1  # too old (>48h), already deleted, or not deletable
+            failed += 1  # trop vieux (>48h), déjà supprimé, ou non supprimable
         except Exception:  # noqa: BLE001
             failed += 1
     if ids:
         update_chat(chat_id, messages=[])
     msg = (
-        f"Deleted {deleted} bot message(s)."
+        f"Supprimé {deleted} message(s) du bot."
         + (f" ({failed} introuvable(s)/trop ancien(s))" if failed else "")
     )
     await update.message.reply_text(msg)
@@ -821,16 +855,16 @@ async def cmd_jobs(update: Update, _ctx) -> None:
     jobs = load_jobs(JOBS_FILE)
     if not jobs:
         await update.message.reply_text(
-            f"No scheduled run.\nExpected file: {JOBS_FILE}"
+            f"Aucune exécution programmée.\nFichier attendu : {JOBS_FILE}"
         )
         return
     lines = []
     for j in jobs:
-        mark = "" if j.get("enabled", True) else " (disabled)"
+        mark = "" if j.get("enabled", True) else " (désactivé)"
         days = ",".join(j.get("days", ["tous"]))
         lines.append(f"• {j['name']} — {j['time']} [{days}]{mark}")
     await update.message.reply_text(
-        "Scheduled runs:\n" + "\n".join(lines) + "\n\n/run <name> to trigger."
+        "Exécutions programmées :\n" + "\n".join(lines) + "\n\n/run <nom> pour lancer."
     )
 
 
@@ -854,7 +888,7 @@ async def cmd_run(update: Update, ctx) -> None:
 
 
 async def cmd_notify(update: Update, ctx) -> None:
-    """Manage proactive notifications: /notify [push|telegram] [on|off]."""
+    """Gère les notifications proactives : /notify [push|telegram] [on|off]."""
     if not authorized(update):
         return
     chat_id = update.effective_chat.id
@@ -862,7 +896,7 @@ async def cmd_notify(update: Update, ctx) -> None:
     if not args:
         from ocnotify import push_enabled, telegram_enabled  # noqa: PLC0415
 
-        state = lambda b: "on" if b else "off"
+        state = lambda b: "activé" if b else "désactivé"
         await update.message.reply_text(
             "Notifications :\n"
             f"• Web Push : {state(push_enabled(chat_id))}\n"
@@ -882,7 +916,7 @@ async def cmd_notify(update: Update, ctx) -> None:
 
 
 async def cmd_watch(update: Update, ctx) -> None:
-    """Manage the watch list: /watch, /watch add <kind> <target>, /watch rm <id>."""
+    """Gère la veille : /watch, /watch add <kind> <target>, /watch rm <id>."""
     if not authorized(update):
         return
     chat_id = update.effective_chat.id
@@ -895,12 +929,12 @@ async def cmd_watch(update: Update, ctx) -> None:
         items = watch.list()
         if not items:
             await update.message.reply_text(
-                "No watched item.\n"
+                "Aucun item surveillé.\n"
                 "/watch add web <url> — alerte si la page change\n"
-                "/watch add mail <query> — watch your mail\n"
+                "/watch add mail <requête> — surveille les mails\n"
                 "/watch add github <owner/repo> — PR ouvertes\n"
                 "/watch add stock <SYMBOLE>[:niveaux] — franchissement + volume\n"
-                "   ex. /watch add stock AAPL:180:200:240\n"
+                "   ex. /watch add stock SLS:7.07:10.20:15.88:16.07\n"
                 "/watch rm <id> — retirer un item"
             )
             return
@@ -919,7 +953,7 @@ async def cmd_watch(update: Update, ctx) -> None:
             )
             return
         watch.add(kind, target)
-        await update.message.reply_text(f"Watch added: {kind} → {target}")
+        await update.message.reply_text(f"Veille ajoutée : {kind} → {target}")
         return
 
     if args[0] in ("rm", "remove", "del") and len(args) >= 2:
@@ -929,7 +963,7 @@ async def cmd_watch(update: Update, ctx) -> None:
             await update.message.reply_text("ID invalide.")
             return
         watch.remove(item_id)
-        await update.message.reply_text(f"Item {item_id} removed.")
+        await update.message.reply_text(f"Item {item_id} retiré.")
         return
 
     await update.message.reply_text(
@@ -938,7 +972,7 @@ async def cmd_watch(update: Update, ctx) -> None:
 
 
 async def cmd_rag(update: Update, ctx) -> None:
-    """Index or search documents: /rag index <title> <text> | /rag <query>."""
+    """Indexe ou recherche dans les documents : /rag index <titre> <texte> | /rag <requête>."""
     if not authorized(update):
         return
     chat_id = update.effective_chat.id
@@ -946,7 +980,7 @@ async def cmd_rag(update: Update, ctx) -> None:
     if not args:
         await update.message.reply_text(
             "Usage :\n"
-            "/rag <query> — search indexed documents\n"
+            "/rag <requête> — cherche dans les documents indexés\n"
             "/rag index <titre> <texte> — indexe un document"
         )
         return
@@ -955,13 +989,13 @@ async def cmd_rag(update: Update, ctx) -> None:
         title = args[1]
         body = " ".join(args[2:])
         rag.index(chat_id, title, body, source="telegram")
-        await update.message.reply_text(f"Document indexed: {title}")
+        await update.message.reply_text(f"Document indexé : {title}")
         return
 
     query = " ".join(args)
     hits = rag.search(chat_id, query, top=5)
     if not hits:
-        await update.message.reply_text(f"No document found for: {query}")
+        await update.message.reply_text(f"Aucun document trouvé pour : {query}")
         return
     lines = []
     for h in hits:
@@ -988,9 +1022,9 @@ async def on_startup(app: Application) -> None:
         from ocnotify import ensure_schema  # noqa: PLC0415
 
         ensure_schema()
-        log.info("notifications: schema ready")
+        log.info("notifications : schéma prêt")
     except Exception as exc:  # noqa: BLE001
-        log.warning("notifications schema unavailable: %s", exc)
+        log.warning("schéma notifications indisponible : %s", exc)
 
     try:
         r = await http.get(f"{OPENCODE_URL}/global/health", timeout=10)
@@ -1006,16 +1040,16 @@ async def on_startup(app: Application) -> None:
     scheduler.start()
     jobs = load_jobs(JOBS_FILE)
 
-    # Continuous watch: one loop per allowed chat.
+    # Veille continue : une boucle par chat autorisé.
     for cid in ALLOWED:
         w = Watch(app.bot, cid)
-        if w.list() or True:  # start the loop even with no item (ready to add)
+        if w.list() or True:  # démarre la boucle même sans item (prêt à en ajouter)
             watch = w
             asyncio.create_task(w.run())
             log.info("veille active pour chat %s", cid)
             break
 
-    log.info("memory: %s | jobs: %d", "on" if MEMORY_ENABLED else "off", len(jobs))
+    log.info("mémoire : %s | jobs : %d", "on" if MEMORY_ENABLED else "off", len(jobs))
 
 
 async def on_shutdown(_app: Application) -> None:
@@ -1059,15 +1093,15 @@ def main() -> None:
     app.add_handler(CommandHandler("debate", handle_debate))
     if PLAIN_TEXT_IS_ASK:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ask))
-    # Messages with an attachment (photo/document): treat them as a
-    # question, an optional caption serving as the prompt.
+    # Messages avec pièce jointe (photo/document) : on les traite comme une
+    # question, la légende éventuelle servant de prompt.
     app.add_handler(
         MessageHandler(
             (filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, handle_ask
         )
     )
 
-    log.info("listening on Telegram, opencode at %s", OPENCODE_URL)
+    log.info("écoute Telegram, opencode sur %s", OPENCODE_URL)
     app.run_polling(drop_pending_updates=True)
 
 
