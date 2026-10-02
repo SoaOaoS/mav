@@ -8,6 +8,9 @@ Talk to it, it acts, it remembers, it watches things for you.
 
 `curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
 
+**Website & docs:** <https://soaoaos.github.io/mav/> ·
+[documentation](https://soaoaos.github.io/mav/docs.html)
+
 </div>
 
 Mav is made of two pieces that work together:
@@ -32,9 +35,13 @@ any OpenAI-compatible endpoint.
 - **Web Push** — get notified outside the app, and tap a notification to open a
   chat that explains the alert in detail.
 - **RAG** — index documents and retrieve relevant excerpts into context.
-- **Self-service config** — edit your agent's `AGENTS.md` and your **MCP
-  servers** right from the dashboard, with a live engine status indicator and a
-  one-click **Restart engine** to apply changes.
+- **Self-service config** — edit your agent's `AGENTS.md`, create your own
+  **agents**, and manage your **MCP servers** right from the dashboard, with a
+  live engine status indicator and a one-click **Restart engine** to apply
+  changes.
+- **An orchestrator built in** — a default agent that analyses a request,
+  convenes the right specialists, has them challenge each other, then
+  synthesises a single answer.
 
 ## Installation
 
