@@ -890,6 +890,7 @@ tpl() { sed -e "s|__USER__|${A[INSTALL_USER]}|g" \
             -e "s|__DASH_USER__|root|g" \
             -e "s|__PORT__|${OPENCODE_PORT:-4096}|g" \
             -e "s|__OPENCODE_BIN__|${OPENCODE_BIN:-$A[INSTALL_HOME]/.opencode/bin/opencode}|g" \
+            -e "s|__RUN_OPENCODE__|${A[INSTALL_HOME]}/.mav/run-opencode.sh|g" \
             -e "s|__ENV_BOT__|$ENV_BOT|g" \
             -e "s|__ENV_DASH__|$ENV_DASH|g" \
             -e "s|__ENV_SERVER__|$ENV_SERVER|g" \

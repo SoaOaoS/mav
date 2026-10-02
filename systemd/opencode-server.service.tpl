@@ -9,9 +9,12 @@ User=__USER__
 WorkingDirectory=__HOME__/workspace
 Environment=HOME=__HOME__
 Environment=OPENCODE_DISABLE_AUTOUPDATE=1
+Environment=MAV_OPENCODE_PORT=__PORT__
 EnvironmentFile=-__ENV_SERVER__
-ExecStart=__OPENCODE_BIN__ serve --hostname 127.0.0.1 --port __PORT__
-Restart=always
+# Use a launcher that resolves the opencode binary at runtime, so the unit
+# never fails with 203 if opencode is installed in an unexpected place.
+ExecStart=__RUN_OPENCODE__
+Restart=on-failure
 RestartSec=5
 
 [Install]
