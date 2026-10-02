@@ -150,13 +150,24 @@ Three systemd services:
 
 The wizard lets you pick:
 
-| Provider         | What you need                      | Model (example)             |
-| ---------------- | ---------------------------------- | --------------------------- |
-| **ollama**       | a running Ollama (local/remote)    | `llama3.1`, `qwen2.5-coder` |
-| **ollama-cloud** | `opencode auth login ollama-cloud` | `deepseek-v4.1-flash`       |
-| **anthropic**    | an `ANTHROPIC_API_KEY`             | `claude-sonnet-4-5`         |
-| **openai**       | an `OPENAI_API_KEY`                | `gpt-4o`                    |
-| **custom**       | OpenAI-compatible endpoint + key   | depends on your provider    |
+| Provider             | What you need                      | Model (example)             |
+| -------------------- | ---------------------------------- | --------------------------- |
+| **ollama**           | a running Ollama (local/remote)    | `llama3.1`, `qwen2.5-coder` |
+| **ollama-cloud**     | `opencode auth login ollama-cloud` | `deepseek-v4.1-flash`       |
+| **ollama-cloud-api** | an `OLLAMA_API_KEY`                | `deepseek-v4.1-flash`       |
+| **anthropic**        | an `ANTHROPIC_API_KEY`             | `claude-sonnet-4-5`         |
+| **openai**           | an `OPENAI_API_KEY`                | `gpt-4o`                    |
+| **custom**           | OpenAI-compatible endpoint + key   | depends on your provider    |
+
+`ollama-cloud` and `ollama-cloud-api` both reach Ollama Cloud
+(`https://ollama.com/v1`), but differ in how they are wired:
+
+- **`ollama-cloud`** uses opencode's native provider. Authenticate once with
+  `opencode auth login ollama-cloud`; the key is then read from `auth.json`.
+- **`ollama-cloud-api`** declares Ollama Cloud as a plain OpenAI-compatible
+  provider, with the endpoint preconfigured and the key in `OLLAMA_API_KEY`.
+  No `opencode auth login` needed. Pick this when the native provider does not
+  reach the cloud on your setup.
 
 ## What you configure yourself
 

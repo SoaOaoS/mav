@@ -243,6 +243,7 @@ PY
     anthropic) A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" ANTHROPIC_API_KEY)" ;;
     openai)    A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" OPENAI_API_KEY)" ;;
     ollama)    A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" OLLAMA_API_KEY)" ;;
+    ollama-cloud-api) A[PROVIDER_APIKEY]="$(env_get "$ENV_SERVER" OLLAMA_API_KEY)" ;;
   esac
 
   # Postgres
@@ -483,8 +484,8 @@ A[CLEAR_ALLOWED_CHAT_IDS]="$(ask_env "Chat IDs allowed to /clear (empty = disabl
 # Provider LLM (moteur opencode)
 echo
 info "— Model (LLM provider) —"
-info "  Supported providers: ollama, ollama-cloud, anthropic (Claude), openai, custom"
-A[PROVIDER]="$(ask_choice "Provider" "ollama|ollama-cloud|anthropic|openai|custom" "${MAV_PROVIDER:-ollama}")"
+info "  Supported providers: ollama, ollama-cloud, ollama-cloud-api, anthropic (Claude), openai, custom"
+A[PROVIDER]="$(ask_choice "Provider" "ollama|ollama-cloud|ollama-cloud-api|anthropic|openai|custom" "${MAV_PROVIDER:-ollama}")"
 
 case "${A[PROVIDER]}" in
   ollama)
@@ -501,6 +502,18 @@ case "${A[PROVIDER]}" in
     A[PROVIDER_BASEURL]=""; A[PROVIDER_APIKEY]=""
     A[PROVIDER_ID]="ollama-cloud"; A[PROVIDER_NPM]=""
     info "  Auth: run 'opencode auth login ollama-cloud' if you have not yet."
+    A[OPENCODE_MODEL]="$(ask "Ollama Cloud model" "${MAV_OPENCODE_MODEL:-deepseek-v4.1-flash}")"
+    ;;
+  ollama-cloud-api)
+    # Ollama Cloud over its plain OpenAI-compatible endpoint, declared as a
+    # regular custom provider. Unlike the native `ollama-cloud` provider this
+    # needs no `opencode auth login`: the key lives in the engine env
+    # (OLLAMA_API_KEY) and the baseURL is preconfigured. Pick this when the
+    # native provider does not reach the cloud (older opencode, custom setup).
+    A[PROVIDER_ID]="ollama-cloud-api"
+    A[PROVIDER_BASEURL]="$(ask "Ollama Cloud endpoint" "${MAV_PROVIDER_BASEURL:-https://ollama.com/v1}")"
+    A[PROVIDER_APIKEY]="$(ask_env_required "Ollama Cloud API key" "OLLAMA_API_KEY" secret)"
+    A[PROVIDER_NPM]="@ai-sdk/openai-compatible"
     A[OPENCODE_MODEL]="$(ask "Ollama Cloud model" "${MAV_OPENCODE_MODEL:-deepseek-v4.1-flash}")"
     ;;
   anthropic)
@@ -806,7 +819,7 @@ if pid in native:
         if not blocks:
             cfg.pop("provider", None)
 else:
-    envname = {"ollama": "OLLAMA_API_KEY"}.get(pid)
+    envname = {"ollama": "OLLAMA_API_KEY", "ollama-cloud-api": "OLLAMA_API_KEY"}.get(pid)
     provider = {
         "npm": "${A[PROVIDER_NPM]}",
         "name": pid,
@@ -827,6 +840,7 @@ PY
       anthropic) echo "ANTHROPIC_API_KEY=${A[PROVIDER_APIKEY]}" ;;
       openai)    echo "OPENAI_API_KEY=${A[PROVIDER_APIKEY]}" ;;
       ollama)    [[ -n "${A[PROVIDER_APIKEY]}" ]] && echo "OLLAMA_API_KEY=${A[PROVIDER_APIKEY]}" ;;
+      ollama-cloud-api) echo "OLLAMA_API_KEY=${A[PROVIDER_APIKEY]}" ;;
     esac
   } > "$ENV_SERVER"
   chmod 600 "$ENV_SERVER"
