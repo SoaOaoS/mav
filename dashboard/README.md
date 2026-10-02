@@ -53,32 +53,39 @@ the Telegram session, so it never interferes with the bot running alongside.
 
 ## API
 
-| Method | Route                                  | Purpose                            |
-| ------ | -------------------------------------- | ---------------------------------- |
-| GET    | `/api/status`                          | engine health, metrics, counters   |
-| GET    | `/api/connections`                     | service status                     |
-| GET    | `/api/proxmox`                         | Proxmox nodes and VMs              |
-| GET    | `/api/jobs`                            | scheduled jobs + last run          |
-| GET    | `/api/job-results`                     | latest reports produced by jobs    |
-| GET    | `/api/memory`                          | conversations, facts, preferences  |
-| GET    | `/api/search?q=`                       | memory + document search           |
-| GET    | `/api/watch`                           | watch items                        |
-| GET    | `/api/notifications`                   | notification history               |
-| GET    | `/api/notification?id=`                | one notification                   |
-| GET    | `/api/agents`                          | available agents                   |
-| GET    | `/api/sessions`                        | dashboard conversations            |
-| GET    | `/api/session?id=`                     | messages + title of a conversation |
-| GET    | `/api/session/export?id=`              | markdown export                    |
-| GET    | `/api/stream`                          | **SSE**: streamed answer           |
-| GET    | `/api/push/key`                        | VAPID public key                   |
-| GET    | `/api/chart` / `/api/quotes`           | market data                        |
-| GET    | `/api/media` / `/api/asset`            | media / local files                |
-| POST   | `/api/ask`                             | send a prompt (blocking)           |
-| POST   | `/api/session/new                      | rename                             | delete | abort           | summary` | conversation management |
-| POST   | `/api/job/toggle` / `/api/job/run`     | job control                        |
-| POST   | `/api/watch/add` / `/api/watch/remove` | watch control                      |
-| POST   | `/api/upload`                          | attachment (base64 → file)         |
-| POST   | `/api/push/subscribe                   | unsubscribe                        | test`  | push management |
+| Method | Route                                                          | Purpose                                   |
+| ------ | -------------------------------------------------------------- | ----------------------------------------- |
+| GET    | `/api/status`                                                  | engine health, metrics, counters          |
+| GET    | `/api/connections`                                             | service status                            |
+| GET    | `/api/proxmox`                                                 | Proxmox nodes and VMs                     |
+| GET    | `/api/jobs`                                                    | scheduled jobs + last run                 |
+| GET    | `/api/job-results`                                             | latest reports produced by jobs           |
+| GET    | `/api/memory`                                                  | conversations, facts, preferences         |
+| GET    | `/api/search?q=`                                               | memory + document search                  |
+| GET    | `/api/watch`                                                   | watch items                               |
+| GET    | `/api/notifications`                                           | notification history                      |
+| GET    | `/api/notification?id=`                                        | one notification                          |
+| GET    | `/api/agents`                                                  | available agents                          |
+| GET    | `/api/sessions`                                                | dashboard conversations                   |
+| GET    | `/api/session?id=`                                             | messages + title of a conversation        |
+| GET    | `/api/session/export?id=`                                      | markdown export                           |
+| GET    | `/api/stream`                                                  | **SSE**: streamed answer                  |
+| GET    | `/api/push/key`                                                | VAPID public key                          |
+| GET    | `/api/chart` / `/api/quotes`                                   | market data                               |
+| GET    | `/api/media` / `/api/asset`                                    | media / local files                       |
+| GET    | `/api/config`                                                  | agent config snapshot (agents+mcp+engine) |
+| GET    | `/api/config/agents`                                           | AGENTS.md content                         |
+| GET    | `/api/config/mcp`                                              | MCP servers (secrets masked)              |
+| GET    | `/api/config/engine`                                           | engine/service live status                |
+| POST   | `/api/ask`                                                     | send a prompt (blocking)                  |
+| POST   | `/api/session/new` / `rename` / `delete` / `abort` / `summary` | conversation management                   |
+| POST   | `/api/job/toggle` / `/api/job/run`                             | job control                               |
+| POST   | `/api/watch/add` / `/api/watch/remove`                         | watch control                             |
+| POST   | `/api/upload`                                                  | attachment (base64 → file)                |
+| POST   | `/api/push/subscribe` / `unsubscribe` / `test` / `ack`         | push management                           |
+| POST   | `/api/config/agents`                                           | save AGENTS.md                            |
+| POST   | `/api/config/mcp`                                              | save MCP servers (keeps masked secrets)   |
+| POST   | `/api/config/restart`                                          | restart the engine and wait for it        |
 
 ### Sessions
 
@@ -114,6 +121,9 @@ MAV_STATIC="$PWD" BOT_DIR="$HOME/bot" \
 - **Memories** — memory (conversations, facts, preferences) + full-text search.
 - **Watch** — watched items, add/remove, alert only on change.
 - **Infra** — live Proxmox nodes and VMs (CPU, RAM, uptime, status).
+- **Settings** — engine live status (online/offline, version, model, agent and
+  MCP counts), a markdown editor for **AGENTS.md**, an editor for your **MCP
+  servers**, and a **Restart engine** button to apply changes.
 
 ## Features
 

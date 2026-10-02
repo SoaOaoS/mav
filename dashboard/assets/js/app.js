@@ -199,6 +199,7 @@ function go(view) {
     v.classList.toggle("is-active", v.id === `view-${view}`),
   );
   if (view === "system") loadInfra();
+  if (view === "settings") loadSettings();
   setMobileTitle(view);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -217,6 +218,7 @@ const VIEW_TITLES = {
   memory: "Memories",
   watch: "Watch",
   system: "Infra",
+  settings: "Settings",
 };
 function setMobileTitle(view) {
   const t = $("#mobileTitle");
@@ -522,6 +524,208 @@ async function loadInfra() {
   } catch (_) {
     renderInfra(null);
   }
+}
+
+/* ---------- Settings: agent config (AGENTS.md + MCP) ---------- */
+const engine = { timer: null };
+
+function engineDot(online, active) {
+  const cls = online ? "ok" : active ? "warn" : "off";
+  return `<span class="engine-dot is-${cls}" id="engineDot"></span>`;
+}
+
+function renderEngine(e) {
+  if (!e) return;
+  const online = !!e.online;
+  const active = !!e.active;
+  const dot = $("#engineDot");
+  if (dot)
+    dot.className = `engine-dot is-${online ? "ok" : active ? "warn" : "off"}`;
+  $("#engineLabel").textContent = online
+    ? "Engine online"
+    : active
+      ? "Engine starting…"
+      : "Engine offline";
+  $("#engineMeta").innerHTML = [
+    ["Service", esc(e.unit || "—")],
+    ["Version", esc(e.version || "—")],
+    ["Model", esc(e.model || "—")],
+    ["Agents", String(e.agents ?? "—")],
+    ["MCP servers", String(e.mcp ?? "—")],
+  ]
+    .map(
+      ([k, v]) =>
+        `<div class="engine-row"><span>${k}</span><span>${v}</span></div>`,
+    )
+    .join("");
+}
+
+async function loadEngine() {
+  if (!LIVE) {
+    renderEngine({ active: false, online: false, unit: "demo", model: "—" });
+    return;
+  }
+  try {
+    renderEngine(await api.get("config/engine"));
+  } catch (_) {
+    renderEngine({ active: false, online: false, unit: "?", model: "?" });
+  }
+}
+
+async function loadAgents() {
+  if (!LIVE) {
+    $("#agentsPath").textContent = "demo";
+    $("#agentsEditor").value =
+      "# Agent instructions\n\n(editable when connected to a live engine)";
+    return;
+  }
+  try {
+    const d = await api.get("config/agents");
+    $("#agentsPath").textContent = d.path || "";
+    $("#agentsEditor").value = d.text || "";
+    setStatus("agentsStatus", d.exists ? "loaded" : "new file", "ok");
+  } catch (_) {
+    setStatus("agentsStatus", "load failed", "err");
+  }
+}
+
+async function loadMcp() {
+  if (!LIVE) return;
+  try {
+    const d = await api.get("config/mcp");
+    $("#mcpPath").textContent = d.path || "";
+    const mcp = d.mcp || {};
+    $("#mcpEditor").value = JSON.stringify(mcp, null, 2);
+    renderMcpCards(mcp);
+    setStatus("mcpStatus", `${Object.keys(mcp).length} server(s)`, "ok");
+  } catch (_) {
+    setStatus("mcpStatus", "load failed", "err");
+  }
+}
+
+function renderMcpCards(mcp) {
+  const keys = Object.keys(mcp);
+  const box = $("#mcpCards");
+  if (!keys.length) {
+    box.innerHTML = `<div class="mcp-empty">No MCP server configured yet.</div>`;
+    return;
+  }
+  box.innerHTML = keys
+    .map((name) => {
+      const s = mcp[name] || {};
+      const type = s.type || (s.command ? "local" : s.url ? "remote" : "?");
+      const enabled = s.enabled !== false;
+      const detail =
+        s.url ||
+        (Array.isArray(s.command) ? s.command.join(" ") : s.command) ||
+        "";
+      return `
+        <div class="mcp-card ${enabled ? "" : "is-off"}">
+          <div class="mcp-card-head">
+            <strong>${esc(name)}</strong>
+            <span class="mcp-badge">${esc(type)}</span>
+            <span class="mcp-state ${enabled ? "on" : "off"}">${enabled ? "enabled" : "disabled"}</span>
+          </div>
+          ${detail ? `<div class="mcp-detail">${esc(String(detail).slice(0, 140))}</div>` : ""}
+        </div>`;
+    })
+    .join("");
+}
+
+function setStatus(id, text, kind) {
+  const el = $("#" + id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = "editor-status" + (kind ? " is-" + kind : "");
+  if (kind === "ok")
+    setTimeout(() => {
+      el.textContent = "";
+    }, 2500);
+}
+
+async function saveAgents() {
+  if (!LIVE) return toast("Not connected.");
+  setStatus("agentsStatus", "saving…");
+  try {
+    await api.post("config/agents", { text: $("#agentsEditor").value });
+    setStatus("agentsStatus", "saved", "ok");
+    toast("AGENTS.md saved. Restart the engine to apply.");
+  } catch (_) {
+    setStatus("agentsStatus", "save failed", "err");
+  }
+}
+
+async function saveMcp() {
+  if (!LIVE) return toast("Not connected.");
+  let mcp;
+  try {
+    mcp = JSON.parse($("#mcpEditor").value || "{}");
+  } catch (e) {
+    setStatus("mcpStatus", "invalid JSON", "err");
+    return toast("Invalid JSON.");
+  }
+  setStatus("mcpStatus", "saving…");
+  try {
+    await api.post("config/mcp", { mcp });
+    setStatus("mcpStatus", "saved", "ok");
+    renderMcpCards(mcp);
+    toast("MCP config saved. Restart the engine to connect them.");
+  } catch (_) {
+    setStatus("mcpStatus", "save failed", "err");
+  }
+}
+
+async function restartEngine() {
+  if (!LIVE) return toast("Not connected.");
+  const btn = $("#engineRestart");
+  btn.disabled = true;
+  btn.textContent = "Restarting…";
+  toast("Restarting the engine…");
+  try {
+    const r = await api.post("config/restart", {});
+    renderEngine(r);
+    if (r.online) toast("Engine back online.");
+    else if (r.ok) toast("Restarted — engine still starting.");
+    else toast("Restart failed: " + (r.error || "?"));
+  } catch (_) {
+    toast("Restart failed.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Restart engine";
+  }
+}
+
+function loadSettings() {
+  loadEngine();
+  loadAgents();
+  loadMcp();
+}
+
+function initSettings() {
+  $$(".settings-tab").forEach((t) =>
+    t.addEventListener("click", () => {
+      $$(".settings-tab").forEach((x) =>
+        x.classList.toggle("is-active", x === t),
+      );
+      $$(".settings-panel").forEach((p) =>
+        p.classList.toggle("is-active", p.id === `panel-${t.dataset.stab}`),
+      );
+    }),
+  );
+  $("#agentsSave").addEventListener("click", saveAgents);
+  $("#agentsReload").addEventListener("click", loadAgents);
+  $("#mcpSave").addEventListener("click", saveMcp);
+  $("#mcpReload").addEventListener("click", loadMcp);
+  $("#engineRestart").addEventListener("click", restartEngine);
+  $("#engineRefresh").addEventListener("click", loadEngine);
+  // Live engine status while the settings view is open.
+  engine.timer = setInterval(() => {
+    if (
+      document.body.dataset.mode === "live" &&
+      $("#view-settings").classList.contains("is-active")
+    )
+      loadEngine();
+  }, 15000);
 }
 
 /* ---------- Agents (selector) ---------- */
@@ -1009,8 +1213,7 @@ function thinking(on) {
 
 function renderConvList() {
   if (!CONVS.length) {
-    $("#convList").innerHTML =
-      `<div class="conv-empty">No conversation.</div>`;
+    $("#convList").innerHTML = `<div class="conv-empty">No conversation.</div>`;
     return;
   }
   $("#convList").innerHTML = CONVS.map(
@@ -1586,6 +1789,7 @@ $("#paletteResults").addEventListener("click", (e) => {
 });
 
 welcome();
+initSettings();
 
 /* ---------- Chargement ---------- */
 async function loadLive() {

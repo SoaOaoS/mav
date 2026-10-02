@@ -102,6 +102,9 @@
           <button class="nav-item" data-view="system">
             <span class="nav-ico" data-ico="cpu"></span> Infra
           </button>
+          <button class="nav-item" data-view="settings">
+            <span class="nav-ico" data-ico="sliders"></span> Settings
+          </button>
         </nav>
 
         <div class="side-block">
@@ -162,9 +165,7 @@
             <button class="chip" data-cmd="status">
               How is the system doing?
             </button>
-            <button class="chip" data-cmd="automations">
-              My automations
-            </button>
+            <button class="chip" data-cmd="automations">My automations</button>
             <button class="chip" data-cmd="memories">
               What do you remember?
             </button>
@@ -276,13 +277,9 @@
               <div class="attachments" id="chatAttachments" hidden></div>
               <div class="chips" id="chatChips">
                 <button class="chip" data-cmd="status">Status</button>
-                <button class="chip" data-cmd="automations">
-                  Automations
-                </button>
+                <button class="chip" data-cmd="automations">Automations</button>
                 <button class="chip" data-cmd="memories">Memories</button>
-                <button class="chip" data-cmd="watch">
-                  Watch
-                </button>
+                <button class="chip" data-cmd="watch">Watch</button>
                 <button class="chip" data-cmd="markets">Markets</button>
               </div>
             </div>
@@ -321,10 +318,7 @@
         <section class="view" id="view-watch">
           <header class="view-head">
             <h1>Watch</h1>
-            <p>
-              I watch this for you and only ping you when it
-              change.
-            </p>
+            <p>I watch this for you and only ping you when it change.</p>
           </header>
           <form class="watch-add" id="watchForm">
             <select id="watchKind" aria-label="Type">
@@ -349,10 +343,95 @@
         <section class="view" id="view-system">
           <header class="view-head">
             <h1>Infra</h1>
-            <p>L'hyperviseur GAIA et ses machines, en direct de Proxmox.</p>
+            <p>The GAIA hypervisor and its machines, live from Proxmox.</p>
           </header>
           <div class="infra-nodes" id="infraNodes"></div>
           <div class="infra-vms" id="infraVms"></div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section class="view" id="view-settings">
+          <header class="view-head">
+            <h1>Settings</h1>
+            <p>Your agent, your rules — edit AGENTS.md and MCP servers.</p>
+          </header>
+
+          <!-- Engine status -->
+          <div class="card engine-card" id="engineCard">
+            <div class="engine-head">
+              <div class="engine-title">
+                <span class="engine-dot" id="engineDot"></span>
+                <strong id="engineLabel">Engine status</strong>
+              </div>
+              <button class="ghost-btn" id="engineRefresh" title="Re-check">
+                Refresh
+              </button>
+            </div>
+            <div class="engine-meta" id="engineMeta"></div>
+            <div class="engine-actions">
+              <button class="btn-primary" id="engineRestart">
+                Restart engine
+              </button>
+              <span class="hint">Applies AGENTS.md and MCP changes.</span>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="settings-tabs">
+            <button class="settings-tab is-active" data-stab="agents">
+              AGENTS.md
+            </button>
+            <button class="settings-tab" data-stab="mcp">MCP servers</button>
+          </div>
+
+          <!-- AGENTS.md editor -->
+          <div class="settings-panel is-active" id="panel-agents">
+            <div class="editor-bar">
+              <span class="editor-path" id="agentsPath"></span>
+              <div class="editor-actions">
+                <span class="editor-status" id="agentsStatus"></span>
+                <button class="ghost-btn" id="agentsReload">Reload</button>
+                <button class="btn-primary" id="agentsSave">Save</button>
+              </div>
+            </div>
+            <textarea
+              class="code-editor"
+              id="agentsEditor"
+              spellcheck="false"
+              placeholder="# Your agent instructions&#10;&#10;Write in Markdown how you want your agent to behave…"
+            ></textarea>
+            <p class="editor-hint">
+              This file is loaded at the start of every session. Restart the
+              engine to apply it.
+            </p>
+          </div>
+
+          <!-- MCP editor -->
+          <div class="settings-panel" id="panel-mcp">
+            <div class="editor-bar">
+              <span class="editor-path" id="mcpPath"></span>
+              <div class="editor-actions">
+                <span class="editor-status" id="mcpStatus"></span>
+                <button class="ghost-btn" id="mcpReload">Reload</button>
+                <button class="btn-primary" id="mcpSave">Save</button>
+              </div>
+            </div>
+            <p class="editor-hint">
+              JSON object of MCP servers (same shape as opencode.json's
+              <code>"mcp"</code> key). Secrets are masked — leave the dots to
+              keep an existing value. Restart the engine to connect them.
+            </p>
+            <div class="mcp-cards" id="mcpCards"></div>
+            <details class="mcp-raw">
+              <summary>Advanced: edit raw JSON</summary>
+              <textarea
+                class="code-editor code-editor--json"
+                id="mcpEditor"
+                spellcheck="false"
+                placeholder='{ "my-server": { "type": "remote", "url": "https://...", "enabled": true } }'
+              ></textarea>
+            </details>
+          </div>
         </section>
       </main>
     </div>
@@ -378,6 +457,10 @@
       <button class="tab" data-view="system">
         <span class="nav-ico" data-ico="cpu"></span>
         <span class="tab-label">Infra</span>
+      </button>
+      <button class="tab" data-view="settings">
+        <span class="nav-ico" data-ico="sliders"></span>
+        <span class="tab-label">Settings</span>
       </button>
     </nav>
 

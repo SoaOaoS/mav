@@ -32,6 +32,9 @@ any OpenAI-compatible endpoint.
 - **Web Push** — get notified outside the app, and tap a notification to open a
   chat that explains the alert in detail.
 - **RAG** — index documents and retrieve relevant excerpts into context.
+- **Self-service config** — edit your agent's `AGENTS.md` and your **MCP
+  servers** right from the dashboard, with a live engine status indicator and a
+  one-click **Restart engine** to apply changes.
 
 ## Installation
 

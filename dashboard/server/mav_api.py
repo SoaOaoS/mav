@@ -211,6 +211,256 @@ def _opencode_config_path() -> Path:
     return candidates[0]
 
 
+# ------------------------------------------------------------------- config
+# Everything needed to let the user edit their own agent (AGENTS.md) and MCP
+# servers from the dashboard, then restart the engine to apply.
+
+# The systemd unit of the engine (installer default: mav-server; older installs
+# may use opencode-server). Configurable, with auto-detection as a fallback.
+SERVER_UNIT_EXPLICIT = os.environ.get("MAV_SERVER_UNIT", "").strip()
+DEFAULT_SERVER_UNITS = ["mav-server", "opencode-server"]
+
+
+def _config_dir() -> Path:
+    return _opencode_config_path().parent
+
+
+def agents_path() -> Path:
+    """Global AGENTS.md read by opencode (same dir as opencode.json)."""
+    env = os.environ.get("MAV_AGENTS_MD")
+    if env:
+        return Path(env)
+    return _config_dir() / "AGENTS.md"
+
+
+def _run(cmd: list[str], timeout: float = 20) -> tuple[int, str]:
+    import subprocess  # noqa: PLC0415
+
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, (p.stdout or "") + (p.stderr or "")
+    except Exception as exc:  # noqa: BLE001
+        return 1, str(exc)
+
+
+def server_unit() -> str:
+    """Name of the systemd unit running the opencode engine."""
+    if SERVER_UNIT_EXPLICIT:
+        return SERVER_UNIT_EXPLICIT
+    for u in DEFAULT_SERVER_UNITS:
+        code, _ = _run(["systemctl", "cat", u], timeout=6)
+        if code == 0:
+            return u
+    return DEFAULT_SERVER_UNITS[0]
+
+
+def _unit_active(unit: str) -> bool:
+    code, out = _run(["systemctl", "is-active", unit], timeout=6)
+    return out.strip() == "active"
+
+
+def engine_status() -> dict:
+    """Live status of the agent engine + the services around it."""
+    unit = server_unit()
+    active = _unit_active(unit)
+    health = {}
+    try:
+        health = http_json(f"{OPENCODE_URL}/global/health", timeout=4) or {}
+    except Exception:
+        health = {}
+    online = bool(health.get("healthy"))
+    # How many agents/MCP the engine currently knows about.
+    n_agents = len(valid_agents())
+    n_mcp = 0
+    try:
+        names = _engine_mcp_names()
+        n_mcp = len(names)
+    except Exception:
+        n_mcp = 0
+    return {
+        "unit": unit,
+        "active": active,
+        "online": online,
+        "version": health.get("version"),
+        "agents": n_agents,
+        "mcp": n_mcp,
+        "model": DEFAULT_MODEL,
+        "url": OPENCODE_URL,
+        "checked": int(time.time()),
+    }
+
+
+def _engine_mcp_names() -> list[str]:
+    try:
+        data = http_json(f"{OPENCODE_URL}/mcp", timeout=6)
+    except Exception:
+        return []
+    if isinstance(data, dict):
+        return list(data.keys())
+    if isinstance(data, list):
+        return [d.get("name") for d in data if isinstance(d, dict) and d.get("name")]
+    return []
+
+
+SECRET_HINTS = ("token", "key", "secret", "password", "authorization", "auth")
+
+
+def _mask_secrets(obj):
+    """Recursively mask values whose key looks like a secret, for display."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if isinstance(v, str) and any(h in k.lower() for h in SECRET_HINTS):
+                out[k] = "••••••••" if v else ""
+            else:
+                out[k] = _mask_secrets(v)
+        return out
+    if isinstance(obj, list):
+        return [_mask_secrets(x) for x in obj]
+    return obj
+
+
+def _merge_secrets(new_obj, old_obj):
+    """Keep the old secret when the client sent the masked placeholder back."""
+    if isinstance(new_obj, dict) and isinstance(old_obj, dict):
+        out = {}
+        for k, v in new_obj.items():
+            if (
+                isinstance(v, str)
+                and v == "••••••••"
+                and isinstance(old_obj.get(k), str)
+            ):
+                out[k] = old_obj[k]
+            else:
+                out[k] = _merge_secrets(v, old_obj.get(k))
+        return out
+    if isinstance(new_obj, list) and isinstance(old_obj, list):
+        return [
+            _merge_secrets(v, old_obj[i] if i < len(old_obj) else None)
+            for i, v in enumerate(new_obj)
+        ]
+    return new_obj
+
+
+def _chown_user(path: Path) -> None:
+    """The engine runs as the install user; the dashboard may run as root."""
+    home = os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME")
+    user = os.environ.get("MAV_INSTALL_USER")
+    try:
+        import pwd  # noqa: PLC0415
+
+        if not user and home:
+            # infer from the home directory owner
+            import os as _os  # noqa: PLC0415
+
+            uid = _os.stat(home).st_uid
+            user = pwd.getpwuid(uid).pw_name
+        if user:
+            import grp  # noqa: PLC0415
+
+            uid = pwd.getpwnam(user).pw_uid
+            gid = grp.getgrnam(user).gr_gid
+            os.chown(path, uid, gid)
+    except Exception:
+        pass
+
+
+def read_agents() -> dict:
+    p = agents_path()
+    try:
+        text = p.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc), "path": str(p), "text": ""}
+    return {"path": str(p), "text": text, "exists": p.is_file()}
+
+
+def write_agents(text: str) -> dict:
+    p = agents_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        # Back up the previous version (keep a couple of them).
+        if p.is_file():
+            try:
+                bak = p.with_suffix(".md.bak")
+                bak.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+                _chown_user(bak)
+            except Exception:
+                pass
+        p.write_text(text, encoding="utf-8")
+        _chown_user(p)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "path": str(p)}
+
+
+def read_mcp() -> dict:
+    """MCP servers from the opencode config, secrets masked."""
+    p = _opencode_config_path()
+    try:
+        cfg = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc), "path": str(p), "mcp": {}}
+    return {"path": str(p), "mcp": _mask_secrets(cfg.get("mcp", {}) or {})}
+
+
+def write_mcp(mcp: dict) -> dict:
+    """Replace the `mcp` key in opencode.json, preserving other settings."""
+    p = _opencode_config_path()
+    if not isinstance(mcp, dict):
+        return {"ok": False, "error": "mcp must be an object"}
+    try:
+        cfg = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except Exception:
+        cfg = {}
+    old = cfg.get("mcp", {}) or {}
+    cfg["mcp"] = _merge_secrets(mcp, old)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp.replace(p)
+        _chown_user(p)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "path": str(p)}
+
+
+def restart_engine() -> dict:
+    """Restart the engine unit and wait until it answers again."""
+    unit = server_unit()
+    code, out = _run(["systemctl", "restart", unit], timeout=45)
+    if code != 0:
+        return {"ok": False, "error": out.strip(), "unit": unit}
+    # Wait up to ~20s for the engine to become healthy.
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        time.sleep(1)
+        try:
+            h = http_json(f"{OPENCODE_URL}/global/health", timeout=3)
+            if h and h.get("healthy"):
+                _agents_cache["at"] = 0.0  # force agent list refresh
+                return {"ok": True, "unit": unit, **engine_status()}
+        except Exception:
+            continue
+    return {"ok": True, "unit": unit, "slow": True, **engine_status()}
+
+
+def config_snapshot() -> dict:
+    """Everything the settings screen shows at once."""
+    cfg = _opencode_config_path()
+    return {
+        "agents": read_agents(),
+        "mcp": read_mcp(),
+        "engine": engine_status(),
+        "config_path": str(cfg),
+        "model": DEFAULT_MODEL,
+        "url": OPENCODE_URL,
+    }
+
+
+
 def _proxmox_conf() -> dict:
     """Read Proxmox credentials from the opencode config, without exposing them."""
     try:
@@ -1461,6 +1711,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_proxmox())
             if path == "/api/health":
                 return self._send(200, {"ok": True, "ts": int(time.time())})
+            if path == "/api/config":
+                return self._send(200, config_snapshot())
+            if path == "/api/config/agents":
+                return self._send(200, read_agents())
+            if path == "/api/config/mcp":
+                return self._send(200, read_mcp())
+            if path == "/api/config/engine":
+                return self._send(200, engine_status())
             if path == "/api/sessions":
                 return self._send(200, {"sessions": list_sessions()})
             if path == "/api/session":
@@ -1626,6 +1884,18 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
                 return self._send(200, {"ok": True})
+            if path == "/api/config/agents":
+                text = payload.get("text")
+                if not isinstance(text, str):
+                    return self._send(400, {"error": "text requis"})
+                res = write_agents(text)
+                return self._send(200 if res.get("ok") else 500, res)
+            if path == "/api/config/mcp":
+                res = write_mcp(payload.get("mcp"))
+                return self._send(200 if res.get("ok") else 500, res)
+            if path == "/api/config/restart":
+                res = restart_engine()
+                return self._send(200, res)
             return self._send(404, {"error": "not found"})
         except Exception as exc:  # noqa: BLE001
             return self._send(500, {"error": str(exc)})
