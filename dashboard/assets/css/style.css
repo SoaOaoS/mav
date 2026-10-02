@@ -17,10 +17,28 @@
   --warn: #c9973f;
   --off: #b6b2aa;
   --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 8px 24px rgba(28, 27, 25, 0.06);
-  --radius: 18px;
-  --radius-sm: 12px;
+  --shadow-sm: 0 1px 2px rgba(28, 27, 25, 0.05);
+  --shadow-lg:
+    0 1px 2px rgba(28, 27, 25, 0.04), 0 18px 48px rgba(28, 27, 25, 0.1);
+
+  /* ---- Radii ---- */
+  --radius-lg: 22px;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+
+  /* ---- Typography ---- */
   --font: "Inter", system-ui, -apple-system, sans-serif;
   --display: "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --mono: var(--font-mono);
+
+  /* ---- Motion ---- */
+  --dur-fast: 120ms;
+  --dur: 150ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ---- Glass (iOS 26) ---- */
   --glass-bg: rgba(255, 255, 255, 0.62);
@@ -44,6 +62,20 @@
   display: none !important;
 }
 
+/* One accessible focus ring for every interactive control. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+/* Controls with their own focus treatment (wrapper or border) opt out of the
+   ring to avoid doubling up. */
+.composer input:focus-visible,
+.code-editor:focus-visible,
+.mcp-raw textarea:focus-visible {
+  outline: none;
+}
+
 html,
 body {
   height: 100%;
@@ -54,8 +86,14 @@ body {
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   line-height: 1.5;
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--accent-ink);
 }
 
 /* Living background: fixed colored halos the glass blurs */
@@ -147,7 +185,7 @@ body::before {
   padding: 0.55rem 1.1rem;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .install-btn:hover {
   background: var(--accent-ink);
@@ -274,8 +312,8 @@ body.is-thinking .orb::before {
   border-radius: var(--radius-sm);
   text-align: left;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .nav-item:hover {
   background: var(--line-2);
@@ -535,8 +573,8 @@ body.is-thinking .orb::before {
   padding: 0.4rem 0.4rem 0.4rem 1.2rem;
   box-shadow: var(--shadow);
   transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+    border-color var(--dur-med) var(--ease),
+    box-shadow var(--dur-med) var(--ease);
 }
 .composer:focus-within {
   border-color: #cfd8d3;
@@ -571,8 +609,8 @@ body.is-thinking .orb::before {
   display: grid;
   place-items: center;
   transition:
-    transform 0.15s,
-    background 0.15s;
+    transform var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
 }
 .send:hover {
   background: var(--accent-ink);
@@ -601,7 +639,7 @@ body.is-thinking .orb::before {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.45rem 0.9rem;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .chip:hover {
   border-color: #d4d0c8;
@@ -759,8 +797,8 @@ body.is-thinking .orb::before {
   padding: 0.7rem 0.9rem;
   cursor: pointer;
   transition:
-    background 0.15s,
-    transform 0.15s;
+    background var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 .new-conv:hover {
   background: var(--accent-ink);
@@ -785,7 +823,7 @@ body.is-thinking .orb::before {
   cursor: pointer;
   font-size: 0.86rem;
   color: var(--ink-2);
-  transition: background 0.12s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .conv-item:hover {
   background: var(--line-2);
@@ -809,12 +847,12 @@ body.is-thinking .orb::before {
   border: none;
   background: none;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   display: grid;
   place-items: center;
   transition:
-    opacity 0.12s,
-    background 0.12s;
+    opacity var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
 }
 .conv-item:hover .cdel {
   opacity: 0.6;
@@ -854,11 +892,11 @@ body.is-thinking .orb::before {
   height: 32px;
   border: none;
   background: none;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: background 0.12s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .icon-btn:hover {
   background: var(--line-2);
@@ -912,7 +950,7 @@ body.is-thinking .orb::before {
 .bubble {
   font-size: 0.94rem;
   padding: 0.75rem 1rem;
-  border-radius: 16px;
+  border-radius: var(--radius-sm);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -974,7 +1012,7 @@ body.is-thinking .orb::before {
 .job .jicon {
   width: 38px;
   height: 38px;
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   background: var(--accent-soft);
@@ -1207,8 +1245,8 @@ body.is-thinking .orb::before {
 .wcard,
 .stat {
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    transform var(--dur-med) var(--ease),
+    box-shadow var(--dur-med) var(--ease);
 }
 .job:hover,
 .wcard:hover,
@@ -1313,7 +1351,7 @@ body.is-thinking .orb::before {
   border-radius: var(--radius-sm);
   padding: 0.6rem 0.7rem;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .side-search:hover {
   background: var(--glass-bg-strong);
@@ -1329,7 +1367,7 @@ body.is-thinking .orb::before {
   font-size: 0.68rem;
   color: var(--ink-3);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   padding: 0.05rem 0.35rem;
 }
 
@@ -1350,7 +1388,7 @@ body.is-thinking .orb::before {
   -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .side-tool:hover {
   background: var(--glass-bg-strong);
@@ -1378,7 +1416,7 @@ body.is-thinking .orb::before {
   border-radius: 50%;
   cursor: pointer;
   flex: none;
-  transition: background 0.12s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .attach:hover {
   background: var(--line-2);
@@ -1398,7 +1436,7 @@ body.is-thinking .orb::before {
   border-radius: 50%;
   cursor: pointer;
   flex: none;
-  transition: background 0.12s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .mic-btn:hover {
   background: var(--line-2);
@@ -1425,7 +1463,7 @@ body.is-thinking .orb::before {
   display: grid;
   place-items: center;
   flex: none;
-  transition: transform 0.15s;
+  transition: transform var(--dur-fast) var(--ease);
 }
 .stop-btn:hover {
   transform: scale(1.05);
@@ -1488,8 +1526,8 @@ body.is-thinking .orb::before {
   padding: 0.18rem 0.6rem;
   cursor: pointer;
   transition:
-    border-color 0.15s,
-    background 0.15s;
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
 }
 .agent-btn:hover {
   border-color: var(--accent);
@@ -1523,7 +1561,7 @@ body.is-thinking .orb::before {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 12px 34px rgba(20, 40, 60, 0.18);
 }
 .agent-opt {
@@ -1533,7 +1571,7 @@ body.is-thinking .orb::before {
   color: var(--ink-2);
   background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   padding: 0.4rem 0.6rem;
   cursor: pointer;
 }
@@ -1658,7 +1696,7 @@ body.is-thinking .orb::before {
   border-radius: 999px;
   padding: 0.3rem 0.7rem;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .job-act:hover {
   border-color: var(--accent);
@@ -1706,7 +1744,7 @@ body.is-thinking .orb::before {
 .mini-bar {
   height: 5px;
   background: rgba(0, 0, 0, 0.08);
-  border-radius: 3px;
+  border-radius: 999px;
   overflow: hidden;
   margin-bottom: 0.6rem;
 }
@@ -1905,11 +1943,11 @@ body.is-thinking .orb::before {
     height: 38px;
     border: none;
     background: none;
-    border-radius: 10px;
+    border-radius: var(--radius-xs);
     display: grid;
     place-items: center;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background var(--dur-fast) var(--ease);
   }
   .mobile-icon:active {
     background: var(--line-2);
@@ -1944,12 +1982,12 @@ body.is-thinking .orb::before {
     align-items: center;
     gap: 0.16rem;
     padding: 0.42rem 0.1rem;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     color: var(--ink-3);
     transition:
-      color 0.15s,
-      background 0.15s;
+      color var(--dur-fast) var(--ease),
+      background var(--dur-fast) var(--ease);
   }
   .tab .nav-ico {
     width: 21px;
@@ -2211,7 +2249,7 @@ body.is-thinking .orb::before {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   padding: 0.7rem 0.9rem;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .jr-item:hover {
   background: rgba(255, 255, 255, 0.72);
@@ -2301,7 +2339,7 @@ body.is-thinking .orb::before {
 .bubble .md-code {
   background: rgba(20, 30, 40, 0.06);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   padding: 0.6rem 0.7rem;
   margin: 0.5rem 0;
   overflow-x: auto;
@@ -2317,7 +2355,7 @@ body.is-thinking .orb::before {
   font-size: 0.85em;
   background: rgba(20, 30, 40, 0.07);
   padding: 0.08rem 0.35rem;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
 }
 .bubble .md-quote {
   border-left: 3px solid var(--accent);
@@ -2365,7 +2403,7 @@ body.is-thinking .orb::before {
   margin: 0.6rem 0;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-xs);
 }
 .md-table {
   border-collapse: collapse;
@@ -2414,7 +2452,7 @@ body.is-thinking .orb::before {
   margin: 0.7rem 0;
   padding: 0.6rem 0.6rem 0.2rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.5);
   overflow: hidden;
 }
@@ -2473,13 +2511,13 @@ body.is-thinking .orb::before {
   max-width: 100%;
   height: auto;
   margin: 0.55rem 0;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   box-shadow: 0 4px 16px rgba(20, 40, 60, 0.08);
   cursor: zoom-in;
   transition:
-    transform 0.15s,
-    box-shadow 0.15s;
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
 }
 .bubble .md-img:hover {
   transform: scale(1.01);
@@ -2487,7 +2525,7 @@ body.is-thinking .orb::before {
 }
 .jr-preview .md-img {
   max-width: 100%;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   margin: 0.4rem 0;
 }
 
@@ -2509,7 +2547,7 @@ body.is-thinking .orb::before {
 .lightbox img {
   max-width: 100%;
   max-height: 92vh;
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
 
@@ -2595,12 +2633,14 @@ body.is-thinking .orb::before {
   font-weight: 600;
   font-size: 0.85rem;
   padding: 0.5rem 0.9rem;
-  border-radius: 9px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
   cursor: pointer;
-  transition: filter 0.15s, opacity 0.15s;
+  transition:
+    filter var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 .btn-primary:hover {
   filter: brightness(1.06);
@@ -2613,7 +2653,7 @@ body.is-thinking .orb::before {
   font: inherit;
   font-size: 0.82rem;
   padding: 0.42rem 0.7rem;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--line);
   background: transparent;
   color: var(--ink-2);
@@ -2689,7 +2729,7 @@ body.is-thinking .orb::before {
   font-size: 0.82rem;
   line-height: 1.5;
   padding: 0.8rem 0.9rem;
-  border-radius: 10px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--line);
   background: rgba(20, 30, 40, 0.03);
   color: var(--ink);
@@ -2712,7 +2752,7 @@ body.is-thinking .orb::before {
   font-family: var(--font-mono, monospace);
   background: rgba(20, 30, 40, 0.06);
   padding: 0.05rem 0.3rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .mcp-cards {
@@ -2723,7 +2763,7 @@ body.is-thinking .orb::before {
 }
 .mcp-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 0.6rem 0.7rem;
   background: var(--glass-bg, rgba(255, 255, 255, 0.5));
 }
@@ -2744,7 +2784,7 @@ body.is-thinking .orb::before {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0.08rem 0.35rem;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   background: rgba(20, 30, 40, 0.08);
   color: var(--ink-3);
 }
@@ -2795,7 +2835,7 @@ body.is-thinking .orb::before {
 }
 .agent-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 0.6rem 0.7rem;
   background: var(--glass-bg, rgba(255, 255, 255, 0.5));
 }
@@ -2817,7 +2857,7 @@ body.is-thinking .orb::before {
   font: inherit;
   font-size: 0.82rem;
   padding: 0.42rem 0.7rem;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(217, 83, 79, 0.5);
   background: transparent;
   color: #c0392b;
@@ -2825,4 +2865,21 @@ body.is-thinking .orb::before {
 }
 .danger-btn:hover {
   background: rgba(217, 83, 79, 0.1);
+}
+
+/* ============================================================
+   MOTION — respect users who prefer less animation.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  body::before {
+    animation: none;
+  }
 }
