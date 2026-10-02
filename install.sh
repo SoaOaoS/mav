@@ -277,7 +277,7 @@ resolve_opencode_bin() {
 # ------------------------------------------------------------------ uninstall
 uninstall() {
   step "Uninstall"
-  for u in "$BOT_UNIT" "$DASH_UNIT"; do
+  for u in "$SERVER_UNIT" "$BOT_UNIT" "$DASH_UNIT"; do
     run systemctl disable --now "$u" 2>/dev/null || true
     run rm -f "/etc/systemd/system/$u.service"
   done
@@ -666,7 +666,8 @@ tpl() { sed -e "s|__USER__|${A[INSTALL_USER]}|g" \
             -e "s|__OPENCODE_BIN__|${OPENCODE_BIN:-$A[INSTALL_HOME]/.opencode/bin/opencode}|g" \
             -e "s|__ENV_BOT__|$ENV_BOT|g" \
             -e "s|__ENV_DASH__|$ENV_DASH|g" \
-            -e "s|__ENV_SERVER__|$ENV_SERVER|g" "$1"; }
+            -e "s|__ENV_SERVER__|$ENV_SERVER|g" \
+            -e "s|__SERVER_UNIT__|$SERVER_UNIT|g" "$1"; }
 
 if [[ $DRY_RUN -eq 0 ]]; then
   tpl "$SCRIPT_DIR/systemd/opencode-server.service.tpl" > "/etc/systemd/system/$SERVER_UNIT.service"

@@ -1,7 +1,7 @@
 [Unit]
 Description=Mav — Telegram bridge
-After=opencode-server.service
-Requires=opencode-server.service
+After=__SERVER_UNIT__.service
+Requires=__SERVER_UNIT__.service
 
 [Service]
 Type=simple
