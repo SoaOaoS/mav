@@ -112,8 +112,17 @@ const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
     });
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+    let data = null;
+    try {
+      data = await r.json();
+    } catch (_) {}
+    if (!r.ok) {
+      const msg = (data && data.error) || r.status;
+      const err = new Error(msg);
+      err.data = data;
+      throw err;
+    }
+    return data;
   },
 };
 
@@ -670,8 +679,9 @@ async function saveMcp() {
     setStatus("mcpStatus", "saved", "ok");
     renderMcpCards(mcp);
     toast("MCP config saved. Restart the engine to connect them.");
-  } catch (_) {
+  } catch (e) {
     setStatus("mcpStatus", "save failed", "err");
+    toast(String(e.message || "Save failed.").slice(0, 300));
   }
 }
 

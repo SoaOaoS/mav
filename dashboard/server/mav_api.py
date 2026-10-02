@@ -419,17 +419,101 @@ def read_mcp() -> dict:
     return {"path": str(p), "mcp": _mask_secrets(cfg.get("mcp", {}) or {})}
 
 
+def _normalize_mcp_entry(name: str, entry: dict) -> tuple[dict, str | None]:
+    """Return (normalized_entry, error). Accepts opencode's schema and coerces
+    the common shapes people paste from other MCP clients.
+
+    opencode requires: type local + command [] , or type remote + url, and it
+    rejects anything else (breaking startup with 'Missing key mcp.<name>.enabled').
+    """
+    if not isinstance(entry, dict):
+        return entry, f"{name}: must be an object"
+    e = dict(entry)
+
+    # A bare { "enabled": bool } is a valid opencode entry (disable a remote default).
+    if set(e.keys()) == {"enabled"}:
+        return e, None
+
+    # Coerce common aliases.
+    if "env" in e and "environment" not in e:
+        e["environment"] = e.pop("env")
+    t = str(e.get("type", "")).lower()
+    if t in ("stdio", "subprocess", "process"):
+        e["type"] = "local"
+    elif t in ("http", "sse", "streamable-http"):
+        e["type"] = "remote"
+
+    # command string + args []  ->  command [string, *args]
+    if isinstance(e.get("command"), str):
+        args = e.pop("args", None)
+        cmd = [e["command"]]
+        if isinstance(args, list):
+            cmd += [str(a) for a in args]
+        elif args is not None:
+            cmd.append(str(args))
+        e["command"] = cmd
+
+    t = e.get("type")
+    if t == "local":
+        if not isinstance(e.get("command"), list) or not e["command"]:
+            return e, (
+                f"{name}: a local server needs \"command\" as an array of strings "
+                '(e.g. "command": ["npx", "-y", "pkg"]), not a string with "args".'
+            )
+    elif t == "remote":
+        if not isinstance(e.get("url"), str) or not e["url"]:
+            return e, f'{name}: a remote server needs a "url".'
+    else:
+        return e, (
+            f'{name}: needs "type": "local" (with "command") or "type": "remote" '
+            '(with "url"), or be just {"enabled": true|false}.'
+        )
+
+    # opencode versions expect `enabled` on configured servers; default it on.
+    e.setdefault("enabled", True)
+    # Keep only keys opencode understands.
+    allowed = {
+        "type", "command", "cwd", "environment", "enabled", "timeout",
+        "url", "headers", "oauth",
+    }
+    e = {k: v for k, v in e.items() if k in allowed}
+    return e, None
+
+
+def _validate_mcp(mcp: dict) -> tuple[dict, list[str]]:
+    """Normalize every entry; return (clean_mcp, errors)."""
+    clean: dict = {}
+    errors: list[str] = []
+    for name, entry in (mcp or {}).items():
+        if not isinstance(name, str) or not name.strip():
+            errors.append("MCP server name must be a non-empty string.")
+            continue
+        norm, err = _normalize_mcp_entry(name, entry)
+        if err:
+            errors.append(err)
+        clean[name] = norm
+    return clean, errors
+
+
 def write_mcp(mcp: dict) -> dict:
-    """Replace the `mcp` key in opencode.json, preserving other settings."""
+    """Replace the `mcp` key in opencode.json, preserving other settings.
+
+    Validates and normalizes entries first: an invalid MCP config would make
+    opencode refuse to start, so we refuse to save it and explain why."""
     p = _opencode_config_path()
     if not isinstance(mcp, dict):
         return {"ok": False, "error": "mcp must be an object"}
+    clean, errors = _validate_mcp(mcp)
+    if errors:
+        return {"ok": False, "error": "Invalid MCP config:\n- " + "\n- ".join(errors)}
     try:
         cfg = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
     except Exception:
         cfg = {}
     old = cfg.get("mcp", {}) or {}
-    cfg["mcp"] = _merge_secrets(mcp, old)
+    # Normalize the existing entries too, so the merge stays consistent.
+    old_clean, _ = _validate_mcp(old)
+    cfg["mcp"] = _merge_secrets(clean, old_clean)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_suffix(".json.tmp")

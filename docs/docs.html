@@ -615,6 +615,24 @@ sudo systemctl restart mav-server</code></pre>
               Installed opencode elsewhere? Point the launcher at it via
               <code>MAV_OPENCODE_BIN</code> in <code>/etc/mav-server.env</code>.
             </p>
+            <h3><code>Missing key mcp.&lt;name&gt;.enabled</code></h3>
+            <p>
+              opencode refused to start because an MCP server entry is invalid.
+              opencode requires either a full definition or just
+              <code>{"enabled": …}</code>:
+            </p>
+            <pre><code>// local — command is an ARRAY, env vars go in "environment"
+{ "type": "local", "command": ["npx", "-y", "pkg"], "enabled": true }
+
+// remote
+{ "type": "remote", "url": "https://…/mcp", "enabled": true }</code></pre>
+            <div class="docs-note">
+              The dashboard now validates MCP config before saving: it coerces
+              the common <code>type:"stdio"</code> + <code>command</code> +
+              <code>args</code> + <code>env</code> shape into opencode's format,
+              and rejects anything it cannot fix with an explanation — so a bad
+              edit can no longer break startup.
+            </div>
             <h3>A reboot shows a failed unit</h3>
             <p>
               Run <code>systemctl --failed</code> and
