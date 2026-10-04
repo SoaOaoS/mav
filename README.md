@@ -45,7 +45,8 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 
 ## Install
 
-On a Debian/Ubuntu machine (a home server, a mini PC, a VPS):
+On a Linux machine with systemd — Debian, Ubuntu, Arch (Omarchy, Manjaro…)
+or Fedora — a home server, a mini PC, a VPS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash

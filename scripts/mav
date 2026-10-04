@@ -97,7 +97,10 @@ dashboard_url() {
   port="$(env_get "$MAV_ENV_DASH" MAV_API_PORT)"; port="${port:-80}"
   tls="$(env_get "$MAV_ENV_DASH" MAV_TLS_PORT)"
   host="$bind"
-  [[ "$host" == "0.0.0.0" ]] && host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [[ "$host" == "0.0.0.0" ]]; then
+    host="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}' || true)"
+    [[ -z "$host" ]] && host="$(python3 -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0])' 2>/dev/null || true)"
+  fi
   host="${host:-localhost}"
   if [[ -n "$tls" ]]; then
     [[ "$tls" == "443" ]] && echo "https://$host" || echo "https://$host:$tls"

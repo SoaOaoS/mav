@@ -60,7 +60,7 @@
       <!-- HERO -->
       <section class="hero">
         <div class="hero-copy">
-          <span class="pill">Open source · MIT</span>
+          <a class="pill" id="versionPill" href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener">Open source · MIT</a>
           <h1>
             Your everyday AI assistant,<br />
             that also works on its own.
@@ -85,7 +85,7 @@
           <ul class="hero-points">
             <li>Set up in minutes</li>
             <li>Your model, your keys</li>
-            <li>Private by design</li>
+            <li>Debian, Ubuntu, Arch, Fedora</li>
           </ul>
         </div>
 
@@ -211,6 +211,49 @@
         </div>
       </section>
 
+      <!-- EASY -->
+      <section id="easy" class="section">
+        <header class="section-head">
+          <h2>Easy to live with</h2>
+          <p>No terminal needed after the install — and when you want one, it helps you.</p>
+        </header>
+        <div class="grid cards">
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/></svg></div>
+            <h3>Connections, ready to use</h3>
+            <p>
+              Read web pages, a web browser, Brave search, time zones, your
+              files, Notion, Home Assistant, GitHub. Pick one, paste its key.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></div>
+            <h3>Updates in one click</h3>
+            <p>
+              Mav tells you when a new version is out, shows what's new and
+              installs it. Your chats, memory and routines stay put.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.3M20 4v7h-7"/></svg></div>
+            <h3>Changes, applied when you say</h3>
+            <p>
+              Edit instructions, helpers or connections; a bar reminds you to
+              restart the assistant, in one click, when you're ready.
+            </p>
+          </article>
+          <article class="card glass">
+            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
+            <h3>A helpful command line</h3>
+            <p>
+              <code>mav doctor</code> checks everything and says how to fix it;
+              <code>mav update</code>, <code>mav backup</code>,
+              <code>mav logs</code> do the rest.
+            </p>
+          </article>
+        </div>
+      </section>
+
       <!-- HOW -->
       <section id="how" class="section how">
         <header class="section-head">
@@ -222,8 +265,8 @@
             <span class="step-n">1</span>
             <h3>Install</h3>
             <p>
-              One command on a home server, a mini PC or a VPS. It asks only
-              for your model and installs the rest.
+              One command on a home server, a mini PC or a VPS running Debian,
+              Ubuntu, Arch or Fedora. It asks only for your model.
             </p>
             <code class="mini">curl -fsSL …/get.sh | sudo bash</code>
           </li>
@@ -301,6 +344,7 @@
       </div>
       <nav>
         <a href="docs.html">Docs</a>
+        <a href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener">Releases</a>
         <a href="https://github.com/SoaOaoS/mav" target="_blank" rel="noopener"
           >GitHub</a
         >

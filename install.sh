@@ -14,7 +14,16 @@
 #
 #  Idempotent: safe to re-run. Details of every step go to the log file.
 # ============================================================================
-set -euo pipefail
+set -Eeuo pipefail
+
+# Never stop silently: say where an unexpected error happened.
+on_error() {
+  local rc=$? line="$1" cmd="$2"
+  printf "\n  \033[31m✗ Unexpected error (line %s): %s\033[0m\n" "$line" "$cmd" >&2
+  printf "  Please report it with the log: %s\n" "${LOG:-/var/log/mav-install.log}" >&2
+  exit "$rc"
+}
+trap 'on_error "$LINENO" "$BASH_COMMAND"' ERR
 
 # ------------------------------------------------------------------ constants
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -225,6 +234,39 @@ home_of() {
   h="$(getent passwd "$1" 2>/dev/null | cut -d: -f6 || true)"
   echo "${h:-/home/$1}"
 }
+
+# user:group for chown — the user's real primary group (on Arch it is often
+# "users", not a group named after the user).
+owner() {
+  local u="${A[INSTALL_USER]}" g
+  g="$(id -gn "$u" 2>/dev/null || true)"
+  echo "$u:${g:-$u}"
+}
+
+# This machine's main IPv4 address (portable: no `hostname -I`, which is
+# Debian-only and missing on Arch).
+primary_ip() {
+  local ip=""
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}' || true)"
+    [[ -z "$ip" ]] && ip="$(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}' || true)"
+  fi
+  # A "connected" UDP socket reveals the outgoing address; nothing is sent.
+  [[ -z "$ip" ]] && ip="$(python3 -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0])' 2>/dev/null || true)"
+  [[ -z "$ip" ]] && ip="$( (hostname -I 2>/dev/null || true) | awk '{print $1}')"
+  echo "${ip:-127.0.0.1}"
+}
+
+# Package manager: apt (Debian, Ubuntu…), pacman (Arch, Omarchy, Manjaro…)
+# or dnf (Fedora…). Empty when none is supported.
+detect_pkg() {
+  local p
+  for p in apt-get pacman dnf; do
+    command -v "$p" >/dev/null 2>&1 && { echo "${p%-get}"; return; }
+  done
+  echo ""
+}
+PKG="${MAV_PKG:-$(detect_pkg)}"   # MAV_PKG: force one (tests)
 
 banner() {
   printf "\n${B}${GRN}"
@@ -437,7 +479,7 @@ apply_provider() {
   ref="$(MAV_PROVIDER_APIKEY="${A[API_KEY]:-}" python3 "$PROVIDER_PY" "${args[@]}" 2>>"$LOG")" ||
     die "Could not write the model configuration."
   A[MODEL_REF]="$ref"
-  chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "${A[INSTALL_HOME]}/.config/opencode" 2>/dev/null || true
+  chown -R "$(owner)" "${A[INSTALL_HOME]}/.config/opencode" 2>/dev/null || true
   ok "Model set: $ref"
 }
 
@@ -449,17 +491,44 @@ require_root() {
   fi
 }
 
+pacman_install() {
+  # Without a database sync first (no partial upgrade); if the local database
+  # is too old to find the packages, do the full sync + upgrade Arch expects.
+  pacman -S --needed --noconfirm "$@" || pacman -Syu --needed --noconfirm "$@"
+}
+
 install_prereqs() {
-  export DEBIAN_FRONTEND=noninteractive
-  task "Updating package lists" apt-get update -qq
-  task "Installing Python, git, curl, openssl" \
-    apt-get install -y -qq python3 python3-venv python3-pip git curl openssl ca-certificates
-  if ! command -v docker >/dev/null 2>&1; then
-    task "Installing Docker" sh -c 'curl -fsSL https://get.docker.com | sh'
-  fi
+  case "$PKG" in
+    apt)
+      export DEBIAN_FRONTEND=noninteractive
+      task "Updating package lists" apt-get update -qq
+      task "Installing Python, git, curl, openssl" \
+        apt-get install -y -qq python3 python3-venv python3-pip git curl openssl ca-certificates iproute2
+      if ! command -v docker >/dev/null 2>&1; then
+        task "Installing Docker" sh -c 'curl -fsSL https://get.docker.com | sh'
+      fi
+      ;;
+    pacman)
+      task "Installing Python, git, curl, openssl" \
+        pacman_install python git curl openssl ca-certificates iproute2
+      if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+        task "Installing Docker" pacman_install docker docker-compose
+      fi
+      ;;
+    dnf)
+      task "Installing Python, git, curl, openssl" \
+        dnf install -y -q python3 git curl openssl ca-certificates iproute
+      if ! command -v docker >/dev/null 2>&1; then
+        task "Installing Docker" sh -c 'curl -fsSL https://get.docker.com | sh'
+      fi
+      ;;
+  esac
   task "Starting Docker" systemctl enable --now docker
   if ! docker compose version >/dev/null 2>&1; then
-    TASK_SOFT=1 task "Installing the docker compose plugin" apt-get install -y -qq docker-compose-plugin
+    case "$PKG" in
+      apt) TASK_SOFT=1 task "Installing the docker compose plugin" apt-get install -y -qq docker-compose-plugin ;;
+      dnf) TASK_SOFT=1 task "Installing the docker compose plugin" dnf install -y -q docker-compose-plugin ;;
+    esac
   fi
 }
 
@@ -566,11 +635,16 @@ fi
 if [[ -f /etc/os-release ]]; then
   # shellcheck disable=SC1091
   . /etc/os-release
-  case "${ID:-}" in
-    debian|ubuntu|raspbian) ;;
+  case " ${ID:-} ${ID_LIKE:-} " in
+    *" debian "*|*" ubuntu "*|*" raspbian "*|*" arch "*|*" fedora "*) ;;
     *) warn "Untested system (${PRETTY_NAME:-unknown}) — continuing anyway." ;;
   esac
 fi
+if [[ -z "$PKG" && $DRY_RUN -eq 0 ]]; then
+  die "No supported package manager found (apt, pacman or dnf). Mav supports Debian/Ubuntu, Arch and Fedora."
+fi
+command -v systemctl >/dev/null 2>&1 || [[ $DRY_RUN -eq 1 ]] ||
+  die "Mav needs systemd (systemctl not found)."
 
 MODE="install"
 if detect_existing_install; then
@@ -640,8 +714,7 @@ URL_SCHEME="http"; URL_PORT="${A[HTTP_PORT]}"
 if [[ -n "${A[TLS_PORT]}" ]]; then URL_SCHEME="https"; URL_PORT="${A[TLS_PORT]}"; fi
 HOST_SHOWN="${A[BIND]}"
 if [[ "$HOST_SHOWN" == "0.0.0.0" ]]; then
-  HOST_SHOWN="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  : "${HOST_SHOWN:=localhost}"
+  HOST_SHOWN="$(primary_ip)"
 fi
 DASH_URL="$URL_SCHEME://$HOST_SHOWN"
 [[ "$URL_PORT" != "80" && "$URL_PORT" != "443" ]] && DASH_URL="$DASH_URL:$URL_PORT"
@@ -663,7 +736,7 @@ if ! id "${A[INSTALL_USER]}" >/dev/null 2>&1; then
   task "Creating user ${A[INSTALL_USER]}" useradd -m -s /bin/bash "${A[INSTALL_USER]}"
 fi
 if [[ $DRY_RUN -eq 0 && -d "${A[INSTALL_HOME]}" ]]; then
-  chown "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "${A[INSTALL_HOME]}"
+  chown "$(owner)" "${A[INSTALL_HOME]}"
 fi
 TASK_SOFT=1 task "Giving ${A[INSTALL_USER]} access to Docker" usermod -aG docker "${A[INSTALL_USER]}"
 
@@ -676,14 +749,14 @@ copy_files() {
   # Files from the former Telegram bridge.
   rm -f "$BOT_DIR/opencode_bot.py" "$BOT_DIR/ocformat.py" "$BOT_DIR/sessions.json"
   [[ -f "$BOT_DIR/jobs.json" ]] || echo "[]" >"$BOT_DIR/jobs.json"
-  chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$BOT_DIR" "$DASH_DIR" "${A[INSTALL_HOME]}/workspace"
+  chown -R "$(owner)" "$BOT_DIR" "$DASH_DIR" "${A[INSTALL_HOME]}/workspace"
 
   # Persistent copy of the installer, for `mav update`.
   local src="${A[INSTALL_HOME]}/.mav"
   if [[ "$(cd "$SCRIPT_DIR" && pwd -P)" != "$(mkdir -p "$src" && cd "$src" && pwd -P)" ]]; then
     rm -rf "$src"; mkdir -p "$src"; cp -a "$SCRIPT_DIR/." "$src/"
   fi
-  chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$src"
+  chown -R "$(owner)" "$src"
 
   # Everyday helper templates: added when missing, never overwritten.
   local adir="${A[INSTALL_HOME]}/.config/opencode/agent" tpl
@@ -691,7 +764,7 @@ copy_files() {
   for tpl in "$SCRIPT_DIR"/agents/*.md; do
     [[ -e "$tpl" && ! -f "$adir/$(basename "$tpl")" ]] && cp "$tpl" "$adir/"
   done
-  chown -R "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "${A[INSTALL_HOME]}/.config"
+  chown -R "$(owner)" "${A[INSTALL_HOME]}/.config"
 
   # The `mav` command, and what it needs to know about this install.
   install -m 755 "$SCRIPT_DIR/scripts/mav" /usr/local/bin/mav
@@ -750,11 +823,16 @@ task "Starting the memory database (Postgres)" pg_up
 task "Preparing the database" pg_wait_and_schema
 
 if [[ $DRY_RUN -eq 0 && -n "${A[TLS_PORT]}" && ! -f "$CERT_DIR/server.crt" ]]; then
-  TASK_SOFT=1 task "Creating HTTPS certificates" env MAV_SAN_IP="${A[BIND]}" bash "$DASH_DIR/tools/make_certs.sh"
+  SAN_IP="${A[BIND]}"
+  [[ "$SAN_IP" == "0.0.0.0" ]] && SAN_IP="$(primary_ip)"
+  [[ "$SAN_IP" != "127.0.0.1" ]] && SAN_IP="$SAN_IP,127.0.0.1"
+  SAN_DNS="$(uname -n 2>/dev/null || echo mav),$(uname -n 2>/dev/null || echo mav).local,mav.local"
+  TASK_SOFT=1 task "Creating HTTPS certificates" \
+    env MAV_SAN_IP="$SAN_IP" MAV_SAN_DNS="$SAN_DNS" bash "$DASH_DIR/tools/make_certs.sh"
 fi
 if [[ $DRY_RUN -eq 0 && ! -f "$BOT_DIR/vapid_private.pem" ]]; then
   task "Creating notification keys" make_vapid
-  chown "${A[INSTALL_USER]}:${A[INSTALL_USER]}" "$BOT_DIR"/vapid_* 2>/dev/null || true
+  chown "$(owner)" "$BOT_DIR"/vapid_* 2>/dev/null || true
 fi
 
 write_env() {

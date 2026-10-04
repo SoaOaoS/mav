@@ -95,8 +95,9 @@
           <section id="install">
             <h2>Installation</h2>
             <p>
-              Mav runs on a Debian or Ubuntu machine you control — a home
-              server, a mini PC, a Raspberry Pi 5, a VPS. One command:
+              Mav runs on a Linux machine you control — a home server, a mini
+              PC, a Raspberry Pi 5, a VPS — with Debian, Ubuntu, Arch (Omarchy,
+              Manjaro…) or Fedora. One command:
             </p>
             <pre><code>curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash</code></pre>
             <p>or, from a clone:</p>
@@ -155,7 +156,10 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               Versions follow <a href="https://semver.org" target="_blank" rel="noopener">semantic versioning</a>:
               every change merged into <code>main</code> is released
               automatically, as a major (breaking change), minor (new feature)
-              or patch version, depending on its commit messages.
+              or patch version, depending on its commit messages. What changed
+              in each version is on the
+              <a href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener">releases page</a>
+              (latest: <span data-latest-version>see releases</span>).
             </p>
             <div class="docs-note">
               <strong>Coming from the Telegram version?</strong> Telegram
@@ -173,7 +177,12 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
           <section id="requirements">
             <h2>Requirements</h2>
             <ul>
-              <li>Debian 12+ or Ubuntu 22.04+ (others may work), root access.</li>
+              <li>
+                Debian 12+, Ubuntu 22.04+, Arch-based systems (Omarchy,
+                Manjaro, EndeavourOS…) or Fedora, with systemd and root access.
+                The installer uses <code>apt</code>, <code>pacman</code> or
+                <code>dnf</code> accordingly.
+              </li>
               <li>About 1 GB of RAM for Mav itself — more if you run models locally with Ollama.</li>
               <li>An API key from a model provider, or an Ollama server.</li>
             </ul>
@@ -449,6 +458,14 @@ sudo systemctl restart mav-server</code></pre>
             <p>
               Installed elsewhere? Set <code>MAV_OPENCODE_BIN</code> in
               <code>/etc/mav-server.env</code>.
+            </p>
+            <h3>The installer stopped without a message</h3>
+            <p>
+              Version 1.0.0 stopped silently right after the advanced settings
+              on Arch-based systems. Fixed in 1.0.1 — simply run the one-line
+              installer again. Since 1.0.1, any unexpected error shows the
+              line that failed; send it with the end of
+              <code>/var/log/mav-install.log</code> when reporting a problem.
             </p>
             <h3>Check everything at once</h3>
             <pre><code>mav doctor</code></pre>

@@ -38,6 +38,25 @@
     });
   });
 
+  // Show the latest released version (from GitHub; silently skipped offline).
+  const pill = document.getElementById("versionPill");
+  const latest = document.querySelectorAll("[data-latest-version]");
+  if (pill || latest.length) {
+    fetch("https://api.github.com/repos/SoaOaoS/mav/releases/latest", {
+      headers: { Accept: "application/vnd.github+json" },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rel) => {
+        if (!rel || !rel.tag_name) return;
+        if (pill) {
+          pill.textContent = `${rel.tag_name} · Open source · MIT`;
+          if (rel.html_url) pill.href = rel.html_url;
+        }
+        latest.forEach((el) => (el.textContent = rel.tag_name));
+      })
+      .catch(() => {});
+  }
+
   // Mobile: collapse the docs table of contents so the content comes first.
   const navToggle = document.getElementById("docsNavToggle");
   const docsNav = document.querySelector(".docs-nav");
