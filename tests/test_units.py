@@ -17,9 +17,16 @@ sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 # Bot modules first: mav_api inserts the *installed* BOT_DIR on sys.path, so
 # importing it first could shadow these with a different copy on the machine.
 import mav_provider  # noqa: E402
+import ocactions  # noqa: E402
+import occonditions  # noqa: E402
 import ocdebates  # noqa: E402
+import ocdrafts  # noqa: E402
+import ocevents  # noqa: E402
 import ocjobs  # noqa: E402
 import ocmemory  # noqa: E402
+import ocpriority  # noqa: E402
+import ocroutine_nl  # noqa: E402
+import ocroutine_templates  # noqa: E402
 import ocwatch  # noqa: E402
 import mav_api  # noqa: E402
 
@@ -307,6 +314,224 @@ class Downloads(unittest.TestCase):
             p.write_text("nope")
             self.assertIsNone(mav_api.download_response(str(p)))
         self.assertIsNone(mav_api.resolve_download("/etc/passwd"))
+
+
+class RoutineNL(unittest.TestCase):
+    def test_english(self):
+        d = ocroutine_nl.detect("every monday at 8:30 send me the report")
+        self.assertEqual(d["days"], ["mon"])
+        self.assertEqual(d["time"], "08:30")
+        self.assertEqual(d["mode"], "weekly")
+
+    def test_french(self):
+        d = ocroutine_nl.detect("tous les matins à 7h résume mon agenda")
+        self.assertEqual(d["lang"], "fr")
+        self.assertEqual(d["time"], "07:00")
+        self.assertEqual(d["mode"], "daily")
+
+    def test_french_weekly(self):
+        d = ocroutine_nl.detect("chaque vendredi envoie le rapport")
+        self.assertEqual(d["days"], ["fri"])
+        self.assertEqual(d["mode"], "weekly")
+
+    def test_spanish(self):
+        d = ocroutine_nl.detect("cada día a las 9 dame el tiempo")
+        self.assertEqual(d["lang"], "es")
+        self.assertEqual(d["time"], "09:00")
+
+    def test_interval(self):
+        d = ocroutine_nl.detect("toutes les 3 heures vérifie le serveur")
+        self.assertEqual(d["mode"], "interval")
+        self.assertEqual(d["every_minutes"], 180)
+
+    def test_weekdays(self):
+        d = ocroutine_nl.detect("on weekdays remind me to stretch")
+        self.assertEqual(d["days"], ["mon", "tue", "wed", "thu", "fri"])
+
+    def test_nothing_recurring(self):
+        self.assertIsNone(ocroutine_nl.detect("what is the capital of France?"))
+        self.assertIsNone(ocroutine_nl.detect("/remember I live in Lyon"))
+
+    def test_what_is_stripped(self):
+        d = ocroutine_nl.detect("every morning at 7 give me the weather")
+        self.assertNotIn("7", d["what"])
+        self.assertIn("weather", d["what"])
+
+
+class FlexibleSchedules(unittest.TestCase):
+    def test_monthly_days(self):
+        job = {"name": "x", "prompt": "p", "time": "09:00", "days_of_month": [1, 15]}
+        self.assertTrue(ocjobs.due(job, datetime(2026, 1, 1, 9, 0), None))
+        self.assertTrue(ocjobs.due(job, datetime(2026, 1, 15, 9, 0), None))
+        self.assertFalse(ocjobs.due(job, datetime(2026, 1, 2, 9, 0), None))
+
+    def test_last_day_of_month(self):
+        job = {"name": "x", "prompt": "p", "time": "18:00", "last_day_of_month": True}
+        self.assertTrue(ocjobs.due(job, datetime(2026, 1, 31, 18, 0), None))
+        self.assertFalse(ocjobs.due(job, datetime(2026, 2, 27, 18, 0), None))
+        self.assertTrue(ocjobs.due(job, datetime(2026, 2, 28, 18, 0), None))
+
+    def test_event_job_never_due_by_clock(self):
+        job = {"name": "x", "prompt": "p", "on_event": {"kind": "github"}}
+        self.assertTrue(ocjobs.validate(job))
+        self.assertFalse(ocjobs.due(job, datetime(2026, 1, 1, 9, 0), None))
+
+    def test_snooze_blocks(self):
+        now = datetime(2026, 1, 1, 9, 0)
+        job = {"name": "x", "prompt": "p", "time": "09:00",
+               "snooze_until": int(now.timestamp()) + 3600}
+        self.assertTrue(ocjobs.snoozed(job, now))
+        self.assertFalse(ocjobs.due(job, now, None))
+
+    def test_validate_monthly(self):
+        self.assertTrue(ocjobs.validate({"name": "x", "prompt": "p", "time": "09:00", "days_of_month": [3]}))
+        self.assertFalse(ocjobs.validate({"name": "x", "prompt": "p", "time": "09:00", "days_of_month": ["nope"]}))
+
+
+class Conditions(unittest.TestCase):
+    def test_text_contains(self):
+        cond = {"type": "text_contains", "value": "pluie"}
+        self.assertTrue(occonditions.evaluate(cond, source="averses et pluie"))
+        self.assertFalse(occonditions.evaluate(cond, source="grand soleil"))
+
+    def test_negate(self):
+        cond = {"type": "text_contains", "value": "pluie", "negate": True}
+        self.assertFalse(occonditions.evaluate(cond, source="pluie"))
+        self.assertTrue(occonditions.evaluate(cond, source="soleil"))
+
+    def test_number(self):
+        cond = {"type": "number", "value": 3, "op": ">"}
+        self.assertTrue(occonditions.evaluate(cond, source="5 nouveaux mails"))
+        self.assertFalse(occonditions.evaluate(cond, source="2 mails"))
+
+    def test_weekday(self):
+        self.assertTrue(occonditions.evaluate({"type": "weekday", "value": "weekend"}, weekday="sat"))
+        self.assertFalse(occonditions.evaluate({"type": "weekday", "value": "weekend"}, weekday="mon"))
+
+    def test_unknown_allows(self):
+        self.assertTrue(occonditions.evaluate({"type": "nonsense"}))
+
+
+class Events(unittest.TestCase):
+    def test_matches_kind(self):
+        job = {"on_event": {"kind": "github"}}
+        self.assertTrue(ocevents.matches(job, {"kind": "github", "payload": {}}))
+        self.assertFalse(ocevents.matches(job, {"kind": "iot", "payload": {}}))
+
+    def test_matches_contains(self):
+        job = {"on_event": {"kind": "github", "contains": "opened"}}
+        self.assertTrue(ocevents.matches(job, {"kind": "github", "payload": {"action": "opened"}}))
+        self.assertFalse(ocevents.matches(job, {"kind": "github", "payload": {"action": "closed"}}))
+
+    def test_no_subscription(self):
+        self.assertFalse(ocevents.matches({"prompt": "p"}, {"kind": "any"}))
+
+    def test_any_kind(self):
+        self.assertTrue(ocevents.matches({"on_event": {"kind": "any"}}, {"kind": "form"}))
+
+
+class Priority(unittest.TestCase):
+    def test_critical(self):
+        self.assertEqual(ocpriority.classify("Payment failed")["level"], "critical")
+
+    def test_important(self):
+        self.assertEqual(ocpriority.classify("Réunion demain à 9h")["level"], "important")
+
+    def test_useful_default(self):
+        self.assertEqual(ocpriority.classify("Bilan du mois")["level"], "useful")
+        self.assertEqual(ocpriority.classify("un truc random")["level"], "useful")
+
+    def test_should_push_by_level(self):
+        self.assertFalse(ocpriority.should_push("useful", "quiet"))
+        self.assertTrue(ocpriority.should_push("critical", "quiet"))
+        self.assertTrue(ocpriority.should_push("important", "normal"))
+        self.assertFalse(ocpriority.should_push("useful", "normal"))
+        self.assertTrue(ocpriority.should_push("fyi", "chatty"))
+
+
+class DraftsAndActions(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def test_drafts_crud(self):
+        d = ocdrafts.Drafts(self.tmp / "drafts.json")
+        d._pg = None  # force the file backend
+        d.backend = "file"
+        did = d.add(0, "reply", "Re: facture", "Bonjour, voici…")
+        self.assertIsNotNone(did)
+        self.assertEqual(len(d.list("pending")), 1)
+        d.set_status(did, "sent")
+        self.assertEqual(len(d.list("pending")), 0)
+        self.assertEqual(len(d.list("sent")), 1)
+        d.delete(did)
+        self.assertEqual(len(d.list("all")), 0)
+
+    def test_actions_lifecycle(self):
+        a = ocactions.Actions(self.tmp / "actions.json")
+        a._pg = None
+        a.backend = "file"
+        aid = a.add(0, "Research", "task", "./#chat/x")
+        a.update(aid, "running")
+        self.assertEqual(a.list("running")[0]["id"], aid)
+        a.update(aid, "done", result="Fini")
+        self.assertEqual(a.get(aid)["status"], "done")
+        self.assertEqual(a.get(aid)["result"], "Fini")
+
+
+class ProactivityAPI(unittest.TestCase):
+    def test_schedule_monthly(self):
+        sched = mav_api._schedule_from_payload(
+            {"schedule_mode": "monthly", "time": "09:00", "days_of_month": "1,15"}
+        )
+        self.assertEqual(sched["days_of_month"], [1, 15])
+
+    def test_schedule_monthly_needs_a_day(self):
+        sched = mav_api._schedule_from_payload({"schedule_mode": "monthly", "time": "09:00"})
+        self.assertIn("_error", sched)
+
+    def test_schedule_event(self):
+        sched = mav_api._schedule_from_payload(
+            {"schedule_mode": "event", "event_kind": "github", "event_contains": "opened"}
+        )
+        self.assertEqual(sched["on_event"], {"kind": "github", "contains": "opened"})
+
+    def test_condition_from_payload(self):
+        cond = mav_api._condition_from_payload(
+            {"condition_type": "number", "condition_value": "3", "condition_op": ">"}
+        )
+        self.assertEqual(cond, {"type": "number", "value": "3", "op": ">"})
+        self.assertIsNone(mav_api._condition_from_payload({"condition_type": "none"}))
+
+    def test_template_to_job(self):
+        r = mav_api.template_to_job("morning-brief")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["job"]["name"], "Brief du matin")
+        self.assertIn("time", r["job"])
+
+    def test_detect_endpoint_shape(self):
+        r = mav_api.detect_routine("tous les lundis à 8h envoie le rapport")
+        self.assertIsNotNone(r["draft"])
+        self.assertEqual(r["draft"]["days"], ["mon"])
+
+
+class Templates(unittest.TestCase):
+    def test_catalog_shape(self):
+        jobs = ocroutine_templates.as_jobs()
+        self.assertGreaterEqual(len(jobs), 5)
+        ids = [t["id"] for t in jobs]
+        self.assertEqual(len(ids), len(set(ids)))
+        for t in jobs:
+            self.assertTrue(t["label"])
+            self.assertTrue(t["prompt"])
+            self.assertIn("when", t)
+
+    def test_all_templates_have_valid_when(self):
+        for t in ocroutine_templates.TEMPLATES:
+            when = t.get("when") or {}
+            self.assertTrue(
+                "last_day_of_month" in when or "days_of_month" in when or "time" in when,
+                t["id"],
+            )
 
 
 if __name__ == "__main__":

@@ -82,5 +82,60 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 -- Where tapping the notification leads (e.g. the routine's chat).
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link text;
+-- How much it deserved to interrupt the user (critical/important/useful/fyi).
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS level text;
 CREATE INDEX IF NOT EXISTS notifications_ts_idx    ON notifications (ts DESC);
 CREATE INDEX IF NOT EXISTS notifications_dedup_idx ON notifications (dedup_key, ts DESC);
+
+-- ---------------------------------------------------------------- proactivity
+-- Incoming events (bot/ocevents.py): what wakes a routine up besides time.
+CREATE TABLE IF NOT EXISTS events (
+    id        bigserial PRIMARY KEY,
+    ts        bigint NOT NULL,
+    kind      text,
+    source    text,
+    payload   jsonb,
+    consumed  boolean DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS events_pending_idx ON events (consumed, id);
+
+-- Alerts below the user's proactivity bar: collected, then sent as one digest.
+CREATE TABLE IF NOT EXISTS notify_digest (
+    id       bigserial PRIMARY KEY,
+    ts       bigint NOT NULL,
+    chat_id  bigint,
+    topic    text,
+    title    text,
+    body     text,
+    level    text,
+    sent     boolean DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS notify_digest_idx ON notify_digest (sent, chat_id, ts);
+
+-- Drafts proposed by Mav (bot/ocdrafts.py): a reply, a message, a note, ready
+-- to review and send from the dashboard.
+CREATE TABLE IF NOT EXISTS drafts (
+    id       bigserial PRIMARY KEY,
+    ts       bigint NOT NULL,
+    chat_id  bigint,
+    kind     text,
+    title    text,
+    body     text,
+    status   text DEFAULT 'pending',
+    source   text
+);
+CREATE INDEX IF NOT EXISTS drafts_status_idx ON drafts (status, ts DESC);
+
+-- Background actions (bot/ocactions.py): long tasks running on their own.
+CREATE TABLE IF NOT EXISTS actions (
+    id       bigserial PRIMARY KEY,
+    ts       bigint NOT NULL,
+    chat_id  bigint,
+    name     text,
+    kind     text,
+    status   text DEFAULT 'queued',
+    result   text,
+    link     text,
+    updated  bigint
+);
+CREATE INDEX IF NOT EXISTS actions_status_idx ON actions (status, ts DESC);

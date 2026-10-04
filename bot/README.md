@@ -11,12 +11,27 @@ in the [web app](../dashboard/README.md).
 ## What it does
 
 - **Routines** (`jobs.json`, managed from the web app → Routines): at a time
-  on given days, or every few hours, with one automatic retry. Each run happens
-  in the routine's own chat (`Routine · <name>`) with what Mav remembers about
-  you; a short summary is pushed to your devices and lands in *For you*.
+  on given days, every few hours, on fixed days of the month or the last day
+  of the month, or triggered by an event, with one automatic retry. Create
+  them from a ready-made template, or by just saying "every morning…" in a
+  chat (English, French or Spanish — `ocroutine_nl.py`). Each run happens in
+  the routine's own chat (`Routine · <name>`) with what Mav remembers about
+  you; a short summary is pushed to your devices and lands in _For you_.
+- **Conditions** (`occonditions.py`): a routine can carry a `skip_if` block,
+  so "only tell me if it's going to rain" costs nothing when there's nothing
+  to say. Skipped before the model is even called.
+- **Events** (`ocevents.py`): the outside world can wake Mav up. A webhook
+  (`POST /api/hooks/event`) records an event; every routine with a matching
+  `on_event` runs.
 - **Keep an eye on**: a web page (text changes), a price on a product page
   (any change, or below a target) and news topics (Google News). Alerts only
   when something actually changes — deduplicated, quiet hours respected.
+- **Priorities** (`ocpriority.py`): every alert is ranked
+  critical/important/useful/fyi. Below the user's proactivity level it is not
+  pushed but collected, then sent as one daily recap (`DIGEST_HOUR`).
+- **Drafts & actions** (`ocdrafts.py`, `ocactions.py`): Mav proposes
+  ready-to-send replies and runs long tasks in the background, delivering the
+  result later — both surfaced in the web app.
 - **Memory** (`ocmemory.py`): the Postgres-backed memory shared with the web
   app — facts about you and past exchanges.
 

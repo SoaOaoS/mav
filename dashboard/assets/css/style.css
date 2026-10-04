@@ -1722,6 +1722,76 @@ h6.md-h {
   align-items: center;
   gap: 0.3rem;
 }
+
+/* ---------- Drafts (proactivity) ---------- */
+.drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.draft {
+  padding: 1rem 1.1rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.draft .dhead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.draft .dmeta {
+  margin-left: auto;
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+.draft .dbody {
+  margin: 0.6rem 0;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+.draft .dacts {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- Template picker ---------- */
+.tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.7rem;
+}
+.tpl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.tpl:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.tpl .tpl-ico {
+  font-size: 1.3rem;
+}
+.tpl strong {
+  font-size: 0.94rem;
+}
+.tpl span:last-child {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
 .spin {
   animation: spin 0.9s linear infinite;
 }

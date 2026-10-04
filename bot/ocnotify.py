@@ -141,6 +141,12 @@ def push_enabled(chat_id: int | None) -> bool:
     return _pref(chat_id, "notify.push", "on") != "off"
 
 
+def proactivity(chat_id: int | None) -> str:
+    """How chatty the user wants Mav: quiet | normal | chatty."""
+    val = (_pref(chat_id, "notify.proactivity", "normal") or "normal").strip().lower()
+    return val if val in ("quiet", "normal", "chatty") else "normal"
+
+
 def set_preference(chat_id: int, key: str, value: str) -> None:
     pg = _pg_get()
     if pg is None:
@@ -289,6 +295,73 @@ def send_push(title: str, body: str, url: str = "./") -> int:
     return sent
 
 
+# --------------------------------------------------------------- digest
+# Alerts below the user's proactivity bar are not pushed; they are collected and
+# sent as one digest (see flush_digest), so "more proactive" never means
+# "more noise".
+
+
+def collect(chat_id, topic, title, body, level) -> None:
+    pg = _pg_get()
+    if pg is None:
+        return
+    try:
+        pg.cursor().execute(
+            "INSERT INTO notify_digest (ts, chat_id, topic, title, body, level, sent) "
+            "VALUES (%s, %s, %s, %s, %s, %s, false)",
+            (int(time.time()), chat_id, topic, title[:200], body[:2000], level),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("digest collect: %s", exc)
+
+
+def digest_pending(chat_id) -> list[dict]:
+    pg = _pg_get()
+    if pg is None:
+        return []
+    try:
+        cur = pg.cursor()
+        cur.execute(
+            "SELECT ts, topic, title, body, level FROM notify_digest "
+            "WHERE NOT sent AND chat_id IS NOT DISTINCT FROM %s ORDER BY ts",
+            (chat_id,),
+        )
+        return [
+            {"ts": r[0], "topic": r[1], "title": r[2], "body": r[3], "level": r[4]}
+            for r in cur.fetchall()
+        ]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def digest_mark_sent(chat_id) -> None:
+    pg = _pg_get()
+    if pg is None:
+        return
+    try:
+        pg.cursor().execute(
+            "UPDATE notify_digest SET sent = true WHERE chat_id IS NOT DISTINCT FROM %s",
+            (chat_id,),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def flush_digest(chat_id, *, force: bool = True) -> dict:
+    """Send everything collected since the last digest as one push."""
+    items = digest_pending(chat_id)
+    if not items:
+        return {"push": 0, "count": 0, "skipped": "empty"}
+    lines = [f"• {it['title']}: {it['body']}" for it in items[:20]]
+    more = f"\n+{len(items) - 20} autres" if len(items) > 20 else ""
+    title = f"🗞️ Récap · {len(items)} chose(s)"
+    res = notify(title, "\n".join(lines)[:2000] + more, chat_id=chat_id,
+                 topic="digest", force=force, level="important")
+    digest_mark_sent(chat_id)
+    res["count"] = len(items)
+    return res
+
+
 # --------------------------------------------------------------- public API
 def notify(
     title: str,
@@ -299,30 +372,59 @@ def notify(
     url: str = "./",
     dedup_key: str | None = None,
     force: bool = False,
+    level: str | None = None,
+    digest: bool = True,
 ) -> dict:
-    """Notify via Web Push, honouring preferences, quiet hours and
-    deduplication. Returns what was decided (for logs/tests).
+    """Notify via Web Push, honouring preferences, quiet hours, deduplication
+    and the user's proactivity level. Returns what was decided (for logs/tests).
 
     Every notification is also recorded in the history shown by the
     dashboard (its inbox), even when the push itself is skipped. `url` is
     where tapping it leads (e.g. a routine's chat); by default the dashboard
     opens a chat about the notification.
+
+    `level` is one of critical/important/useful/fyi. When omitted it is
+    inferred from the text (bot/ocpriority.py). Anything below the proactivity
+    bar is recorded but not pushed, and — when `digest` — collected for the
+    next recap instead of being lost.
     """
     link = url if url and url != "./" else None
     result = {"push": 0, "skipped": None, "id": None}
+
+    try:
+        from ocpriority import classify  # noqa: PLC0415
+
+        lvl = level or classify(f"{title} {body}", topic=topic)["level"]
+    except Exception:  # noqa: BLE001
+        lvl = level or "useful"
+    result["level"] = lvl
 
     if dedup_key and _seen_recently(dedup_key, DEDUP_WINDOW) and not force:
         result["skipped"] = "dedup"
         return result
 
-    if not force and in_quiet_hours():
-        result["skipped"] = "quiet"
+    # Quiet hours and the user's push preference: record, never push.
+    quiet = in_quiet_hours()
+    if not force and (quiet or not push_enabled(chat_id)):
+        result["skipped"] = "quiet" if quiet else "pref"
         result["id"] = _record(chat_id, topic, title, body, dedup_key, [], False, link)
         return result
 
-    if not push_enabled(chat_id):
-        result["skipped"] = "pref"
+    # Proactivity bar: below it, keep for the digest rather than pushing now.
+    if force:
+        below = False
+    else:
+        try:
+            from ocpriority import should_push  # noqa: PLC0415
+
+            below = not should_push(lvl, proactivity(chat_id))
+        except Exception:  # noqa: BLE001
+            below = False
+    if below:
+        result["skipped"] = "below-level"
         result["id"] = _record(chat_id, topic, title, body, dedup_key, [], False, link)
+        if digest:
+            collect(chat_id, topic, title, body, lvl)
         return result
 
     # Record first to get the id, then put it in the link: tapping the
