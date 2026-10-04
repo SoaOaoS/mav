@@ -46,6 +46,19 @@ check "credentials reused from an existing compose file" "mav:Abc123xyz:mav:5433
   $(sed -n '/^load_compose_credentials() {/,/^}/p' install.sh)
   load_compose_credentials
   echo \"\${A[PG_USER]}:\${A[PG_PASSWORD]}:\${A[PG_DB]}:\${A[PG_PORT]}\""
+# An update must never wipe the user's routines: the shipped bot/jobs.json is
+# an empty placeholder, so the snapshot/restore helpers have to bring the
+# existing file back after the copy. A bot/jobs.json shipped empty once erased
+# every routine on update.
+check "routines survive an update" "KEEP-ME" bash -c "
+  $(sed -n '/^snapshot_file() {/,/^}/p; /^restore_file() {/,/^}/p' install.sh)
+  D='$T/jobs'; mkdir -p \"\$D/bot\"
+  printf 'KEEP-ME' > \"\$D/bot/jobs.json\"
+  snap=\$(snapshot_file \"\$D/bot/jobs.json\")
+  echo '[]' > \"\$D/bot/jobs.json\"     # what the shipped placeholder does
+  restore_file \"\$D/bot/jobs.json\" \"\$snap\"
+  cat \"\$D/bot/jobs.json\""
+
 # An unexpected error is reported, never silent.
 check "errors are reported" "Unexpected error (line" bash -c "
   set -Eeuo pipefail
