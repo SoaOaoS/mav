@@ -25,6 +25,11 @@ check "unattended (--yes)" "is ready" bash install.sh --yes --dry-run
 check "Arch: uses pacman" "pacman_install python git curl openssl" \
   env MAV_PKG=pacman bash install.sh --yes --dry-run
 check "Fedora: uses dnf" "dnf install -y -q python3" env MAV_PKG=dnf bash install.sh --yes --dry-run
+# Mav's own version must survive /etc/os-release, which also defines VERSION:
+# sourcing it used to overwrite $VERSION, so /etc/mav/version ended up holding
+# the distro version (e.g. "13 (trixie)") and broke `mav version` / updates.
+check "version not clobbered by os-release" "Mav v9.9.9-test is ready" \
+  env MAV_VERSION=v9.9.9-test bash install.sh --yes --dry-run
 # An install interrupted after Postgres started gives its credentials back.
 cat >"$T/compose.yml" <<'YML'
 services:
