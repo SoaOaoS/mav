@@ -20,10 +20,28 @@
 
     <!-- PWA -->
     <link rel="manifest" href="manifest.webmanifest" />
-    <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)" />
-    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+    <meta
+      name="theme-color"
+      content="#f6f5f1"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#17181a"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="icons/icon-192.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="512x512"
+      href="icons/icon-512.png"
+    />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -56,10 +74,19 @@
         <div class="brand">
           <div class="orb" aria-hidden="true"></div>
           <span class="brand-name">Mav</span>
-          <button class="icon-btn" id="searchOpen" title="Search (⌘K)" aria-label="Search">
+          <button
+            class="icon-btn"
+            id="searchOpen"
+            title="Search (⌘K)"
+            aria-label="Search"
+          >
             <i data-i="search"></i>
           </button>
-          <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Close menu">
+          <button
+            class="icon-btn sidebar-close"
+            id="sidebarClose"
+            aria-label="Close menu"
+          >
             <i data-i="x"></i>
           </button>
         </div>
@@ -72,7 +99,12 @@
         <div class="recents">
           <div class="recents-head">
             <span>Chats</span>
-            <input type="search" id="convFilter" placeholder="Filter" aria-label="Filter chats" />
+            <input
+              type="search"
+              id="convFilter"
+              placeholder="Filter"
+              aria-label="Filter chats"
+            />
           </div>
           <div class="conv-list" id="convList"></div>
         </div>
@@ -96,9 +128,15 @@
         </button>
 
         <div class="side-foot">
-          <button class="engine-chip" id="engineChip" title="Assistant status and model">
+          <button
+            class="engine-chip"
+            id="engineChip"
+            title="Assistant status and model"
+          >
             <span class="dot" id="engineChipDot"></span>
-            <span class="engine-chip-text" id="engineChipText">connecting…</span>
+            <span class="engine-chip-text" id="engineChipText"
+              >connecting…</span
+            >
           </button>
           <div class="side-tools">
             <button class="icon-btn" id="notifyToggle" title="Notifications">
@@ -117,21 +155,47 @@
         <div class="pending-bar" id="pendingBar" hidden>
           <i data-i="refresh"></i>
           <span id="pendingText">Some changes are not applied yet.</span>
-          <button class="btn btn-primary btn-sm" id="pendingRestart">Restart assistant</button>
+          <button class="btn btn-primary btn-sm" id="pendingRestart">
+            Restart assistant
+          </button>
         </div>
         <!-- ---------- CHAT (main screen; empty = new chat) ---------- -->
         <section class="view view-chat is-active" id="view-chat">
           <div class="chat is-empty" id="chat">
             <header class="chat-head">
               <div class="chat-title-wrap">
-                <h1 class="chat-title" id="chatTitle" title="Click to rename" tabindex="0">New chat</h1>
+                <h1
+                  class="chat-title"
+                  id="chatTitle"
+                  title="Click to rename"
+                  tabindex="0"
+                >
+                  New chat
+                </h1>
               </div>
               <div class="chat-actions">
-                <button type="button" class="agent-pill agent-pill-lg" id="chatAgent" title="Choose who you talk to"></button>
-                <button class="icon-btn" id="pinBtn" title="Pin"><i data-i="pin"></i></button>
-                <button class="icon-btn" id="summaryBtn" title="Summarise"><i data-i="sparkle"></i></button>
-                <button class="icon-btn" id="exportBtn" title="Download as Markdown"><i data-i="download"></i></button>
-                <button class="icon-btn" id="deleteChatBtn" title="Delete chat"><i data-i="trash"></i></button>
+                <button
+                  type="button"
+                  class="agent-pill agent-pill-lg"
+                  id="chatAgent"
+                  title="Choose who you talk to"
+                ></button>
+                <button class="icon-btn" id="pinBtn" title="Pin">
+                  <i data-i="pin"></i>
+                </button>
+                <button class="icon-btn" id="summaryBtn" title="Summarise">
+                  <i data-i="sparkle"></i>
+                </button>
+                <button
+                  class="icon-btn"
+                  id="exportBtn"
+                  title="Download as Markdown"
+                >
+                  <i data-i="download"></i>
+                </button>
+                <button class="icon-btn" id="deleteChatBtn" title="Delete chat">
+                  <i data-i="trash"></i>
+                </button>
               </div>
             </header>
 
@@ -141,43 +205,95 @@
               <div class="onboard" id="onboard" hidden>
                 <div>
                   <strong>Connect a model to get started</strong>
-                  <span>Pick a provider and paste your key — it takes a minute.</span>
+                  <span
+                    >Pick a provider and paste your key — it takes a
+                    minute.</span
+                  >
                 </div>
-                <button class="btn btn-primary btn-sm" data-goto="settings:model">Connect</button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  data-goto="settings:model"
+                >
+                  Connect
+                </button>
               </div>
               <div class="slash-menu" id="slashMenu" hidden></div>
               <div class="attachments" id="chatAttachments" hidden></div>
               <form class="composer" id="chatForm" autocomplete="off">
-                <textarea id="chatInput" rows="1" placeholder="Ask Mav anything…" aria-label="Message"></textarea>
+                <textarea
+                  id="chatInput"
+                  rows="1"
+                  placeholder="Ask Mav anything…"
+                  aria-label="Message"
+                ></textarea>
                 <div class="composer-bar">
                   <label class="icon-btn" title="Attach a file">
                     <i data-i="paperclip"></i>
                     <input type="file" id="chatFileInput" multiple hidden />
                   </label>
-                  <button type="button" class="agent-pill" id="composerAgent" title="Choose who you talk to"></button>
+                  <button
+                    type="button"
+                    class="agent-pill"
+                    id="composerAgent"
+                    title="Choose who you talk to"
+                  ></button>
                   <span class="composer-hint"><kbd>/</kbd> commands</span>
                   <span class="grow"></span>
-                  <button type="button" class="icon-btn" id="chatMic" title="Dictate"><i data-i="mic"></i></button>
-                  <button type="submit" class="send" id="sendBtn" aria-label="Send"><i data-i="arrow-up"></i></button>
-                  <button type="button" class="send stop" id="stopBtn" hidden aria-label="Stop" title="Stop (Esc)"><i data-i="square"></i></button>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    id="chatMic"
+                    title="Dictate"
+                  >
+                    <i data-i="mic"></i>
+                  </button>
+                  <button
+                    type="submit"
+                    class="send"
+                    id="sendBtn"
+                    aria-label="Send"
+                  >
+                    <i data-i="arrow-up"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="send stop"
+                    id="stopBtn"
+                    hidden
+                    aria-label="Stop"
+                    title="Stop (Esc)"
+                  >
+                    <i data-i="square"></i>
+                  </button>
                 </div>
               </form>
-              <p class="composer-foot">Mav can make mistakes. Check important information.</p>
+              <p class="composer-foot">
+                Mav can make mistakes. Check important information.
+              </p>
             </div>
 
             <!-- Shown only on the new-chat screen -->
             <div class="below" id="below">
               <div class="suggest" id="suggestions">
-                <button class="chip" data-prompt="Help me plan my day. Ask me what I have on, then build a simple schedule.">
+                <button
+                  class="chip"
+                  data-prompt="Help me plan my day. Ask me what I have on, then build a simple schedule."
+                >
                   <i data-i="calendar"></i> Plan my day
                 </button>
-                <button class="chip" data-prompt="Help me draft a message. Ask me who it's for and what I want to say.">
+                <button
+                  class="chip"
+                  data-prompt="Help me draft a message. Ask me who it's for and what I want to say."
+                >
                   <i data-i="edit"></i> Draft a message
                 </button>
                 <button class="chip" data-fill="Summarise this link: ">
                   <i data-i="globe"></i> Summarise a link
                 </button>
-                <button class="chip" data-prompt="What do you remember about me?">
+                <button
+                  class="chip"
+                  data-prompt="What do you remember about me?"
+                >
                   <i data-i="brain"></i> What do you remember about me?
                 </button>
               </div>
@@ -198,18 +314,28 @@
             <header class="view-head">
               <div>
                 <h1>Routines</h1>
-                <p>Things Mav does for you on its own — and things it keeps an eye on. You get a notification when there's something to see.</p>
+                <p>
+                  Things Mav does for you on its own — and things it keeps an
+                  eye on. You get a notification when there's something to see.
+                </p>
               </div>
             </header>
             <div class="tabs" role="tablist">
-              <button class="tab is-active" data-rtab="routines">Routines</button>
+              <button class="tab is-active" data-rtab="routines">
+                Routines
+              </button>
               <button class="tab" data-rtab="watch">Keep an eye on</button>
             </div>
 
             <div class="rpanel is-active" id="rpanel-routines">
               <div class="panel-bar">
-                <p class="hint">Each routine has its own chat, so you can follow up on any report.</p>
-                <button class="btn btn-primary" id="routineNew"><i data-i="plus"></i> New routine</button>
+                <p class="hint">
+                  Each routine has its own chat, so you can follow up on any
+                  report.
+                </p>
+                <button class="btn btn-primary" id="routineNew">
+                  <i data-i="plus"></i> New routine
+                </button>
               </div>
               <div class="jobs" id="routineList"></div>
             </div>
@@ -217,14 +343,29 @@
             <div class="rpanel" id="rpanel-watch">
               <form class="card watch-add" id="watchForm" autocomplete="off">
                 <div class="segmented" id="watchKinds">
-                  <button type="button" data-kind="web" class="is-active">A page</button>
+                  <button type="button" data-kind="web" class="is-active">
+                    A page
+                  </button>
                   <button type="button" data-kind="price">A price</button>
                   <button type="button" data-kind="news">News</button>
                 </div>
                 <div class="watch-fields">
-                  <input type="text" id="watchTarget" placeholder="https://example.com/page" />
-                  <input type="number" id="watchBelow" placeholder="Alert below (optional)" min="0" step="0.01" hidden />
-                  <button class="btn btn-primary" type="submit">Keep an eye on it</button>
+                  <input
+                    type="text"
+                    id="watchTarget"
+                    placeholder="https://example.com/page"
+                  />
+                  <input
+                    type="number"
+                    id="watchBelow"
+                    placeholder="Alert below (optional)"
+                    min="0"
+                    step="0.01"
+                    hidden
+                  />
+                  <button class="btn btn-primary" type="submit">
+                    Keep an eye on it
+                  </button>
                 </div>
                 <p class="hint" id="watchHint"></p>
               </form>
@@ -239,27 +380,48 @@
             <header class="view-head">
               <div>
                 <h1>Memory</h1>
-                <p>What Mav knows about you. It's used to personalise new chats. You can add, delete, or turn memory off anytime.</p>
+                <p>
+                  What Mav knows about you. It's used to personalise new chats.
+                  You can add, delete, or turn memory off anytime.
+                </p>
               </div>
               <span class="badge" id="memoryBackend"></span>
             </header>
 
             <form class="inline-form" id="factForm" autocomplete="off">
-              <input type="text" id="factInput" placeholder="Tell Mav something to remember — e.g. “I'm vegetarian and live in Lyon”" />
+              <input
+                type="text"
+                id="factInput"
+                placeholder="Tell Mav something to remember — e.g. “I'm vegetarian and live in Lyon”"
+              />
               <button class="btn btn-primary" type="submit">Remember</button>
             </form>
 
             <div class="tabs" role="tablist">
-              <button class="tab is-active" data-mtab="facts">About you <span class="count" id="factCount"></span></button>
-              <button class="tab" data-mtab="exchanges">From past chats <span class="count" id="exCount"></span></button>
+              <button class="tab is-active" data-mtab="facts">
+                About you <span class="count" id="factCount"></span>
+              </button>
+              <button class="tab" data-mtab="exchanges">
+                From past chats <span class="count" id="exCount"></span>
+              </button>
             </div>
             <div class="mpanel is-active" id="mpanel-facts">
               <ul class="list" id="factList"></ul>
             </div>
             <div class="mpanel" id="mpanel-exchanges">
               <div class="inline-form">
-                <input type="search" id="memorySearch" placeholder="Search what Mav remembers…" />
-                <button class="btn btn-ghost danger" id="forgetAll" type="button">Clear chat memory</button>
+                <input
+                  type="search"
+                  id="memorySearch"
+                  placeholder="Search what Mav remembers…"
+                />
+                <button
+                  class="btn btn-ghost danger"
+                  id="forgetAll"
+                  type="button"
+                >
+                  Clear chat memory
+                </button>
               </div>
               <ul class="list" id="exchangeList"></ul>
             </div>
@@ -278,7 +440,9 @@
 
             <div class="tabs" role="tablist">
               <button class="tab is-active" data-stab="model">Model</button>
-              <button class="tab" data-stab="instructions">Custom instructions</button>
+              <button class="tab" data-stab="instructions">
+                Custom instructions
+              </button>
               <button class="tab" data-stab="helpers">Helpers</button>
               <button class="tab" data-stab="connections">Connections</button>
               <button class="tab" data-stab="general">General</button>
@@ -289,10 +453,18 @@
               <div class="card current-model" id="currentModel"></div>
               <h3 class="sub">Provider</h3>
               <div class="provider-grid" id="providerGrid"></div>
-              <form class="card form" id="providerForm" autocomplete="off" hidden>
+              <form
+                class="card form"
+                id="providerForm"
+                autocomplete="off"
+                hidden
+              >
                 <div class="field" id="fCustomId" hidden>
                   <label for="pCustomId">Name</label>
-                  <input id="pCustomId" placeholder="e.g. groq, lmstudio, mistral" />
+                  <input
+                    id="pCustomId"
+                    placeholder="e.g. groq, lmstudio, mistral"
+                  />
                 </div>
                 <div class="field" id="fBase">
                   <label for="pBase">Address</label>
@@ -301,21 +473,35 @@
                 </div>
                 <div class="field" id="fKey">
                   <label for="pKey">API key</label>
-                  <input id="pKey" type="password" autocomplete="new-password" />
+                  <input
+                    id="pKey"
+                    type="password"
+                    autocomplete="new-password"
+                  />
                   <small id="pKeyHint"></small>
                 </div>
                 <div class="field">
                   <label for="pModel">Model</label>
                   <div class="row">
-                    <input id="pModel" list="pModelList" placeholder="model name" />
+                    <input
+                      id="pModel"
+                      list="pModelList"
+                      placeholder="model name"
+                    />
                     <datalist id="pModelList"></datalist>
-                    <button class="btn btn-ghost" type="button" id="pTest"><i data-i="plug"></i> Check &amp; list models</button>
+                    <button class="btn btn-ghost" type="button" id="pTest">
+                      <i data-i="plug"></i> Check &amp; list models
+                    </button>
                   </div>
                   <small id="pTestResult"></small>
                 </div>
                 <div class="form-actions">
-                  <button class="btn btn-primary" type="submit" id="pSave">Save</button>
-                  <span class="hint">Mav restarts for a few seconds to apply it.</span>
+                  <button class="btn btn-primary" type="submit" id="pSave">
+                    Save
+                  </button>
+                  <span class="hint"
+                    >Mav restarts for a few seconds to apply it.</span
+                  >
                 </div>
               </form>
             </div>
@@ -323,35 +509,52 @@
             <!-- Custom instructions -->
             <div class="spanel" id="spanel-instructions">
               <div class="panel-bar">
-                <p class="hint">What should Mav know and how should it answer? This applies to every chat and every helper.</p>
+                <p class="hint">
+                  What should Mav know and how should it answer? This applies to
+                  every chat and every helper.
+                </p>
                 <div class="row">
                   <span class="status-text" id="agentsStatus"></span>
                   <button class="btn btn-primary" id="agentsSave">Save</button>
                 </div>
               </div>
-              <textarea class="code-editor prose" id="agentsEditor" spellcheck="true"
-                placeholder="Examples:&#10;- Answer in French, briefly.&#10;- I'm a nurse working night shifts; plan around that.&#10;- Prefer metric units and 24-hour times."></textarea>
+              <textarea
+                class="code-editor prose"
+                id="agentsEditor"
+                spellcheck="true"
+                placeholder="Examples:&#10;- Answer in French, briefly.&#10;- I'm a nurse working night shifts; plan around that.&#10;- Prefer metric units and 24-hour times."
+              ></textarea>
             </div>
 
             <!-- Helpers -->
             <div class="spanel" id="spanel-helpers">
               <div class="panel-bar">
-                <p class="hint">Helpers are assistants with a speciality. Talk to one directly, or let the Assistant call them when useful.</p>
-                <button class="btn btn-primary" id="agentNew"><i data-i="plus"></i> New helper</button>
+                <p class="hint">
+                  Helpers are assistants with a speciality. Talk to one
+                  directly, or let the Assistant call them when useful.
+                </p>
+                <button class="btn btn-primary" id="agentNew">
+                  <i data-i="plus"></i> New helper
+                </button>
               </div>
               <div class="agent-cards" id="agentCards"></div>
             </div>
 
             <!-- Connections -->
             <div class="spanel" id="spanel-connections">
-              <p class="hint">Connect Mav to other apps and services so it can use them for you.</p>
+              <p class="hint">
+                Connect Mav to other apps and services so it can use them for
+                you.
+              </p>
               <h3 class="sub">Your connections</h3>
               <div class="mcp-cards" id="mcpCards"></div>
               <div class="panel-bar catalog-bar">
                 <h3 class="sub">Add a connection</h3>
                 <div class="row">
                   <span class="status-text" id="mcpStatus"></span>
-                  <button class="btn btn-ghost btn-sm" id="mcpAdd"><i data-i="plus"></i> Custom…</button>
+                  <button class="btn btn-ghost btn-sm" id="mcpAdd">
+                    <i data-i="plus"></i> Custom…
+                  </button>
                 </div>
               </div>
               <div class="catalog" id="mcpCatalog"></div>
@@ -364,33 +567,57 @@
                 <div class="setting-row">
                   <div>
                     <strong>Notifications</strong>
-                    <span>Routine reports and alerts on this device, even when Mav is closed.</span>
+                    <span
+                      >Routine reports and alerts on this device, even when Mav
+                      is closed.</span
+                    >
                   </div>
                   <div class="row">
-                    <button class="btn btn-ghost btn-sm" id="pushTest">Send a test</button>
-                    <button class="switch" id="pushSwitch" role="switch" aria-checked="false" aria-label="Notifications"></button>
+                    <button class="btn btn-ghost btn-sm" id="pushTest">
+                      Send a test
+                    </button>
+                    <button
+                      class="switch"
+                      id="pushSwitch"
+                      role="switch"
+                      aria-checked="false"
+                      aria-label="Notifications"
+                    ></button>
                   </div>
                 </div>
                 <div class="setting-row">
                   <div>
                     <strong>Memory</strong>
-                    <span>Recall facts and past chats when you start a new chat.</span>
+                    <span
+                      >Recall facts and past chats when you start a new
+                      chat.</span
+                    >
                   </div>
-                  <button class="btn btn-ghost btn-sm" data-goto="memory">Manage</button>
+                  <button class="btn btn-ghost btn-sm" data-goto="memory">
+                    Manage
+                  </button>
                 </div>
                 <div class="setting-row">
                   <div>
                     <strong>Read answers aloud</strong>
                     <span>Uses your browser's voice.</span>
                   </div>
-                  <button class="switch" id="voiceSwitch" role="switch" aria-checked="false" aria-label="Read aloud"></button>
+                  <button
+                    class="switch"
+                    id="voiceSwitch"
+                    role="switch"
+                    aria-checked="false"
+                    aria-label="Read aloud"
+                  ></button>
                 </div>
                 <div class="setting-row">
                   <div>
                     <strong>Version</strong>
                     <span id="versionText">—</span>
                   </div>
-                  <button class="btn btn-ghost btn-sm" id="versionCheck">Check for updates</button>
+                  <button class="btn btn-ghost btn-sm" id="versionCheck">
+                    Check for updates
+                  </button>
                 </div>
                 <div class="setting-row">
                   <div>
@@ -413,8 +640,12 @@
                     <strong id="engineLabel">Assistant</strong>
                   </div>
                   <div class="row">
-                    <button class="btn btn-ghost btn-sm" id="engineRefresh">Refresh</button>
-                    <button class="btn btn-primary btn-sm" id="engineRestart">Restart assistant</button>
+                    <button class="btn btn-ghost btn-sm" id="engineRefresh">
+                      Refresh
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="engineRestart">
+                      Restart assistant
+                    </button>
                   </div>
                 </div>
                 <div class="kv" id="engineMeta"></div>
@@ -423,11 +654,22 @@
                 <div class="kv" id="advPaths"></div>
 
                 <h3 class="sub">Connections (raw JSON)</h3>
-                <p class="hint">The <code>mcp</code> block of the engine config. Secrets are masked; leave the dots to keep a saved value.</p>
-                <textarea class="code-editor code-editor-json" id="mcpEditor" spellcheck="false"></textarea>
+                <p class="hint">
+                  The <code>mcp</code> block of the engine config. Secrets are
+                  masked; leave the dots to keep a saved value.
+                </p>
+                <textarea
+                  class="code-editor code-editor-json"
+                  id="mcpEditor"
+                  spellcheck="false"
+                ></textarea>
                 <div class="form-actions">
-                  <button class="btn btn-ghost btn-sm" id="mcpReload">Reload</button>
-                  <button class="btn btn-primary btn-sm" id="mcpSave">Save JSON</button>
+                  <button class="btn btn-ghost btn-sm" id="mcpReload">
+                    Reload
+                  </button>
+                  <button class="btn btn-primary btn-sm" id="mcpSave">
+                    Save JSON
+                  </button>
                 </div>
               </details>
             </div>
@@ -443,7 +685,12 @@
       <div class="palette-box">
         <div class="palette-input">
           <i data-i="search"></i>
-          <input type="text" id="paletteInput" placeholder="Search chats, memory, or jump to…" autocomplete="off" />
+          <input
+            type="text"
+            id="paletteInput"
+            placeholder="Search chats, memory, or jump to…"
+            autocomplete="off"
+          />
           <kbd>Esc</kbd>
         </div>
         <div class="palette-results" id="paletteResults"></div>
@@ -451,10 +698,17 @@
     </div>
 
     <div class="modal" id="modal" hidden>
-      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div
+        class="modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
         <header class="modal-head">
           <h2 id="modalTitle"></h2>
-          <button class="icon-btn" id="modalClose" aria-label="Close"><i data-i="x"></i></button>
+          <button class="icon-btn" id="modalClose" aria-label="Close">
+            <i data-i="x"></i>
+          </button>
         </header>
         <div class="modal-body" id="modalBody"></div>
         <footer class="modal-foot" id="modalFoot"></footer>
@@ -468,7 +722,9 @@
       </div>
       <div class="row">
         <button class="btn btn-primary" id="installBtn">Install</button>
-        <button class="icon-btn" id="installClose" aria-label="Later"><i data-i="x"></i></button>
+        <button class="icon-btn" id="installClose" aria-label="Later">
+          <i data-i="x"></i>
+        </button>
       </div>
     </div>
 
