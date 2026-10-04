@@ -964,3 +964,13 @@ main {
     scroll-behavior: auto !important;
   }
 }
+
+a.pill {
+  text-decoration: none;
+}
+a.pill:hover {
+  filter: brightness(0.97);
+}
+.card code {
+  font-size: 0.85em;
+}
