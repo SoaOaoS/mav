@@ -1,0 +1,420 @@
+#!/usr/bin/env bash
+# ============================================================================
+#  mav — control command for your Mav install
+#
+#  Installed to /usr/local/bin/mav by install.sh. Settings are read from
+#  /etc/mav/cli.env (written by the installer); sensible defaults otherwise.
+#  Run `mav help` for the commands.
+# ============================================================================
+set -euo pipefail
+
+CLI_ENV="${MAV_CLI_ENV:-/etc/mav/cli.env}"
+# shellcheck disable=SC1090
+[[ -r "$CLI_ENV" ]] && . "$CLI_ENV"
+
+MAV_REPO="${MAV_REPO:-SoaOaoS/mav}"
+MAV_CHANNEL="${MAV_CHANNEL:-release}"          # release | main
+MAV_SERVER_UNIT="${MAV_SERVER_UNIT:-mav-server}"
+MAV_WORKER_UNIT="${MAV_WORKER_UNIT:-mav-worker}"
+MAV_DASH_UNIT="${MAV_DASH_UNIT:-mav-dashboard}"
+MAV_ENV_DASH="${MAV_ENV_DASH:-/etc/mav-dashboard.env}"
+MAV_ENV_BOT="${MAV_ENV_BOT:-/etc/mav.env}"
+MAV_ENV_SERVER="${MAV_ENV_SERVER:-/etc/mav-server.env}"
+MAV_PG_CONTAINER="${MAV_PG_CONTAINER:-mav-postgres}"
+MAV_VERSION_FILE="${MAV_VERSION_FILE:-/etc/mav/version}"
+MAV_INSTALL_LOG="${MAV_INSTALL_LOG:-/var/log/mav-install.log}"
+MAV_BACKUP_DIR="${MAV_BACKUP_DIR:-/var/backups/mav}"
+MAV_OPENCODE_PORT="${MAV_OPENCODE_PORT:-4096}"
+MAV_GITHUB_API="${MAV_GITHUB_API:-https://api.github.com}"
+MAV_CODELOAD="${MAV_CODELOAD:-https://codeload.github.com}"
+LOCK_FILE="${MAV_LOCK_FILE:-/run/mav-update.lock}"
+
+# Local copy of the installer (for offline updates and reconfiguration).
+if [[ -z "${MAV_SRC:-}" ]]; then
+  u="$( (grep -E '^MAV_INSTALL_USER=' "$MAV_ENV_DASH" 2>/dev/null || true) | tail -1 | cut -d= -f2-)"
+  MAV_SRC="$(getent passwd "${u:-mav}" 2>/dev/null | cut -d: -f6 || true)/.mav"
+fi
+
+# ------------------------------------------------------------------ output
+if [[ -t 1 ]]; then
+  B=$'\033[1m'; DIM=$'\033[2m'; R=$'\033[0m'
+  RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'
+else
+  B=""; DIM=""; R=""; RED=""; GRN=""; YEL=""
+fi
+ok()   { printf "  ${GRN}✓${R} %s\n" "$*"; }
+bad()  { printf "  ${RED}✗${R} %s\n" "$*"; }
+warn() { printf "  ${YEL}!${R} %s\n" "$*"; }
+info() { printf "  ${DIM}%s${R}\n" "$*"; }
+die()  { printf "${RED}✗ %s${R}\n" "$*" >&2; exit "${2:-1}"; }
+
+# ------------------------------------------------------------------ helpers
+# Re-run the whole command as root when needed (keeps the arguments).
+need_root() {
+  [[ $EUID -eq 0 || "${MAV_TEST:-}" == 1 ]] && return 0
+  command -v sudo >/dev/null 2>&1 || die "This needs root, and sudo is not installed. Run it as root."
+  exec sudo -E "$0" "$@"
+}
+
+env_get() {  # env_get FILE KEY
+  [[ -r "$1" ]] || return 0
+  grep -E "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true
+}
+
+unit_for() {  # friendly name → systemd unit(s)
+  case "${1:-all}" in
+    engine|server|assistant|opencode) echo "$MAV_SERVER_UNIT" ;;
+    worker|routines|bot) echo "$MAV_WORKER_UNIT" ;;
+    web|dashboard|app) echo "$MAV_DASH_UNIT" ;;
+    all|"") echo "$MAV_SERVER_UNIT $MAV_WORKER_UNIT $MAV_DASH_UNIT" ;;
+    *) die "Unknown service: $1 (engine, worker, web or all)" 2 ;;
+  esac
+}
+
+installed_version() {
+  if [[ -r "$MAV_VERSION_FILE" ]]; then head -1 "$MAV_VERSION_FILE"; else echo "unknown"; fi
+}
+
+fetch() {  # fetch URL [curl args…] — retries, timeouts, fails on HTTP errors
+  local url="$1"; shift
+  curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 "$@" "$url"
+}
+
+# Latest released version (vX.Y.Z), or empty if none / unreachable.
+latest_version() {
+  fetch "$MAV_GITHUB_API/repos/$MAV_REPO/releases/latest" -H "Accept: application/vnd.github+json" 2>/dev/null |
+    python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true
+}
+
+semver_gt() {  # semver_gt A B → true if A > B (A, B like v1.2.3)
+  local a="${1#v}" b="${2#v}"
+  [[ "$a" != "$b" && "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -1)" == "$a" ]]
+}
+
+dashboard_url() {
+  local bind port tls host
+  bind="$(env_get "$MAV_ENV_DASH" MAV_API_BIND)"; bind="${bind:-0.0.0.0}"
+  port="$(env_get "$MAV_ENV_DASH" MAV_API_PORT)"; port="${port:-80}"
+  tls="$(env_get "$MAV_ENV_DASH" MAV_TLS_PORT)"
+  host="$bind"
+  [[ "$host" == "0.0.0.0" ]] && host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  host="${host:-localhost}"
+  if [[ -n "$tls" ]]; then
+    [[ "$tls" == "443" ]] && echo "https://$host" || echo "https://$host:$tls"
+  else
+    [[ "$port" == "80" ]] && echo "http://$host" || echo "http://$host:$port"
+  fi
+}
+
+local_api() {  # local_api PATH → JSON from the dashboard on this machine
+  local port tls
+  port="$(env_get "$MAV_ENV_DASH" MAV_API_PORT)"; port="${port:-80}"
+  tls="$(env_get "$MAV_ENV_DASH" MAV_TLS_PORT)"
+  curl -fsS --max-time 5 "http://127.0.0.1:$port/api/$1" 2>/dev/null ||
+    { [[ -n "$tls" ]] && curl -fsSk --max-time 5 "https://127.0.0.1:$tls/api/$1" 2>/dev/null; } || true
+}
+
+# ------------------------------------------------------------------ commands
+cmd_help() {
+  cat <<EOF
+${B}mav${R} — control your Mav assistant  ${DIM}($(installed_version))${R}
+
+  ${B}mav status${R}               what's running, the address, the model
+  ${B}mav doctor${R}               check everything and explain what's wrong
+  ${B}mav update${R}               install the latest version (keeps your settings)
+      --check                  only tell whether an update is available
+      --local                  reinstall the local copy, no download
+      --channel main           follow the main branch instead of releases
+      --force                  reinstall even if already up to date
+  ${B}mav version${R}              installed and latest available version
+  ${B}mav restart${R} [service]    restart the assistant (engine, worker, web or all)
+  ${B}mav start${R} | ${B}stop${R} [service]
+  ${B}mav logs${R} [service]       follow the logs (engine, worker, web, install)
+      -n N                     show the last N lines, then exit
+  ${B}mav backup${R} [file]        save memory, routines and settings to a file
+  ${B}mav reconfigure${R}          change the model, or re-run the setup
+  ${B}mav uninstall${R}            remove the services (your data is kept)
+EOF
+}
+
+cmd_version() {
+  local cur latest
+  cur="$(installed_version)"
+  echo "installed: $cur"
+  latest="$(latest_version)"
+  if [[ -z "$latest" ]]; then
+    echo "latest:    unknown (no release found or GitHub unreachable)"
+  elif semver_gt "$latest" "$cur"; then
+    echo "latest:    $latest  ${YEL}← update available: mav update${R}"
+  else
+    echo "latest:    $latest  ${GRN}(up to date)${R}"
+  fi
+}
+
+cmd_status() {
+  local u state health model
+  printf "${B}Mav${R} %s  ·  %s\n\n" "$(installed_version)" "$(dashboard_url)"
+  for u in $MAV_SERVER_UNIT $MAV_WORKER_UNIT $MAV_DASH_UNIT; do
+    state="$(systemctl is-active "$u" 2>/dev/null || true)"
+    case "$state" in
+      active) ok "$u" ;;
+      activating|reloading) warn "$u ($state)" ;;
+      *) bad "$u (${state:-not installed})" ;;
+    esac
+  done
+  health="$(curl -fsS --max-time 4 "http://127.0.0.1:$MAV_OPENCODE_PORT/global/health" 2>/dev/null || true)"
+  if [[ "$health" == *'"healthy":true'* ]]; then ok "assistant answers"; else bad "assistant does not answer"; fi
+  if command -v docker >/dev/null 2>&1 && [[ "$(docker inspect -f '{{.State.Running}}' "$MAV_PG_CONTAINER" 2>/dev/null)" == "true" ]]; then
+    ok "memory database"
+  else
+    bad "memory database ($MAV_PG_CONTAINER not running)"
+  fi
+  model="$(env_get "$MAV_ENV_DASH" OPENCODE_MODEL)"
+  echo
+  info "model: ${model:-not set — open the app, Settings → Model}"
+}
+
+cmd_doctor() {
+  local problems=0 u state free cert end days bin port
+  printf "${B}Checking Mav${R} %s\n\n" "$(installed_version)"
+
+  for u in $MAV_SERVER_UNIT $MAV_WORKER_UNIT $MAV_DASH_UNIT; do
+    state="$(systemctl is-active "$u" 2>/dev/null || true)"
+    if [[ "$state" == "active" ]]; then ok "service $u is running"
+    else bad "service $u is ${state:-missing}"; info "→ journalctl -u $u -n 30   then: mav restart"; problems=$((problems + 1)); fi
+  done
+
+  bin=""
+  for p in "$(getent passwd "$(env_get "$MAV_ENV_DASH" MAV_INSTALL_USER)" 2>/dev/null | cut -d: -f6)/.opencode/bin/opencode" /usr/local/bin/opencode /usr/bin/opencode; do
+    [[ -x "$p" ]] && { bin="$p"; break; }
+  done
+  if [[ -n "$bin" ]]; then ok "agent engine installed ($("$bin" --version 2>/dev/null || echo '?'))"
+  else bad "agent engine (opencode) not found"; info "→ curl -fsSL https://opencode.ai/install | bash   (as the Mav user)"; problems=$((problems + 1)); fi
+
+  if curl -fsS --max-time 4 "http://127.0.0.1:$MAV_OPENCODE_PORT/global/health" 2>/dev/null | grep -q '"healthy":true'; then
+    ok "assistant answers on port $MAV_OPENCODE_PORT"
+  else
+    bad "assistant does not answer on port $MAV_OPENCODE_PORT"; info "→ mav logs engine"; problems=$((problems + 1))
+  fi
+
+  if [[ -n "$(env_get "$MAV_ENV_DASH" OPENCODE_MODEL)" ]]; then ok "model: $(env_get "$MAV_ENV_DASH" OPENCODE_MODEL)"
+  else warn "no model configured"; info "→ open $(dashboard_url), Settings → Model"; fi
+
+  if [[ -n "$(local_api status)" ]]; then ok "web app answers at $(dashboard_url)"
+  else bad "web app does not answer"; info "→ mav logs web"; problems=$((problems + 1)); fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    bad "docker is not installed (needed for the memory database)"; problems=$((problems + 1))
+  elif docker exec "$MAV_PG_CONTAINER" pg_isready >/dev/null 2>&1; then
+    ok "memory database is ready"
+  else
+    bad "memory database is not ready"; info "→ docker start $MAV_PG_CONTAINER   or: mav update --local"; problems=$((problems + 1))
+  fi
+
+  free="$(df -P / | awk 'NR==2 {print 100 - $5}')"
+  if [[ "${free:-100}" -lt 10 ]]; then bad "disk almost full (${free}% free)"; problems=$((problems + 1))
+  else ok "disk space (${free}% free)"; fi
+
+  for f in "$MAV_ENV_DASH" "$MAV_ENV_BOT" "$MAV_ENV_SERVER"; do
+    [[ -e "$f" ]] || continue
+    if [[ "$(stat -c %a "$f")" == "600" ]]; then ok "$f is private"
+    else warn "$f is readable by others"; info "→ chmod 600 $f"; fi
+  done
+
+  cert="$(dirname "$(env_get "$MAV_ENV_DASH" MAV_TLS_CERT)")/server.crt"
+  if [[ -n "$(env_get "$MAV_ENV_DASH" MAV_TLS_PORT)" && -r "$cert" ]]; then
+    end="$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)"
+    days=$(( ( $(date -d "$end" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
+    if [[ $days -lt 15 ]]; then warn "HTTPS certificate expires in $days days"; info "→ delete $cert, then: mav update --local"
+    else ok "HTTPS certificate valid ($days days left)"; fi
+  fi
+
+  if command -v npx >/dev/null 2>&1; then ok "Node.js available (for connections)"
+  else info "Node.js not installed — some connections need it: sudo apt install nodejs npm"; fi
+  if command -v uvx >/dev/null 2>&1; then ok "uv available (for connections)"
+  else info "uv not installed — some connections need it: curl -LsSf https://astral.sh/uv/install.sh | sh"; fi
+
+  port="$(env_get "$MAV_ENV_DASH" MAV_API_PORT)"
+  if [[ -n "$port" ]] && command -v ss >/dev/null 2>&1 && ! ss -ltn "( sport = :$port )" | grep -q LISTEN; then
+    warn "nothing listens on port $port"
+  fi
+
+  local latest; latest="$(latest_version)"
+  if [[ -n "$latest" ]] && semver_gt "$latest" "$(installed_version)"; then
+    warn "a new version is available: $latest"; info "→ mav update"
+  fi
+
+  echo
+  if [[ $problems -eq 0 ]]; then printf "${GRN}${B}All good.${R}\n"
+  else printf "${RED}${B}%d problem(s) found.${R} The hints above say what to do.\n" "$problems"; return 1; fi
+}
+
+cmd_update() {
+  local check=0 local_copy=0 force=0 channel="$MAV_CHANNEL" target="" cur tmp rc=0
+  local -a orig=("$@")
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --check) check=1 ;;
+      --local) local_copy=1 ;;
+      --force) force=1 ;;
+      --yes|-y) ;;
+      --channel) channel="${2:?--channel needs release or main}"; shift ;;
+      --to) target="${2:?--to needs a version, e.g. v1.2.0}"; shift ;;
+      *) die "Unknown option for update: $1" 2 ;;
+    esac
+    shift
+  done
+  cur="$(installed_version)"
+
+  if [[ $local_copy -eq 0 && -z "$target" && "$channel" == "release" ]]; then
+    target="$(latest_version)"
+    if [[ -z "$target" ]]; then
+      info "No release found (or GitHub unreachable) — using the main branch."
+      channel="main"
+    fi
+  fi
+
+  if [[ $check -eq 1 ]]; then
+    if [[ -n "$target" ]] && semver_gt "$target" "$cur"; then echo "Update available: $cur → $target"; return 0; fi
+    echo "Up to date ($cur)."; return 0
+  fi
+  if [[ $local_copy -eq 0 && $force -eq 0 && -n "$target" && "$target" == "$cur" ]]; then
+    echo "Already up to date ($cur). Use --force to reinstall."; return 0
+  fi
+
+  need_root update "${orig[@]}"
+
+  # One update at a time (the web app may start one too).
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "An update is already running."
+
+  if [[ $local_copy -eq 1 ]]; then
+    [[ -f "$MAV_SRC/install.sh" ]] || die "Local copy not found ($MAV_SRC)."
+    MAV_VERSION="$cur" bash "$MAV_SRC/install.sh" --update
+    return
+  fi
+
+  tmp="$(mktemp -d /tmp/mav-update.XXXXXX)"
+  trap 'rm -rf "$tmp"' EXIT
+  local ref url version
+  if [[ "$channel" == "main" && -z "$target" ]]; then
+    ref="refs/heads/main"; version="main@$(date +%Y-%m-%d)"
+  else
+    ref="refs/tags/$target"; version="$target"
+  fi
+  url="$MAV_CODELOAD/$MAV_REPO/tar.gz/$ref"
+  echo "Downloading Mav $version…"
+  if ! fetch "$url" -o "$tmp/mav.tar.gz" || ! tar xzf "$tmp/mav.tar.gz" -C "$tmp" --strip-components=1 || [[ ! -f "$tmp/install.sh" ]]; then
+    warn "Could not download $version — reinstalling the local copy instead."
+    [[ -f "$MAV_SRC/install.sh" ]] || die "Local copy not found ($MAV_SRC)."
+    MAV_VERSION="$cur" bash "$MAV_SRC/install.sh" --update
+    return
+  fi
+  MAV_VERSION="$version" MAV_REPO="$MAV_REPO" MAV_CHANNEL="$channel" bash "$tmp/install.sh" --update || rc=$?
+  [[ $rc -eq 0 ]] && echo "Mav is now at $version." || echo "The update failed — see $MAV_INSTALL_LOG" >&2
+  return $rc
+}
+
+cmd_service() {  # start|stop|restart [service]
+  local action="$1" units
+  units="$(unit_for "${2:-all}")"
+  need_root "$action" "${2:-all}"
+  # shellcheck disable=SC2086
+  systemctl "$action" $units
+  [[ "$action" == "stop" ]] && { echo "Stopped."; return; }
+  # Wait until the assistant answers again (up to 60 s).
+  if [[ "$units" == *"$MAV_SERVER_UNIT"* ]]; then
+    for _ in $(seq 1 60); do
+      curl -fsS --max-time 2 "http://127.0.0.1:$MAV_OPENCODE_PORT/global/health" >/dev/null 2>&1 && { echo "Assistant ready."; return; }
+      sleep 1
+    done
+    warn "The assistant is still starting — check: mav status"
+  else
+    echo "Done."
+  fi
+}
+
+cmd_logs() {
+  local svc="all" lines="" u args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n) lines="${2:?-n needs a number}"; shift ;;
+      *) svc="$1" ;;
+    esac
+    shift
+  done
+  if [[ "$svc" == "install" ]]; then
+    if [[ ! -r "$MAV_INSTALL_LOG" ]]; then
+      if [[ -n "$lines" ]]; then need_root logs install -n "$lines"; else need_root logs install; fi
+    fi
+    if [[ -n "$lines" ]]; then tail -n "$lines" "$MAV_INSTALL_LOG"; else tail -f "$MAV_INSTALL_LOG"; fi
+    return
+  fi
+  for u in $(unit_for "$svc"); do args+=(-u "$u"); done
+  if [[ -n "$lines" ]]; then journalctl "${args[@]}" -n "$lines" --no-pager
+  else journalctl "${args[@]}" -f; fi
+}
+
+cmd_backup() {
+  need_root backup "$@"
+  local out="${1:-$MAV_BACKUP_DIR/mav-$(date +%Y%m%d-%H%M%S).tar.gz}" tmp user home bot pguser pgdb dsn
+  tmp="$(mktemp -d /tmp/mav-backup.XXXXXX)"
+  trap 'rm -rf "$tmp"' EXIT
+  user="$(env_get "$MAV_ENV_DASH" MAV_INSTALL_USER)"
+  home="$(env_get "$MAV_ENV_DASH" MAV_USER_HOME)"
+  bot="$(env_get "$MAV_ENV_DASH" BOT_DIR)"
+  dsn="$(env_get "$MAV_ENV_DASH" PG_DSN)"
+  pguser="$(sed -n 's/.*user=\([^ ]*\).*/\1/p' <<<"$dsn")"; pguser="${pguser:-mav}"
+  pgdb="$(sed -n 's/.*dbname=\([^ ]*\).*/\1/p' <<<"$dsn")"; pgdb="${pgdb:-mav}"
+  mkdir -p "$tmp/mav" "$(dirname "$out")"
+  echo "Saving the memory database…"
+  docker exec "$MAV_PG_CONTAINER" pg_dump -U "$pguser" -d "$pgdb" --no-owner | gzip >"$tmp/mav/database.sql.gz" ||
+    die "Could not dump the database (is $MAV_PG_CONTAINER running?)"
+  echo "Saving settings, helpers and routines…"
+  cp -a /etc/mav*.env /etc/mav "$tmp/mav/" 2>/dev/null || true
+  [[ -n "$home" && -d "$home/.config/opencode" ]] && cp -a "$home/.config/opencode" "$tmp/mav/opencode"
+  if [[ -n "$bot" && -d "$bot" ]]; then
+    mkdir -p "$tmp/mav/bot"
+    cp -a "$bot"/jobs.json "$bot"/jobs_state.json "$bot"/push_subs.json "$bot"/vapid_* "$bot"/dash_sessions.json \
+      "$tmp/mav/bot/" 2>/dev/null || true
+  fi
+  cat >"$tmp/mav/README.txt" <<EOF
+Mav backup — $(date) — $(installed_version) — user ${user:-?}
+database.sql.gz   memory, alerts, keep-an-eye-on items (pg_dump)
+opencode/         engine config, custom instructions, helpers
+bot/              routines, notification keys and subscriptions
+*.env             service configuration (contains secrets!)
+Restore the database:
+  gunzip -c database.sql.gz | docker exec -i $MAV_PG_CONTAINER psql -U $pguser -d $pgdb
+EOF
+  tar czf "$out" -C "$tmp" mav
+  chmod 600 "$out"
+  echo "Backup saved: $out ($(du -h "$out" | cut -f1)). It contains secrets — keep it private."
+}
+
+cmd_installer() {  # reconfigure / uninstall through the local installer copy
+  need_root "$@"
+  [[ -f "$MAV_SRC/install.sh" ]] || die "Installer copy not found ($MAV_SRC). Re-run the one-line installer."
+  if [[ "$1" == "uninstall" ]]; then
+    bash "$MAV_SRC/install.sh" --uninstall
+  else
+    MAV_VERSION="$(installed_version)" bash "$MAV_SRC/install.sh"
+  fi
+}
+
+# ------------------------------------------------------------------ main
+cmd="${1:-help}"
+[[ $# -gt 0 ]] && shift
+case "$cmd" in
+  help|-h|--help) cmd_help ;;
+  version|-v|--version) cmd_version ;;
+  status|st) cmd_status ;;
+  doctor|check) cmd_doctor ;;
+  update|up|upgrade) cmd_update "$@" ;;
+  restart|start|stop) cmd_service "$cmd" "${1:-all}" ;;
+  logs|log) cmd_logs "$@" ;;
+  backup) cmd_backup "$@" ;;
+  reconfigure|config|model) cmd_installer reconfigure ;;
+  uninstall|remove) cmd_installer uninstall ;;
+  *) echo "Unknown command: $cmd" >&2; cmd_help >&2; exit 2 ;;
+esac

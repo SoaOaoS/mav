@@ -59,6 +59,11 @@ ENV_FILES = [
     Path(os.environ.get("MAV_ENV_DASH", "/etc/mav-dashboard.env")),
 ]
 WORKER_UNIT = os.environ.get("MAV_WORKER_UNIT", "mav-worker").strip()
+VERSION_FILE = Path(os.environ.get("MAV_VERSION_FILE", "/etc/mav/version"))
+MAV_REPO = os.environ.get("MAV_REPO", "SoaOaoS/mav").strip()
+INSTALL_LOG = Path(os.environ.get("MAV_INSTALL_LOG", "/var/log/mav-install.log"))
+MAV_CLI = os.environ.get("MAV_CLI", "/usr/local/bin/mav")
+CATALOG_FILE = STATIC_DIR / "mcp-catalog.json"
 
 # Shared modules live in the worker's folder (memory, RAG): make them importable
 # both from an install (BOT_DIR) and from a checkout (../../bot).
@@ -316,6 +321,8 @@ def engine_status() -> dict:
         "model": DEFAULT_MODEL or provider_current().get("ref") or "",
         "url": OPENCODE_URL,
         "checked": int(time.time()),
+        "pending": pending_changes(),
+        "version": installed_version(),
     }
 
 
@@ -440,6 +447,7 @@ def write_agents(text: str) -> dict:
         _chown_user(p)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
+    mark_pending("Custom instructions")
     return {"ok": True, "path": str(p)}
 
 
@@ -556,6 +564,7 @@ def write_mcp(mcp: dict) -> dict:
         _chown_user(p)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
+    mark_pending("Connections")
     return {"ok": True, "path": str(p)}
 
 
@@ -573,7 +582,263 @@ def restart_engine() -> dict:
     # its env: restart it too so it picks up the new configuration.
     _run(["systemctl", "restart", "--no-block", WORKER_UNIT], timeout=15)
     _agents_cache["at"] = 0.0
+    _pending.clear()
     return {"ok": True, "restarting": True, "unit": unit}
+
+
+# ------------------------------------------------------- pending changes
+# Changes to custom instructions, helpers, connections or keys only apply
+# once the assistant restarts. We remember what changed (from the web app)
+# and also compare file times with the engine's start time (edits by hand).
+
+_pending: dict = {}  # label -> time of the change
+
+
+def mark_pending(label: str) -> None:
+    _pending[label] = time.time()
+
+
+def engine_started_at() -> float | None:
+    """Unix time the engine service last (re)started, or None."""
+    code, out = _run(
+        ["systemctl", "show", server_unit(), "-p", "ActiveEnterTimestampMonotonic", "--value"], timeout=6
+    )
+    try:
+        mono = int(out.strip() or 0)
+        if code != 0 or mono <= 0:
+            return None
+        btime = next(int(l.split()[1]) for l in open("/proc/stat") if l.startswith("btime"))
+        return btime + mono / 1e6
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _config_files() -> dict:
+    files = {
+        "Connections or model": _opencode_config_path(),
+        "Custom instructions": agents_path(),
+        "API keys": ENV_SERVER,
+    }
+    d = agents_dir()
+    try:
+        newest = max([d] + list(d.glob("*.md")), key=lambda p: p.stat().st_mtime)
+        files["Helpers"] = newest
+    except Exception:  # noqa: BLE001
+        pass
+    return files
+
+
+def pending_changes() -> list[str]:
+    started = engine_started_at()
+    labels = set()
+    if started:
+        for label, path in _config_files().items():
+            try:
+                if Path(path).stat().st_mtime > started + 2:
+                    labels.add(label)
+            except Exception:  # noqa: BLE001
+                continue
+        labels |= {k for k, t in _pending.items() if t > started}
+    else:
+        labels |= set(_pending)
+    # Precise labels from the web app win over the generic file one.
+    if labels & {"Connections", "Model"}:
+        labels.discard("Connections or model")
+    return sorted(labels)
+
+
+# ------------------------------------------------------------ versions
+_release_cache: dict = {"at": 0.0, "data": None}
+
+
+def installed_version() -> str:
+    try:
+        return VERSION_FILE.read_text().strip().splitlines()[0] or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def _semver(v: str) -> tuple | None:
+    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)$", (v or "").strip())
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def latest_release(force: bool = False) -> dict | None:
+    """Latest GitHub release (cached 6 h; 30 min after a failure)."""
+    now = time.time()
+    ttl = 6 * 3600 if _release_cache["data"] else 1800
+    if not force and now - _release_cache["at"] < ttl:
+        return _release_cache["data"]
+    data = None
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{MAV_REPO}/releases/latest",
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "mav"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as r:
+            rel = json.loads(r.read().decode("utf-8", "replace"))
+        data = {
+            "tag": rel.get("tag_name", ""),
+            "url": rel.get("html_url", ""),
+            "notes": (rel.get("body") or "")[:4000],
+            "published": rel.get("published_at", ""),
+        }
+    except Exception:  # noqa: BLE001
+        data = None
+    _release_cache.update(at=now, data=data)
+    return data
+
+
+def version_info(force: bool = False) -> dict:
+    cur = installed_version()
+    rel = latest_release(force)
+    latest = (rel or {}).get("tag", "")
+    a, b = _semver(latest), _semver(cur)
+    # Installs that are not on a release (a branch, a clone) can always move
+    # to the latest release.
+    available = bool(a and (b is None or a > b)) and cur != latest
+    return {
+        "installed": cur,
+        "latest": latest,
+        "update_available": available,
+        "release_url": (rel or {}).get("url", ""),
+        "notes": (rel or {}).get("notes", "") if available else "",
+        "updating": update_running(),
+    }
+
+
+def update_running() -> bool:
+    code, out = _run(["systemctl", "is-active", "mav-update"], timeout=6)
+    return out.strip() in ("active", "activating")
+
+
+def start_update() -> dict:
+    """Run `mav update` outside the web app's own service: the update restarts
+    the web app, and must survive that."""
+    if update_running():
+        return {"ok": True, "already": True}
+    if not Path(MAV_CLI).exists():
+        return {"ok": False, "error": "The mav command is not installed — run: sudo mav update"}
+    code, out = _run(
+        ["systemd-run", "--unit=mav-update", "--collect", "--quiet",
+         "--description=Mav update", MAV_CLI, "update", "--yes"],
+        timeout=15,
+    )
+    if code != 0:
+        return {"ok": False, "error": out.strip() or "could not start the update"}
+    return {"ok": True}
+
+
+def update_status() -> dict:
+    lines = []
+    try:
+        with open(INSTALL_LOG, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 6000))
+            raw = f.read().decode("utf-8", "replace").splitlines()
+        lines = [l for l in raw if l.startswith("===")][-6:]
+    except Exception:  # noqa: BLE001
+        pass
+    return {
+        "running": update_running(),
+        "installed": installed_version(),
+        "steps": [l.split(" — ", 1)[-1] for l in lines],
+    }
+
+
+# ------------------------------------------------------- connections catalog
+def _install_home() -> Path:
+    return Path(os.environ.get("MAV_USER_HOME") or Path.home())
+
+
+def find_runtime(name: str) -> str:
+    """Absolute path of npx / uvx as the engine will need it (the engine's
+    service has a minimal PATH, so ~/.local/bin is resolved here)."""
+    home = _install_home()
+    for d in [*os.environ.get("PATH", "").split(":"), str(home / ".local/bin"),
+              str(home / ".cargo/bin"), "/usr/local/bin", "/usr/bin"]:
+        p = Path(d) / name
+        if d and p.is_file() and os.access(p, os.X_OK):
+            return str(p)
+    return ""
+
+
+def mcp_catalog() -> dict:
+    try:
+        cat = json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        cat = {"items": []}
+    installed = set((read_mcp().get("mcp") or {}).keys())
+    runtimes = {r: bool(find_runtime(r)) for r in ("npx", "uvx")}
+    for it in cat.get("items", []):
+        it["installed"] = it["id"] in installed
+        rt = it.get("runtime")
+        it["ready"] = not rt or runtimes.get(rt, False)
+    return {"items": cat.get("items", []), "runtimes": runtimes}
+
+
+def _fill(value, values: dict):
+    if isinstance(value, str):
+        return re.sub(r"\{\{(\w+)\}\}", lambda m: str(values.get(m.group(1), "")), value)
+    if isinstance(value, list):
+        return [_fill(v, values) for v in value]
+    if isinstance(value, dict):
+        return {k: _fill(v, values) for k, v in value.items()}
+    return value
+
+
+def install_from_catalog(item_id: str, values: dict) -> dict:
+    item = next((i for i in mcp_catalog()["items"] if i["id"] == item_id), None)
+    if not item:
+        return {"ok": False, "error": "Unknown connection."}
+    values = {k: str(v).strip() for k, v in (values or {}).items()}
+    for inp in item.get("inputs", []):
+        if inp.get("required") and not values.get(inp["key"]):
+            return {"ok": False, "error": f"{inp['label']} is required."}
+    if "base_url" in values:
+        values["base_url"] = values["base_url"].rstrip("/")
+    entry: dict = {"type": item["type"], "enabled": True}
+    if item["type"] == "local":
+        cmd = _fill(item["command"], values)
+        rt = item.get("runtime")
+        if rt:
+            path = find_runtime(rt)
+            if not path:
+                hint = {"npx": "sudo apt install nodejs npm",
+                        "uvx": "curl -LsSf https://astral.sh/uv/install.sh | sh"}.get(rt, "")
+                return {"ok": False, "error": f"This connection needs {rt}, which is not installed. Install it with: {hint}"}
+            cmd[0] = path
+        entry["command"] = cmd
+        if item.get("environment"):
+            entry["environment"] = _fill(item["environment"], values)
+    else:
+        entry["url"] = _fill(item["url"], values)
+        if item.get("headers"):
+            entry["headers"] = _fill(item["headers"], values)
+    return add_mcp_entry(item_id, entry)
+
+
+def add_mcp_entry(name: str, entry: dict) -> dict:
+    """Add or replace one MCP server, keeping the others untouched."""
+    p = _opencode_config_path()
+    norm, err = _normalize_mcp_entry(name, entry)
+    if err:
+        return {"ok": False, "error": err}
+    try:
+        cfg = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+    cfg.setdefault("mcp", {})[name] = norm
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp.replace(p)
+        _chown_user(p)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    mark_pending("Connections")
+    return {"ok": True, "name": name}
 
 
 # --------------------------------------------------------------- provider
@@ -629,6 +894,8 @@ def provider_save(payload: dict) -> dict:
     _chown_user(_opencode_config_path())
     if payload.get("restart", True):
         res["restart"] = restart_engine()
+    else:
+        mark_pending("Model")
     return res
 
 
@@ -732,6 +999,7 @@ def write_agent_file(name: str, text: str) -> dict:
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
     _agents_cache["at"] = 0.0
+    mark_pending("Helpers")
     return {"ok": True, "name": name, "path": str(p)}
 
 
@@ -743,6 +1011,7 @@ def delete_agent_file(name: str) -> dict:
         if p.is_file():
             p.unlink()
         _agents_cache["at"] = 0.0
+        mark_pending("Helpers")
         return {"ok": True, "name": name}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
@@ -791,6 +1060,8 @@ def get_status() -> dict:
         "model": DEFAULT_MODEL or prov.get("ref") or "",
         "provider_configured": bool(prov.get("configured")),
         "memory_backend": "postgres" if pg else "file",
+        "pending": pending_changes(),
+        "mav_version": installed_version(),
         "agent_online": bool(health and health.get("healthy")),
         "version": (health or {}).get("version"),
         "cpu": cpu_pct() or m.get("load", 0),
@@ -1021,7 +1292,7 @@ def get_memory(limit: int = 40) -> dict:
             "from conversations order by ts desc limit %s",
             (limit,),
         ),
-        "facts": q("select id, fact, source, ts from facts order by ts desc limit 100"),
+        "facts": q("select id, fact, source, ts from facts order by ts desc limit 200"),
         "preferences": q("select key, value, ts from preferences order by ts desc limit 20"),
         "backend": MEMORY.backend if MEMORY else "none",
         "enabled": MEMORY_ENABLED,
@@ -1290,6 +1561,69 @@ def _clean_title(raw: str) -> str:
     if not words or len(words) > 8:
         return ""
     return " ".join(words)[:48]
+
+
+def quick_completion(instruction: str, agent: str = "", timeout: float = 90) -> str:
+    """One-shot model call in a throwaway session (titles, fact extraction)."""
+    tmp = None
+    try:
+        tmp = http_json(f"{OPENCODE_URL}/session", method="POST", body={"title": "mav-internal"}, timeout=10)["id"]
+        body = {"parts": [{"type": "text", "text": instruction}], **_model_body()}
+        if agent and agent in valid_agents():
+            body["agent"] = agent
+        res = http_json(f"{OPENCODE_URL}/session/{tmp}/message", method="POST", body=body, timeout=timeout)
+        return _part_text((res or {}).get("parts") or [])
+    except Exception:  # noqa: BLE001
+        return ""
+    finally:
+        if tmp:
+            delete_session(tmp)
+
+
+# ------------------------------------------------------------- learned facts
+# Like ChatGPT's memory: when a message says something about the user, durable
+# facts are extracted in the background and saved (source "learned").
+
+ABOUT_ME_RE = re.compile(
+    r"\b(i|i'm|im|i've|i'd|my|mine|me|we|we're|our|us|je|j'|moi|mon|ma|mes|nous|notre|nos)\b",
+    re.I,
+)
+
+
+def learn_facts(prompt: str) -> int:
+    if not (MEMORY and MEMORY_ENABLED) or not ABOUT_ME_RE.search(prompt) or len(prompt) > 4000:
+        return 0
+    instruction = (
+        "Extract durable personal facts about the user from their message below: "
+        "things worth remembering in future conversations (where they live, job, "
+        "family, health or diet, preferences, recurring constraints, goals). "
+        "Ignore one-off requests and anything about other topics. Write each fact "
+        "as a short third-person sentence starting with 'User', in the language "
+        "of the message, one per line, each line starting with '- '. If there is "
+        "nothing durable, reply exactly NONE.\n\n"
+        f"Message: {prompt.strip()[:2000]}"
+    )
+    raw = quick_completion(instruction, timeout=120)
+    if not raw or raw.strip().upper().startswith("NONE"):
+        return 0
+    known = [f["fact"].lower() for f in MEMORY.facts(DEFAULT_CHAT_ID, limit=200)]
+    added = 0
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line.startswith(("-", "•", "*")):
+            continue
+        fact = line.lstrip("-•* ").strip().rstrip(".")
+        if len(fact) < 6 or len(fact) > 240:
+            continue
+        low = fact.lower()
+        if any(low in k or k in low for k in known):
+            continue
+        if MEMORY.add_fact(DEFAULT_CHAT_ID, fact, source="learned"):
+            known.append(low)
+            added += 1
+        if added >= 3:
+            break
+    return added
 
 
 def generate_title(sid: str, prompt: str, answer: str) -> None:
@@ -1876,6 +2210,7 @@ def stream_answer(
         threading.Thread(
             target=remember_exchange, args=(prompt, final, sid, ag), daemon=True
         ).start()
+        threading.Thread(target=learn_facts, args=(prompt,), daemon=True).start()
         if needs_title:
             threading.Thread(
                 target=generate_title, args=(sid, prompt, final), daemon=True
@@ -2116,6 +2451,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, engine_status())
             if path == "/api/config/provider":
                 return self._send(200, provider_snapshot())
+            if path == "/api/config/mcp/catalog":
+                return self._send(200, mcp_catalog())
+            if path == "/api/version":
+                return self._send(200, version_info(p.get("refresh") == "1"))
+            if path == "/api/update/status":
+                return self._send(200, update_status())
             if path == "/api/config/agent-files":
                 return self._send(200, list_agent_files())
             if path == "/api/config/agent-file":
@@ -2265,6 +2606,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/config/provider/test":
                 return self._send(200, provider_test(payload))
+            if path == "/api/config/mcp/install":
+                res = install_from_catalog(payload.get("id", ""), payload.get("values") or {})
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/update":
+                res = start_update()
+                return self._send(200 if res.get("ok") else 500, res)
             if path == "/api/watch/add":
                 ok = watch_add(payload.get("kind", ""), payload.get("target", ""))
                 return self._send(200 if ok else 400, {"ok": ok})

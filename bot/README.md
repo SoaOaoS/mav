@@ -1,8 +1,8 @@
 # Mav worker
 
-The background half of Mav: it runs **scheduled jobs** and the **continuous
-watch**, and reaches you with **Web Push** notifications. Conversations happen
-in the [dashboard](../dashboard/README.md).
+The background half of Mav: it runs **routines** and **keeps an eye on**
+things, and reaches you with **Web Push** notifications. Conversations happen
+in the [web app](../dashboard/README.md).
 
 > This module is part of the [Mav](../README.md) project. In a full install the
 > top-level `install.sh` sets everything up and runs it as the `mav-worker`
@@ -10,16 +10,15 @@ in the [dashboard](../dashboard/README.md).
 
 ## What it does
 
-- **Scheduled jobs** (`jobs.json`, editable from the dashboard → Automations):
-  at a fixed time on given days, or every N minutes, with automatic retries.
-  Each run gets its own `job-<name>` session, so its report shows up in the
-  dashboard's *Job results*, and a short summary is pushed to your devices.
-- **Watch**: web pages, GitHub repos, Proxmox VMs, service health and stock
-  levels. It only alerts when the state actually changes (deduplicated, quiet
-  hours respected).
-- **Memory** (`ocmemory.py`): the Postgres-backed memory shared with the
-  dashboard — exchanges and durable facts, recalled at the start of a new
-  conversation.
+- **Routines** (`jobs.json`, managed from the web app → Routines): at a time
+  on given days, or every few hours, with one automatic retry. Each run happens
+  in the routine's own chat (`Routine · <name>`) with what Mav remembers about
+  you; a short summary is pushed to your devices and lands in *For you*.
+- **Keep an eye on**: a web page (text changes), a price on a product page
+  (any change, or below a target) and news topics (Google News). Alerts only
+  when something actually changes — deduplicated, quiet hours respected.
+- **Memory** (`ocmemory.py`): the Postgres-backed memory shared with the web
+  app — facts about you and past exchanges.
 
 ## Configuration
 
@@ -44,13 +43,13 @@ journalctl -u mav-worker -f
 ## Structure
 
 ```
-mav_worker.py       # entry point: scheduler + watch loop
+mav_worker.py       # entry point: routines scheduler + watch loop
 ocbus.py            # SSE event bus (follows engine sessions)
-ocjobs.py           # job scheduler
+ocjobs.py           # routines scheduler
 ocmemory.py         # memory on Postgres (shared with the dashboard)
 ocnotify.py         # Web Push + notification history/dedup
 ocprogress.py       # session progress tracking
-ocwatch.py          # continuous watch (alerts on state change)
+ocwatch.py          # keep an eye on: page, price, news
 ocrag.py            # full-text document search (RAG)
-jobs.json           # scheduled jobs (empty by default)
+jobs.json           # routines (empty by default)
 ```

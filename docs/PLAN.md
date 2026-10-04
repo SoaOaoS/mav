@@ -1,83 +1,63 @@
-# Mav — usability & efficiency plan
+# Mav — plan: an everyday assistant that is proactive and runs on your own machine
 
-Goal: make Mav faster to install, configurable entirely from the dashboard, and
-obvious to use day to day (which agent am I talking to, what is this chat
-about, what does Mav remember).
+**Positioning.** Mav is a general-purpose personal assistant, like ChatGPT but
+agentic and proactive: it remembers you, runs routines on its own, keeps an eye
+on things and comes to you with what matters. It runs on your machine, with the
+model you choose. It can help with specialist tasks through tools
+(connections), but nothing in the product is built around a niche use case.
 
-## Findings (audit)
+## Audit (before)
 
 | Area | Problem |
 | --- | --- |
-| Memory | The bot stored exchanges in `~/bot/memory.json`; the dashboard read the Postgres `conversations` / `facts` tables, which **nothing ever wrote to**. Dashboard chats were never remembered at all. |
-| Provider | Changing model/provider meant re-running the terminal wizard. The provider logic lived as inline Python inside `install.sh`. |
-| Wizard | ~35 sequential free-text prompts, no validation (bad Telegram token / API key only discovered after the install), chat id had to be found by hand, noisy output. |
-| Agents | Agent chosen in a small dropdown, not tied to the conversation, not shown on the answers. |
-| Conversations | Titles were the first 48 characters of the first message. |
-| Automations | "Run" on the dashboard created an empty session and never ran the job. Jobs could not be created from the UI. |
-| Bot | `/rag` crashed (`time` not imported); messages still in French. |
+| Memory | The bot wrote exchanges to `memory.json`; the dashboard read Postgres tables nothing ever wrote to. Dashboard chats were never remembered. |
+| Model | Changing provider/model meant re-running the terminal wizard. |
+| Installer | ~35 free-text questions, no validation, chat id to find by hand, noisy output. |
+| Focus | Telegram bot, Proxmox/infra page, market charts, stock watcher, dev-centric agents: a power-user toolbox rather than an everyday assistant. |
+| Chat | Agent hidden in a dropdown, not tied to the chat, not shown on answers; titles = first 48 characters. |
+| Jobs | "Run" in the dashboard created an empty session and never ran the job; no way to create one from the UI. |
 
-## Plan
+## What was done
 
-### 1. Memory on Postgres (bug fix)
-- `ocmemory.py` rewritten: Postgres-backed (`conversations`, `facts`), JSON file
-  kept only as a fallback when Postgres is unreachable.
-- One-time migration of an existing `memory.json` into Postgres.
-- Retrieval: Postgres full-text search + recency decay, durable **facts** always
-  injected first.
-- Dashboard conversations are stored too (same tables, `source = 'dashboard'`).
-- New bot command `/remember <fact>`; dashboard Memories page can add / delete
-  facts and forget exchanges.
+### 1. Removed (code, UI, installer, env vars, docs)
+- Telegram bot → replaced by `mav-worker` (routines + keep an eye on + push).
+- Proxmox / Infra page and `/api/proxmox`, `PROXMOX_*`, the Proxmox watch kind.
+- Specialist watch kinds (GitHub, service health, Moodle, mail) and the stock
+  watcher; `/api/quotes`, `/api/chart`, `[[chart:…]]`, lightweight-charts.
+- `dev`, `reviewer`, `ops` agents and `examples/biotech_brief.py`.
 
-### 2. Provider & model from the UI
-- New module `dashboard/server/mav_provider.py`: single source of truth for
-  provider presets and for writing `opencode.json` + engine env. Used by the
-  installer *and* by the dashboard.
-- API: `GET /api/config/provider`, `POST /api/config/provider/test` (live
-  connection test + model list), `POST /api/config/provider` (save, apply,
-  restart engine and bot).
-- Settings → **Model** tab: provider cards, key field, "Test connection",
-  model picker filled from the provider, one-click "Save & apply".
+### 2. ChatGPT-like
+- Chat is the main screen; sidebar = New chat, chats grouped by day
+  (auto-titled), and Routines · Memory · Settings.
+- New-chat screen = greeting, centred composer, 4 everyday suggestions, and the
+  proactive *For you* inbox.
+- Plain language: Assistant, Helpers, Connections, Custom instructions,
+  Restart assistant; technical details in Settings → General → Advanced.
+- Who you talk to is shown on the composer, the header and each answer, and
+  remembered per chat.
+- Helpers: Assistant (default orchestrator), Researcher, Writer, Planner, Money.
+- Dark mode, ⌘K palette, keyboard shortcuts, copy/regenerate, PWA.
 
-### 3. Installer wizard (Claude Code-style)
-- Arrow-key menus with descriptions, numbered steps (`Step 2 of 4`), masked
-  secrets, inline validation.
-- Telegram token validated live (`getMe`); **chat id detected automatically**
-  by asking the user to send a message to the bot.
-- Provider key tested live, model picked from the provider's own list; or
-  "configure later from the dashboard".
-- Express by default: only the essentials are asked; everything else has smart
-  defaults behind an "Advanced settings?" prompt.
-- Install steps run behind a spinner with a log file (`/var/log/mav-install.log`)
-  instead of a wall of apt/pip output.
+### 3. Agentic and proactive
+- **Routines**: simple form (what / when: every day, some days, every few
+  hours / which helper), `/routine`, and detection of "every morning…" in chat
+  with a *Create routine* confirm card. Each routine has its own chat; results
+  go to push + the inbox.
+- **Keep an eye on**: a page, a price (optionally below a target), a news topic.
+- **Memory** like ChatGPT's, on Postgres: facts + past exchanges, recalled in
+  new chats and routines, Memory page, `/remember`.
 
-### 4. Chat UX
-- Agent identity everywhere: coloured avatar + name in the header, on every
-  answer, and in the conversation list; agent remembered **per conversation**;
-  a divider when you switch agent mid-chat; agent descriptions in the picker.
-- **Auto-generated titles**: after the first exchange a short 2–5 word title is
-  generated in the background (keyword fallback if the model is unavailable).
-- Conversations grouped by day, filterable, with relative times.
-- Multi-line composer (Enter = send, Shift+Enter = new line, auto-grow).
-- Message actions: copy, regenerate; copy button on code blocks.
-- Slash commands in the composer: `/new`, `/agent <name>`, `/remember <fact>`,
-  `/export`, `/help`.
-- Shortcuts: `⌘/Ctrl K` palette, `/` focus composer, `Esc` stop/close.
-- Dark mode (auto + manual toggle).
+### 4. Installer
+- Asks only for the provider, the key (checked live), the model (from the
+  provider's list, or "set it up later"), and optionally an email.
+- Arrow-key menus, numbered steps, spinner, `/var/log/mav-install.log`,
+  *Advanced settings?* for the rest. Existing installs: Update / Change the
+  model / Reconfigure / Uninstall, with migration from the Telegram version.
+- Provider logic shared with the web app (`dashboard/server/mav_provider.py`).
 
-### 5. Pages
-- **Home**: real activity feed (notifications + job runs), "start with an agent"
-  shortcuts, onboarding banner when no model is configured.
-- **Automations**: create / edit / delete jobs, working "Run now" (result shows
-  up in Job results), last-run info.
-- **Memories**: Facts / Exchanges / Preferences tabs, add & delete.
-- **Watch**: all kinds available (incl. stock) with a hint per kind.
-- **Settings**: Model · Agents · Instructions (AGENTS.md) · MCP · Engine.
-
-### 6. Telegram bot
-- English messages, agent name shown in the progress line, `/agent` with
-  inline buttons, `/remember`, `/rag` crash fixed.
-
-## Out of scope / next
-- Authentication on the dashboard (still meant for a VPN / private host).
-- Embedding-based memory (pgvector) — the schema leaves room for it.
-- Streaming tool steps in the dashboard (currently final text only).
+## Next
+- Optional login for the web app (today: home network or VPN only).
+- Automatic fact extraction from chats (today: the Assistant suggests
+  `/remember`; facts are added explicitly).
+- Embedding-based recall (pgvector) on top of full-text search.
+- Natural-language routine detection in more languages (today: English).

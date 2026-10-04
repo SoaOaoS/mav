@@ -90,6 +90,11 @@
           </button>
         </nav>
 
+        <button class="update-pill" id="updatePill" hidden>
+          <i data-i="download"></i>
+          <span id="updatePillText">Update available</span>
+        </button>
+
         <div class="side-foot">
           <button class="engine-chip" id="engineChip" title="Assistant status and model">
             <span class="dot" id="engineChipDot"></span>
@@ -109,6 +114,11 @@
 
       <!-- ============ CONTENT ============ -->
       <main class="content">
+        <div class="pending-bar" id="pendingBar" hidden>
+          <i data-i="refresh"></i>
+          <span id="pendingText">Some changes are not applied yet.</span>
+          <button class="btn btn-primary btn-sm" id="pendingRestart">Restart assistant</button>
+        </div>
         <!-- ---------- CHAT (main screen; empty = new chat) ---------- -->
         <section class="view view-chat is-active" id="view-chat">
           <div class="chat is-empty" id="chat">
@@ -334,14 +344,18 @@
 
             <!-- Connections -->
             <div class="spanel" id="spanel-connections">
-              <div class="panel-bar">
-                <p class="hint">Connect Mav to other apps and services (calendar, files, notes…) so it can use them for you.</p>
+              <p class="hint">Connect Mav to other apps and services so it can use them for you.</p>
+              <h3 class="sub">Your connections</h3>
+              <div class="mcp-cards" id="mcpCards"></div>
+              <div class="panel-bar catalog-bar">
+                <h3 class="sub">Add a connection</h3>
                 <div class="row">
                   <span class="status-text" id="mcpStatus"></span>
-                  <button class="btn btn-primary" id="mcpAdd"><i data-i="plus"></i> Add a connection</button>
+                  <button class="btn btn-ghost btn-sm" id="mcpAdd"><i data-i="plus"></i> Custom…</button>
                 </div>
               </div>
-              <div class="mcp-cards" id="mcpCards"></div>
+              <div class="catalog" id="mcpCatalog"></div>
+              <p class="hint" id="runtimeHint"></p>
             </div>
 
             <!-- General -->
@@ -370,6 +384,13 @@
                     <span>Uses your browser's voice.</span>
                   </div>
                   <button class="switch" id="voiceSwitch" role="switch" aria-checked="false" aria-label="Read aloud"></button>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Version</strong>
+                    <span id="versionText">—</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="versionCheck">Check for updates</button>
                 </div>
                 <div class="setting-row">
                   <div>

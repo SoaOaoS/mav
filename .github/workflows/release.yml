@@ -1,0 +1,53 @@
+# Every push to main gets a semantic version tag and a GitHub release.
+# The bump comes from the commit messages since the last tag
+# (Conventional Commits, see scripts/next-version.sh):
+#   type!: / BREAKING CHANGE  → major · feat → minor · anything else → patch
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Releases are made one at a time, in push order.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history and tags, to find the last version
+
+      - name: Compute the next version
+        id: version
+        run: |
+          set +e
+          next="$(scripts/next-version.sh --explain)"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 3 ]; then
+            echo "This commit is already released."
+          elif [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Tag and publish the release
+        if: steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Mav $TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "Mav $TAG" --generate-notes --verify-tag
+          echo "### Released $TAG" >> "$GITHUB_STEP_SUMMARY"

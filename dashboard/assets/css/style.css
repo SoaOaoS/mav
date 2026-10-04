@@ -2746,3 +2746,132 @@ body[data-mode="mock"] .engine-chip-text::after {
     justify-content: flex-end;
   }
 }
+button.memory-updated {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+button.memory-updated:hover {
+  text-decoration: underline;
+}
+
+/* "Restart to apply" bar (top of the content, on every page) */
+.content {
+  display: flex;
+  flex-direction: column;
+}
+.content > .view {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.pending-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 1rem;
+  background: var(--warm-soft);
+  color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--warm) 30%, var(--line));
+  font-size: 0.88rem;
+  flex: none;
+  animation: rise var(--dur) var(--ease-out);
+}
+.pending-bar > i[data-i] {
+  color: var(--warm);
+  width: 16px;
+  height: 16px;
+}
+.pending-bar span {
+  flex: 1;
+}
+
+/* Update available (sidebar) */
+.update-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+}
+.update-pill:hover {
+  background: color-mix(in srgb, var(--accent) 22%, var(--accent-soft));
+}
+.update-pill i[data-i] {
+  width: 15px;
+  height: 15px;
+}
+.release-notes {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  font-size: 0.88rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Connections catalog */
+.catalog-bar {
+  margin: 1.6rem 0 0.6rem;
+}
+.catalog-bar h3.sub {
+  margin: 0;
+}
+.catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.6rem;
+}
+.cat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  text-align: left;
+  transition: all var(--dur-fast) var(--ease);
+}
+.cat-item:hover {
+  border-color: var(--ink-3);
+  transform: translateY(-1px);
+}
+.cat-item.is-added {
+  opacity: 0.75;
+}
+.cat-text {
+  flex: 1;
+  min-width: 0;
+}
+.cat-text strong {
+  display: block;
+  font-size: 0.92rem;
+}
+.cat-text span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  line-height: 1.35;
+  margin-top: 0.1rem;
+}
+.cat-item .badge {
+  flex: none;
+}
+.onboard.soft {
+  background: var(--bg-sunk);
+  color: var(--ink-2);
+  padding: 0.6rem 0.8rem;
+  margin: 0;
+}
+#spanel-connections .mcp-cards .empty {
+  padding: 0;
+}
