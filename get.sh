@@ -9,8 +9,8 @@
 #  script and the prompt reader would have nothing left to read).
 #
 #  Environment variables accepted (useful for automation, with
-#  install.sh --yes): MAV_TELEGRAM_TOKEN, MAV_ALLOWED_CHAT_IDS,
-#  MAV_OPENCODE_MODEL, MAV_API_BIND, … (see the README).
+#  install.sh --yes): MAV_PROVIDER, MAV_PROVIDER_APIKEY, MAV_OPENCODE_MODEL,
+#  MAV_VAPID_EMAIL, … (see the README).
 # ============================================================================
 set -euo pipefail
 

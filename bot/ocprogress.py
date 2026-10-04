@@ -1,7 +1,8 @@
 """Turns a session's event stream into a readable status line.
 
-Telegram rate-limits message edits: we batch events and only edit beyond a
-minimum interval, and only if the text actually changed.
+Used by the worker to follow a routine run until the session is idle (and to
+detect errors or a stuck session). Updates are rate-limited: rendered at most
+once per interval, and only if the text changed.
 """
 
 from __future__ import annotations
@@ -18,17 +19,17 @@ EDIT_INTERVAL = 3.0  # seconds between status message edits
 # Readable labels for common tools. MCP servers are prefixed by their
 # name (github_*, notion_*); we handle them generically.
 TOOL_LABELS = {
-    "websearch": "recherche web",
-    "webfetch": "lecture d'une page",
-    "read": "lecture de fichier",
+    "websearch": "searching the web",
+    "webfetch": "reading a page",
+    "read": "reading a file",
     "write": "writing file",
-    "edit": "modification de fichier",
-    "bash": "commande shell",
-    "grep": "recherche dans le code",
-    "glob": "parcours de fichiers",
+    "edit": "editing a file",
+    "bash": "running a command",
+    "grep": "searching the code",
+    "glob": "listing files",
     "task": "delegating to a sub-agent",
     "todowrite": "updating the plan",
-    "apply_patch": "application d'un patch",
+    "apply_patch": "applying a patch",
 }
 
 
@@ -37,7 +38,7 @@ def tool_label(name: str) -> str:
         return TOOL_LABELS[name]
     if "_" in name:
         server, _, rest = name.partition("_")
-        return f"{server} : {rest.replace('_', ' ')}"
+        return f"{server}: {rest.replace('_', ' ')}"
     return name
 
 
@@ -49,7 +50,8 @@ def human_delay(seconds: float) -> str:
 class ProgressTracker:
     """Accumulates a running session's state and produces the text to display."""
 
-    def __init__(self) -> None:
+    def __init__(self, agent: str = "") -> None:
+        self.agent = agent
         self.started = time.monotonic()
         self.current: str | None = None
         self.steps = 0
@@ -83,27 +85,28 @@ class ProgressTracker:
             self.current = "thinking"
         elif etype == "session.next.compaction.started":
             self.compacting = True
-            self.current = "compactage du contexte"
+            self.current = "compacting the context"
         elif etype == "session.next.compaction.ended":
             self.compacting = False
         elif etype == "session.next.retried":
-            self.current = "nouvelle tentative"
+            self.current = "retrying"
         elif etype == "session.error":
             err = props.get("error") or {}
-            name = err.get("name") or err.get("_tag") or "erreur"
+            name = err.get("name") or err.get("_tag") or "error"
             self.error = str(name)
             self.done = True
         elif etype == "session.idle":
             self.done = True
 
-    # --------------------------------------------------------------- rendu
+    # --------------------------------------------------------------- render
 
     def render(self) -> str:
         elapsed = human_delay(time.monotonic() - self.started)
         if self.error:
             return f"⚠️ {html.escape(self.error)} — after {elapsed}"
 
-        head = f"⏳ <b>{html.escape(self.current or 'starting')}</b>  ·  {elapsed}"
+        who = f"🤖 <b>{html.escape(self.agent)}</b>  ·  " if self.agent else ""
+        head = f"{who}⏳ <b>{html.escape(self.current or 'starting')}</b>  ·  {elapsed}"
 
         detail = []
         if self.steps > 1:

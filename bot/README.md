@@ -1,92 +1,56 @@
-# Mav bot
+# Mav worker
 
-The **opencode ↔ Telegram** bridge: ask a question from Telegram, opencode
-answers with live progress, cross-session memory and scheduled runs.
+The background half of Mav: it runs **scheduled jobs** and the **continuous
+watch**, and reaches you with **Web Push** notifications. Conversations happen
+in the [dashboard](../dashboard/README.md).
 
-> This module is part of the [Mav](../README.md) project. In a full Mav install
-> the top-level `install.sh` sets everything up; the details below are for
-> running the bot on its own.
+> This module is part of the [Mav](../README.md) project. In a full install the
+> top-level `install.sh` sets everything up and runs it as the `mav-worker`
+> systemd service.
 
-## Features
+## What it does
 
-- **Questions**: `/ask <question>` or just send a message
-- **Live progress**: status updated while the answer streams in
-- **Cross-session memory**: relevant past exchanges are recalled
-- **Attachments**: photos and documents forwarded to opencode
-- **Scheduled jobs**: recurring prompts pushed to Telegram
-- **Multi-agent debates**: `/debate <question>`
-- **Security**: allowlist of authorized chats
-
-## Commands
-
-| Command              | Description                           |
-| -------------------- | ------------------------------------- |
-| `/ask <question>`    | Ask a question                        |
-| `/new`               | New session                           |
-| `/agent [name]`      | Show / switch agent                   |
-| `/stop`              | Abort the current task                |
-| `/memory`            | Memory status                         |
-| `/forget`            | Clear the chat's memory               |
-| `/clear`             | Delete the bot's messages (allowlist) |
-| `/jobs`              | List scheduled jobs                   |
-| `/run <name>`        | Trigger a job                         |
-| `/watch`             | Manage watch items                    |
-| `/rag`               | Full-text document search/index       |
-| `/notify`            | Toggle push / Telegram notifications  |
-| `/debate <question>` | Start a multi-agent debate            |
-| `/id`                | Chat identifier                       |
+- **Scheduled jobs** (`jobs.json`, editable from the dashboard → Automations):
+  at a fixed time on given days, or every N minutes, with automatic retries.
+  Each run gets its own `job-<name>` session, so its report shows up in the
+  dashboard's *Job results*, and a short summary is pushed to your devices.
+- **Watch**: web pages, GitHub repos, Proxmox VMs, service health and stock
+  levels. It only alerts when the state actually changes (deduplicated, quiet
+  hours respected).
+- **Memory** (`ocmemory.py`): the Postgres-backed memory shared with the
+  dashboard — exchanges and durable facts, recalled at the start of a new
+  conversation.
 
 ## Configuration
 
-The bot reads environment variables (in a full install these live in
-`/etc/mav.env`). See [`.env.example`](.env.example) for the full list. The
-essentials:
+Environment variables (in a full install: `/etc/mav.env`). See
+[`.env.example`](.env.example) for the full list. The essentials:
 
 ```bash
-TELEGRAM_TOKEN=            # bot token (from @BotFather)
-ALLOWED_CHAT_IDS=          # allowed chats, comma-separated
-OPENCODE_URL=http://127.0.0.1:4096/
+OPENCODE_URL=http://127.0.0.1:4096
 OPENCODE_MODEL=<provider>/<model>
-OPENCODE_AGENT=            # empty = opencode default
-STATE_FILE=/home/USER/bot/sessions.json
-BOT_DIR=/home/USER/bot
+MAV_CHAT_ID=0              # owner id: memory/watch items are attached to it
+BOT_DIR=/home/USER/bot     # data folder (jobs.json, push subscriptions, keys)
 PG_DSN=host=127.0.0.1 port=5432 user=mav password=CHANGE_ME dbname=mav
 ```
 
-## Requirements
-
-- A running **opencode** server (`opencode serve`, default
-  `http://127.0.0.1:4096`)
-- Python 3.10+
-- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
-- Postgres (for memory, watch, RAG, notifications) — optional but recommended
-
-## systemd services
-
-The top-level installer sets up three services; the bot is one of them:
-
-- **`mav-server`** — the headless opencode engine on `127.0.0.1:4096`
-- **`mav-bot`** — the Telegram bridge, depends on `mav-server`
-- **`mav-dashboard`** — the web interface
+## Run
 
 ```bash
-systemctl status mav-bot
-journalctl -u mav-bot -f
+systemctl status mav-worker
+journalctl -u mav-worker -f
 ```
 
 ## Structure
 
 ```
-opencode_bot.py     # main bot (Telegram <-> opencode bridge)
-ocbus.py            # SSE event bus
-ocformat.py         # markdown -> Telegram HTML rendering
+mav_worker.py       # entry point: scheduler + watch loop
+ocbus.py            # SSE event bus (follows engine sessions)
 ocjobs.py           # job scheduler
-ocmemory.py         # cross-session memory
-ocnotify.py         # proactive notifications (Web Push + history/dedup)
-ocprogress.py       # progress tracking
+ocmemory.py         # memory on Postgres (shared with the dashboard)
+ocnotify.py         # Web Push + notification history/dedup
+ocprogress.py       # session progress tracking
 ocwatch.py          # continuous watch (alerts on state change)
-ocrag.py            # full-text search (RAG)
+ocrag.py            # full-text document search (RAG)
 jobs.json           # scheduled jobs (empty by default)
-requirements.txt    # Python dependencies
-.env.example        # configuration reference
 ```
