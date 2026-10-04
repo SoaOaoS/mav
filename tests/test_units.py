@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s tests -v
 """
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 import mav_provider  # noqa: E402
 import ocdebates  # noqa: E402
 import ocjobs  # noqa: E402
+import ocmemory  # noqa: E402
 import ocwatch  # noqa: E402
 
 
@@ -121,49 +123,58 @@ class Provider(unittest.TestCase):
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "openai", "")["ok"])
 
 
-class Debates(unittest.TestCase):
-    def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
-        self.file = self.tmp / "threads.json"
-        self.file.write_text(json.dumps({
-            "debate-1": [
-                {"id": 1, "thread": "debate-1", "author": "system",
-                 "text": "**Faut-il migrer ?**\n\nQuestion : Postgres ou SQLite ?",
-                 "ts": "2026-10-04T16:00:00.000Z"},
-                {"id": 2, "thread": "debate-1", "author": "dev",
-                 "text": "Postgres.", "ts": "2026-10-04T16:01:00.000Z"},
-                {"id": 3, "thread": "debate-1", "author": "reviewer",
-                 "text": "SQLite suffit.", "ts": "2026-10-04T16:02:00.000Z"},
-            ]
-        }))
-        self._orig = ocdebates.DEBATE_FILE
-        ocdebates.DEBATE_FILE = self.file
+class MemoryRecall(unittest.TestCase):
+    def test_and_query_needs_several_terms(self):
+        self.assertEqual(ocmemory.ts_query_and("postgres"), "")
+        q = ocmemory.ts_query_and("postgres migration config")
+        self.assertIn("&", q)
+        self.assertNotIn("|", q)
 
-    def tearDown(self):
-        ocdebates.DEBATE_FILE = self._orig
+    def test_or_query_is_broad(self):
+        self.assertIn("|", ocmemory.ts_query("postgres migration config"))
 
-    def test_intro_and_messages(self):
-        threads = ocdebates.list_threads()
-        self.assertEqual(len(threads), 1)
-        t = threads[0]
-        self.assertEqual(t["title"], "Faut-il migrer ?")
-        self.assertEqual(t["question"], "Postgres ou SQLite ?")
-        self.assertEqual(t["messages"], 3)
-        self.assertEqual(t["authors"], ["system", "dev", "reviewer"])
-        self.assertEqual(t["last_author"], "reviewer")
+    def test_queries_are_alnum_only(self):
+        for fn in (ocmemory.ts_query, ocmemory.ts_query_and):
+            for term in re.split(r"[&|]", fn("l'ete 2026 : test/etrange")):
+                term = term.strip()
+                if term:
+                    self.assertRegex(term, r"^[a-z0-9]+:\*$")
 
-    def test_get_thread_orders_messages(self):
-        d = ocdebates.get_thread("debate-1")
-        self.assertIsNotNone(d)
-        self.assertEqual([m["author"] for m in d["messages"]],
-                         ["system", "dev", "reviewer"])
-        self.assertEqual(d["messages"][1]["text"], "Postgres.")
-        self.assertGreater(d["messages"][1]["ts"], 0)
+    def test_dedupe_keeps_newest_and_drops_contained(self):
+        facts = [
+            "User lives in Lyon, France",  # newest
+            "User lives in Lyon",
+            "User is vegetarian",
+            "User likes hiking in the Alps",
+        ]
+        out = ocmemory._dedupe_facts(facts)
+        self.assertEqual(
+            out,
+            ["User lives in Lyon, France", "User is vegetarian", "User likes hiking in the Alps"],
+        )
 
-    def test_missing_file_and_thread(self):
-        ocdebates.DEBATE_FILE = self.tmp / "absent.json"
-        self.assertEqual(ocdebates.list_threads(), [])
-        self.assertIsNone(ocdebates.get_thread("debate-1"))
+    def test_context_block_respects_budget(self):
+        class Fake(ocmemory.Memory):
+            def facts(self, chat_id, limit=20):
+                return [{"fact": f"Fact number {i} " + "x" * 60, "ts": i} for i in range(40)]
+
+            def search(self, chat_id, query, top=3):
+                return [{"q": "q " + "y" * 200, "a": "a " + "z" * 400, "ts": 0}] * 20
+
+        block = Fake(Path("/nonexistent"), max_entries=5).context_block(0, "anything", top=20)
+        self.assertIn("<memory>", block)
+        self.assertIn("</memory>", block)
+        self.assertLessEqual(len(block), ocmemory.MEMORY_BUDGET + 200)
+
+    def test_context_block_empty_when_nothing(self):
+        class Empty(ocmemory.Memory):
+            def facts(self, chat_id, limit=20):
+                return []
+
+            def search(self, chat_id, query, top=3):
+                return []
+
+        self.assertEqual(Empty(Path("/nonexistent")).context_block(0, "q"), "")
 
 
 class Catalog(unittest.TestCase):

@@ -48,6 +48,44 @@ STOP = set(
 WORD = re.compile(r"[a-z0-9_\-./]{3,}")
 STEM_LEN = 6
 
+# The memory block is injected at the start of a new chat: keep it bounded so it
+# never crowds out the actual conversation, however much the user has said.
+# Facts get a share, recalled exchanges the rest.
+MEMORY_BUDGET = int(os.environ.get("MEMORY_BUDGET", "4000") or 4000)
+FACTS_BUDGET = max(600, int(MEMORY_BUDGET * 0.4))
+
+
+def _clip(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _norm_fact(text: str) -> str:
+    """Fold a fact to a comparable key: no accents, punctuation or spacing."""
+    lowered = fold(text)
+    return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+
+
+def _dedupe_facts(facts: list[str]) -> list[str]:
+    """Drop duplicate facts, keeping the most recent occurrence.
+
+    Input is ordered newest-first (as `facts()` returns it): an older entry is a
+    duplicate if a newer one contains it, or is contained by it. Returns the
+    surviving fact texts, still newest-first.
+    """
+    seen: list[str] = []
+    out: list[str] = []
+    for raw in facts:
+        fact = " ".join(str(raw).split())
+        if not fact:
+            continue
+        key = _norm_fact(fact)
+        if not key or any(key == s or key in s or s in key for s in seen):
+            continue
+        seen.append(key)
+        out.append(fact)
+    return out
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (
     id          bigserial PRIMARY KEY,
@@ -93,10 +131,10 @@ def normalise(text: str) -> list[str]:
     return [stem(w) for w in WORD.findall(fold(text)) if w not in STOP]
 
 
-def ts_query(text: str) -> str:
-    """OR-query of prefix terms for to_tsquery('simple', ...).
+def ts_terms(text: str, limit: int = 24) -> list[str]:
+    """Prefix terms for to_tsquery('simple', ...).
 
-    Only [a-z0-9] survive, so the result is always a valid tsquery."""
+    Only [a-z0-9] survive, so anything built from this is a valid tsquery."""
     terms = []
     for w in WORD.findall(fold(text)):
         if w in STOP:
@@ -104,7 +142,23 @@ def ts_query(text: str) -> str:
         w = re.sub(r"[^a-z0-9]", "", stem(w))
         if len(w) >= 3 and w not in terms:
             terms.append(w)
-    return " | ".join(f"{t}:*" for t in terms[:24])
+    return terms[:limit]
+
+
+def ts_query(text: str) -> str:
+    """OR-query: keeps recall high, at the cost of precision."""
+    return " | ".join(f"{t}:*" for t in ts_terms(text))
+
+
+def ts_query_and(text: str, min_terms: int = 2) -> str:
+    """AND-query over the most meaningful terms, for precision.
+
+    Returns "" when there are not enough distinct terms to be worth an AND
+    (a single term would be as broad as the OR query)."""
+    terms = ts_terms(text, limit=8)
+    if len(terms) < min_terms:
+        return ""
+    return " & ".join(f"{t}:*" for t in terms)
 
 
 class Memory:
@@ -319,25 +373,34 @@ class Memory:
 
     # ------------------------------------------------------------- retrieval
 
+    _SEARCH_SQL = """
+        SELECT question AS q, answer AS a, ts,
+               ts_rank(tsv, to_tsquery('simple', %s))
+                 / (1 + (extract(epoch FROM now()) - ts) / 86400.0 / 60) AS score
+        FROM conversations
+        WHERE chat_id = %s AND tsv @@ to_tsquery('simple', %s)
+        ORDER BY score DESC
+        LIMIT %s
+    """
+
     def search(self, chat_id: int, query: str, top: int = 3) -> list[dict]:
-        tq = ts_query(query)
-        if not tq:
+        # Precision first: require the meaningful terms to co-occur. Fall back
+        # to a broad OR only when the strict query finds nothing, so a
+        # loosely-related exchange never crowds out a relevant one.
+        strict = ts_query_and(query)
+        broad = ts_query(query)
+        if not broad:
             return []
         try:
-            rows = self._q(
-                """
-                SELECT question AS q, answer AS a, ts,
-                       ts_rank(tsv, to_tsquery('simple', %s))
-                         / (1 + (extract(epoch FROM now()) - ts) / 86400.0 / 60) AS score
-                FROM conversations
-                WHERE chat_id = %s AND tsv @@ to_tsquery('simple', %s)
-                ORDER BY score DESC
-                LIMIT %s
-                """,
-                (tq, chat_id, tq, top),
-            )
-            # Below this, recall is noise and pollutes the context.
-            return [r for r in rows if (r.get("score") or 0) >= 0.005]
+            for pq in ([strict, broad] if strict else [broad]):
+                rows = self._q(
+                    self._SEARCH_SQL, (pq, chat_id, pq, top)
+                )
+                # Below this, recall is noise and pollutes the context.
+                hits = [r for r in rows if (r.get("score") or 0) >= 0.005]
+                if hits:
+                    return hits
+            return []
         except Exception as exc:  # noqa: BLE001
             log.debug("memory search via file: %s", exc)
         return self._search_file(chat_id, query, top)
@@ -367,9 +430,39 @@ class Memory:
         return [e for s, e in scored[:top] if s >= 0.5]
 
     def context_block(self, chat_id: int, query: str, top: int = 3) -> str:
-        facts = self.facts(chat_id, limit=15)
+        fact_rows = self.facts(chat_id, limit=20)
         hits = self.search(chat_id, query, top)
+        # Deduplicate near-identical facts (they tend to pile up over time).
+        facts = _dedupe_facts([f["fact"] for f in fact_rows])
         if not facts and not hits:
+            return ""
+
+        # Facts are durable and always useful: give them the first share of the
+        # budget, most recent first. Recalled exchanges fill what is left.
+        fact_lines: list[str] = []
+        used = 0
+        for f in facts:
+            line = f"- {_clip(f, 240)}"
+            if used + len(line) + 1 > FACTS_BUDGET:
+                break
+            fact_lines.append(line)
+            used += len(line) + 1
+
+        exchange_lines: list[str] = []
+        for e in hits:
+            when = time.strftime("%Y-%m-%d", time.localtime(e.get("ts", 0)))
+            chunk = (
+                f"[{when}] Q: {_clip(e.get('q', ''), 300)}",
+                f"           A: {_clip(e.get('a', ''), 500)}",
+                "",
+            )
+            size = sum(len(c) + 1 for c in chunk)
+            if used + size > MEMORY_BUDGET:
+                break
+            exchange_lines.extend(chunk)
+            used += size
+
+        if not fact_lines and not exchange_lines:
             return ""
         lines = [
             "<memory>",
@@ -378,16 +471,12 @@ class Memory:
             "not comment on them explicitly.",
             "",
         ]
-        if facts:
+        if fact_lines:
             lines.append("Facts:")
-            for f in reversed(facts):
-                lines.append(f"- {f['fact']}")
+            lines.extend(fact_lines)
             lines.append("")
-        for e in hits:
-            when = time.strftime("%Y-%m-%d", time.localtime(e.get("ts", 0)))
-            lines.append(f"[{when}] Q: {str(e['q'])[:300]}")
-            lines.append(f"           A: {str(e['a'])[:500]}")
-            lines.append("")
+        if exchange_lines:
+            lines.extend(exchange_lines)
         lines.append("</memory>")
         return "\n".join(lines)
 
