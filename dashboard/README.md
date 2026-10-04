@@ -78,7 +78,11 @@ talks to the opencode engine, and reads/writes Postgres.
 | GET/POST | `/api/config/agents` | custom instructions (AGENTS.md) |
 | GET/POST | `/api/config/agent-files`, `/api/config/agent-file`, `…/delete` | helper files |
 | GET/POST | `/api/config/mcp` | connections (secrets masked) |
-| GET/POST | `/api/config/engine`, `/api/config/restart` | assistant status / restart |
+| GET | `/api/config/mcp/catalog` | ready-made connections (`mcp-catalog.json`) + whether Node.js / uv are installed |
+| POST | `/api/config/mcp/install` | add a catalog connection (`{id, values}`) |
+| GET | `/api/version` | installed / latest version, `update_available`, release notes |
+| POST | `/api/update`, GET `/api/update/status` | run `mav update` in its own systemd unit, follow it |
+| GET/POST | `/api/config/engine`, `/api/config/restart` | assistant status (incl. `pending` changes) / restart |
 | POST | `/api/upload` | attachment |
 | GET/POST | `/api/push/key` · `subscribe` · `unsubscribe` · `test` · `ack` | Web Push |
 

@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "fetch",
+      "name": "Read web pages",
+      "description": "Lets Mav open a link and read the page — to summarise articles, check a recipe, compare offers.",
+      "category": "Web",
+      "type": "local",
+      "runtime": "uvx",
+      "command": ["uvx", "mcp-server-fetch"],
+      "inputs": [],
+      "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
+    },
+    {
+      "id": "browser",
+      "name": "Web browser",
+      "description": "A real browser Mav can drive: click, fill forms, read pages that need JavaScript.",
+      "category": "Web",
+      "type": "local",
+      "runtime": "npx",
+      "command": ["npx", "-y", "@playwright/mcp@latest", "--headless"],
+      "inputs": [],
+      "note": "Downloads a browser the first time it is used (about 150 MB).",
+      "docs": "https://github.com/microsoft/playwright-mcp"
+    },
+    {
+      "id": "brave-search",
+      "name": "Web search (Brave)",
+      "description": "Private web and news search through the Brave Search API (free tier available).",
+      "category": "Web",
+      "type": "local",
+      "runtime": "npx",
+      "command": ["npx", "-y", "@brave/brave-search-mcp-server"],
+      "environment": { "BRAVE_API_KEY": "{{api_key}}" },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Brave Search API key",
+          "secret": true,
+          "required": true,
+          "link": "https://brave.com/search/api/"
+        }
+      ],
+      "docs": "https://github.com/brave/brave-search-mcp-server"
+    },
+    {
+      "id": "time",
+      "name": "Time & time zones",
+      "description": "Current time anywhere and time-zone conversions — handy for calls and trips.",
+      "category": "Everyday",
+      "type": "local",
+      "runtime": "uvx",
+      "command": ["uvx", "mcp-server-time", "--local-timezone", "{{timezone}}"],
+      "inputs": [
+        {
+          "key": "timezone",
+          "label": "Your time zone",
+          "placeholder": "Europe/Paris",
+          "required": true,
+          "default_from": "browser_timezone"
+        }
+      ],
+      "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/time"
+    },
+    {
+      "id": "files",
+      "name": "Your files",
+      "description": "Read and organise files in a folder of your server (documents, notes, exports).",
+      "category": "Everyday",
+      "type": "local",
+      "runtime": "npx",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "{{folder}}"],
+      "inputs": [
+        {
+          "key": "folder",
+          "label": "Folder Mav may use",
+          "placeholder": "/home/you/Documents",
+          "required": true,
+          "help": "Mav can read and write only inside this folder."
+        }
+      ],
+      "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem"
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "description": "Search, read and update your Notion pages and databases.",
+      "category": "Notes & tasks",
+      "type": "local",
+      "runtime": "npx",
+      "command": ["npx", "-y", "@notionhq/notion-mcp-server"],
+      "environment": { "NOTION_TOKEN": "{{token}}" },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Notion integration token",
+          "placeholder": "ntn_…",
+          "secret": true,
+          "required": true,
+          "help": "Create an internal integration, then share the pages Mav may use with it.",
+          "link": "https://www.notion.so/profile/integrations"
+        }
+      ],
+      "docs": "https://github.com/makenotion/notion-mcp-server"
+    },
+    {
+      "id": "home-assistant",
+      "name": "Home Assistant",
+      "description": "Ask about and control your smart home: lights, heating, sensors.",
+      "category": "Home",
+      "type": "remote",
+      "url": "{{base_url}}/api/mcp",
+      "headers": { "Authorization": "Bearer {{token}}" },
+      "inputs": [
+        {
+          "key": "base_url",
+          "label": "Home Assistant address",
+          "placeholder": "http://homeassistant.local:8123",
+          "required": true
+        },
+        {
+          "key": "token",
+          "label": "Long-lived access token",
+          "secret": true,
+          "required": true,
+          "help": "Profile → Security → Long-lived access tokens."
+        }
+      ],
+      "note": "Enable the “Model Context Protocol Server” integration in Home Assistant first.",
+      "docs": "https://www.home-assistant.io/integrations/mcp_server/"
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "description": "Your repositories, issues and pull requests.",
+      "category": "Work",
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer {{token}}" },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "GitHub personal access token",
+          "placeholder": "github_pat_…",
+          "secret": true,
+          "required": true,
+          "link": "https://github.com/settings/personal-access-tokens"
+        }
+      ],
+      "docs": "https://github.com/github/github-mcp-server"
+    }
+  ]
+}

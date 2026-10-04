@@ -1464,6 +1464,7 @@ function renderList(items) {
 function renderStatus(st) {
   state.status = st;
   if (!st) return;
+  renderPending(st.pending || []);
   $("#onboard").hidden = !(st.mode === "live" && st.provider_configured === false);
   const dot = $("#engineChipDot");
   dot.className = "dot " + (st.mode !== "live" ? "warn" : st.agent_online ? "ok" : "off");
@@ -2021,7 +2022,7 @@ function openSettingsTab(tab) {
   if (!$(`#spanel-${tab}`)) tab = "model";
   $$("[data-stab]").forEach((t) => t.classList.toggle("is-active", t.dataset.stab === tab));
   $$(".spanel").forEach((p) => p.classList.toggle("is-active", p.id === `spanel-${tab}`));
-  ({ model: loadProvider, helpers: loadAgentFiles, instructions: loadInstructions, connections: loadMcp, general: loadAdvanced }[tab] || (() => {}))();
+  ({ model: loadProvider, helpers: loadAgentFiles, instructions: loadInstructions, connections: loadMcp, general: () => { loadAdvanced(); checkVersion(); } }[tab] || (() => {}))();
 }
 $$("[data-stab]").forEach((t) =>
   t.addEventListener("click", () => {
@@ -2036,6 +2037,20 @@ function setStatus(id, text, kind) {
   el.className = "status-text" + (kind ? " is-" + kind : "");
   if (kind === "ok") setTimeout(() => (el.textContent = ""), 2500);
 }
+
+/* ---- "Restart to apply" bar ---- */
+function renderPending(list) {
+  const bar = $("#pendingBar");
+  if (!list.length || !LIVE) {
+    bar.hidden = true;
+    return;
+  }
+  const names = list.map((x) => x.toLowerCase());
+  const what = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  $("#pendingText").textContent = `Your changes to ${what} are saved — restart the assistant to apply them.`;
+  bar.hidden = false;
+}
+$("#pendingRestart").addEventListener("click", () => restartAssistant());
 
 /* ---- Restarting the assistant (applies settings changes) ---- */
 async function waitForAssistant(label = "Restarting the assistant…") {
@@ -2060,8 +2075,9 @@ async function waitForAssistant(label = "Restarting the assistant…") {
 }
 async function restartAssistant() {
   if (!needLive()) return;
-  const btn = $("#engineRestart");
-  btn.disabled = true;
+  const btns = [$("#engineRestart"), $("#pendingRestart")];
+  btns.forEach((b) => (b.disabled = true));
+  $("#pendingRestart").textContent = "Restarting…";
   try {
     const r = await api.post("config/restart", {});
     if (!r.ok) throw new Error(r.error || "restart failed");
@@ -2069,9 +2085,16 @@ async function restartAssistant() {
   } catch (e) {
     toast(`Restart failed: ${e.message}`, { error: true });
   }
-  btn.disabled = false;
+  btns.forEach((b) => (b.disabled = false));
+  $("#pendingRestart").textContent = "Restart assistant";
+  refreshStatus();
 }
-const restartAction = { label: "Apply now", run: () => restartAssistant() };
+const restartAction = { label: "Restart now", run: () => restartAssistant() };
+/* After a change that needs a restart: confirm it, and show the pending bar. */
+function changed(msg) {
+  toast(msg);
+  refreshStatus();
+}
 
 /* ---- Model ---- */
 let PROV = { presets: [], current: {}, sel: null };
@@ -2171,7 +2194,10 @@ $("#providerForm").addEventListener("submit", async (e) => {
     toast(`Model set: ${r.ref.split("/").slice(1).join("/")}.`);
     await loadProvider();
     if (r.restart && r.restart.ok) await waitForAssistant("Applying…");
-    else if (r.restart) toast(`Saved, but the restart failed: ${r.restart.error}`, { error: true, action: restartAction });
+    else if (r.restart) {
+      toast(`Saved, but the restart failed: ${r.restart.error}`, { error: true, action: restartAction });
+      refreshStatus();
+    }
   } catch (err) {
     toast(err.message, { error: true });
   }
@@ -2275,7 +2301,7 @@ async function editAgent(name) {
       run: async () => {
         if (!(await confirmDialog(`Delete “${agentDisplay(name)}”?`, "Chats with it are kept.", "Delete"))) return false;
         await api.post("config/agent-file/delete", { name }).catch(() => {});
-        toast("Helper deleted.", { action: restartAction });
+        changed("Helper deleted.");
         loadAgentFiles();
       },
     });
@@ -2299,7 +2325,7 @@ async function editAgent(name) {
       btn.disabled = true;
       try {
         await api.post("config/agent-file", { name: nm, text: out });
-        toast(isNew ? `“${agentDisplay(nm)}” created. Apply to start using it.` : "Saved. Apply to use the new version.", { action: restartAction });
+        changed(isNew ? `“${agentDisplay(nm)}” created.` : "Helper saved.");
         loadAgentFiles();
         return true;
       } catch (e) {
@@ -2330,7 +2356,7 @@ $("#agentsSave").addEventListener("click", async () => {
   try {
     await api.post("config/agents", { text: $("#agentsEditor").value });
     setStatus("agentsStatus", "saved", "ok");
-    toast("Saved. Apply to use it in new chats.", { action: restartAction });
+    changed("Custom instructions saved.");
   } catch (_) {
     setStatus("agentsStatus", "save failed", "err");
   }
@@ -2356,6 +2382,88 @@ async function loadMcp() {
   }
   renderMcp();
 }
+let CATALOG = { items: [], runtimes: {} };
+async function loadCatalog() {
+  if (!LIVE) return renderCatalog();
+  try {
+    CATALOG = await api.get("config/mcp/catalog");
+  } catch (_) {}
+  renderCatalog();
+}
+const CAT_ICON = { Web: "globe", Everyday: "clock", "Notes & tasks": "edit", Home: "home", Work: "tool" };
+function renderCatalog() {
+  const items = CATALOG.items || [];
+  $("#mcpCatalog").innerHTML = items
+    .map(
+      (it) => `<button class="cat-item ${it.installed ? "is-added" : ""}" data-cat="${esc(it.id)}">
+        <span class="cm-icon sm">${I(CAT_ICON[it.category] || "plug")}</span>
+        <span class="cat-text"><strong>${esc(it.name)}</strong><span>${esc(it.description)}</span></span>
+        <span class="badge ${it.installed ? "ok" : ""}">${it.installed ? "added" : it.ready ? "add" : "needs " + esc(it.runtime === "uvx" ? "uv" : "Node.js")}</span>
+      </button>`,
+    )
+    .join("");
+  const missing = Object.entries(CATALOG.runtimes || {}).filter(([, ok]) => !ok).map(([r]) => r);
+  $("#runtimeHint").innerHTML = missing.length
+    ? `Some connections need ${missing.map((r) => (r === "npx" ? "<strong>Node.js</strong> (<code>sudo apt install nodejs npm</code>)" : "<strong>uv</strong> (<code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>)")).join(" and ")} on your server.`
+    : "";
+}
+$("#mcpCatalog").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cat]");
+  if (!b) return;
+  const it = (CATALOG.items || []).find((x) => x.id === b.dataset.cat);
+  if (it) addFromCatalog(it);
+});
+function addFromCatalog(it) {
+  const form = document.createElement("form");
+  form.className = "form";
+  const tz = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch (_) {
+      return "";
+    }
+  })();
+  form.innerHTML =
+    `<p>${esc(it.description)}</p>` +
+    (it.note ? `<div class="onboard soft"><span>${esc(it.note)}</span></div>` : "") +
+    (it.inputs || [])
+      .map(
+        (inp) => `<div class="field"><label>${esc(inp.label)}</label>
+          <input name="${esc(inp.key)}" ${inp.secret ? 'type="password" autocomplete="new-password"' : ""} placeholder="${esc(inp.placeholder || "")}" value="${esc(inp.default_from === "browser_timezone" ? tz : "")}">
+          ${inp.help || inp.link ? `<small>${esc(inp.help || "")} ${inp.link ? `<a href="${esc(inp.link)}" target="_blank" rel="noopener">Get it here ↗</a>` : ""}</small>` : ""}</div>`,
+      )
+      .join("") +
+    (!it.ready ? `<p class="status-text is-err">This one needs ${it.runtime === "uvx" ? "uv" : "Node.js"} on your server — see the hint below the list.</p>` : "") +
+    (it.docs ? `<small><a href="${esc(it.docs)}" target="_blank" rel="noopener">How it works ↗</a></small>` : "");
+  form.addEventListener("submit", (e) => e.preventDefault());
+  modal.open({
+    title: it.installed ? `${it.name} (already added)` : `Add ${it.name}`,
+    body: form,
+    actions: [
+      { label: "Cancel" },
+      {
+        label: it.installed ? "Replace" : "Add",
+        kind: "btn-primary",
+        run: async (btn) => {
+          if (!needLive()) return false;
+          const values = Object.fromEntries(new FormData(form).entries());
+          btn.disabled = true;
+          try {
+            await api.post("config/mcp/install", { id: it.id, values });
+            changed(`${it.name} added.`);
+            loadMcp();
+            return true;
+          } catch (e) {
+            btn.disabled = false;
+            toast(e.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+}
+
 function renderMcp() {
   $("#mcpEditor").value = JSON.stringify(MCP, null, 2);
   const names = Object.keys(MCP);
@@ -2373,7 +2481,8 @@ function renderMcp() {
             <button class="btn btn-ghost btn-sm danger" data-mcp-del="${esc(n)}">${I("trash")} Remove</button></div></div>`;
         })
         .join("")
-    : `<div class="empty-state"><strong>No connection yet</strong>Connections let Mav use other apps — your calendar, notes, files or smart home — through the MCP standard.</div>`;
+    : `<div class="empty">None yet — pick one below.</div>`;
+  loadCatalog();
 }
 async function saveMcp(next, msg = "Saved.") {
   if (!needLive()) return false;
@@ -2383,7 +2492,7 @@ async function saveMcp(next, msg = "Saved.") {
     MCP = next;
     renderMcp();
     setStatus("mcpStatus", "saved", "ok");
-    toast(`${msg} Apply to connect.`, { action: restartAction });
+    changed(msg);
     return true;
   } catch (e) {
     setStatus("mcpStatus", "save failed", "err");
@@ -2488,6 +2597,97 @@ $("#mcpSave").addEventListener("click", () => {
   }
   saveMcp(next);
 });
+
+/* ---- Version & updates ---- */
+async function checkVersion(force = false) {
+  if (!LIVE) return;
+  let v;
+  try {
+    v = await api.get(`version${force ? "?refresh=1" : ""}`);
+  } catch (_) {
+    return;
+  }
+  state.version = v;
+  $("#versionText").textContent =
+    `Mav ${v.installed}` + (v.update_available ? ` — ${v.latest} is available` : v.latest ? " — up to date" : "");
+  $("#updatePill").hidden = !v.update_available && !v.updating;
+  $("#updatePillText").textContent = v.updating ? "Updating…" : `Update to ${v.latest}`;
+  if (force && !v.update_available) toast(v.latest ? `You have the latest version (${v.installed}).` : "Could not check for updates right now.");
+  return v;
+}
+$("#versionCheck").addEventListener("click", async () => {
+  const v = await checkVersion(true);
+  if (v && v.update_available) openUpdate();
+});
+$("#updatePill").addEventListener("click", () => openUpdate());
+
+function openUpdate() {
+  const v = state.version || {};
+  if (v.updating) return followUpdate();
+  modal.open({
+    title: `Update to ${v.latest}`,
+    body: `<p>You have <strong>${esc(v.installed)}</strong>. The update keeps your chats, memory, routines and settings; Mav is unavailable for a minute or two while it installs.</p>
+      ${v.notes ? `<h3 class="sub">What's new</h3><div class="bubble release-notes">${mdToHtml(v.notes)}</div>` : ""}
+      ${v.release_url ? `<small><a href="${esc(v.release_url)}" target="_blank" rel="noopener">Release page ↗</a></small>` : ""}`,
+    actions: [
+      { label: "Later" },
+      {
+        label: "Update now",
+        kind: "btn-primary",
+        run: async (btn) => {
+          btn.disabled = true;
+          try {
+            await api.post("update", {});
+          } catch (e) {
+            btn.disabled = false;
+            toast(e.message, { error: true });
+            return false;
+          }
+          setTimeout(followUpdate, 50);
+          return true;
+        },
+      },
+    ],
+  });
+}
+
+/* Follow the update: the server goes away while it reinstalls, then comes
+   back with the new version — then reload the page. */
+async function followUpdate() {
+  const from = (state.version && state.version.installed) || "";
+  const body = document.createElement("div");
+  body.innerHTML = `<div class="thinking-row">${dots()} <span id="updStep">Starting the update…</span></div>
+    <p class="hint" style="margin-top:.8rem">You can keep this page open; it reloads by itself when Mav is back.</p>`;
+  modal.open({ title: "Updating Mav", body, actions: [{ label: "Hide" }] });
+  $("#updatePill").hidden = false;
+  $("#updatePillText").textContent = "Updating…";
+  let seenDown = false;
+  for (let i = 0; i < 200; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    let st = null;
+    try {
+      st = await api.get("update/status");
+    } catch (_) {
+      seenDown = true;
+      const el = $("#updStep");
+      if (el) el.textContent = "Installing — Mav restarts…";
+      continue;
+    }
+    const el = $("#updStep");
+    if (el && st.steps && st.steps.length) el.textContent = st.steps[st.steps.length - 1];
+    if (!st.running && (seenDown || st.installed !== from)) {
+      if (st.installed !== from) {
+        toast(`Mav updated to ${st.installed}. Reloading…`);
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        modal.close();
+        toast("The update did not complete — see Settings → General → Advanced, or run: mav logs install", { error: true });
+        checkVersion();
+      }
+      return;
+    }
+  }
+}
 
 /* ---- General → Advanced ---- */
 function renderEngine(e) {
@@ -2678,6 +2878,7 @@ const PAL_ACTIONS = [
   { text: "Create a helper", ico: "user", run: () => { go("settings", "helpers"); editAgent(null); } },
   { text: "Add a connection", ico: "plug", run: () => { go("settings", "connections"); editMcp(null); } },
   { text: "Restart assistant", ico: "power", run: () => restartAssistant() },
+  { text: "Check for updates", ico: "download", run: () => { go("settings", "general"); checkVersion(true).then((v) => v && v.update_available && openUpdate()); } },
   { text: "Toggle dark mode", ico: "moon", run: () => $("#themeToggle").click() },
   { text: "Keyboard shortcuts", ico: "key", run: () => showHelp() },
   { text: "Routines", ico: "arrow", run: () => go("routines") },
@@ -2886,7 +3087,7 @@ async function boot() {
   LIVE = true;
   document.body.dataset.mode = "live";
   renderStatus(status);
-  await Promise.allSettled([loadAgentsList(), loadConvs(), loadRoutines()]);
+  await Promise.allSettled([loadAgentsList(), loadConvs(), loadRoutines(), checkVersion()]);
   route();
   if (!state.chat.id) renderThread();
   const notif = new URLSearchParams(location.search).get("notif");
@@ -2917,6 +3118,9 @@ function enterDemo() {
   route();
   if (!state.chat.id) renderThread();
 }
+
+/* Look for a new version every 6 hours. */
+setInterval(() => LIVE && !document.hidden && checkVersion(), 6 * 3600e3);
 
 /* Periodic refresh (paused while the tab is hidden). */
 setInterval(() => {
