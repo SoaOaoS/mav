@@ -136,12 +136,15 @@ sudo ./install.sh --yes        # unattended, see below</code></pre>
 
           <section id="update">
             <h2>Updating</h2>
-            <pre><code>mav update        # new version, keep everything
+            <pre><code>mav update        # download the latest version, keep everything
+mav update --local  # reinstall the local copy (offline)
 mav reconfigure   # Update / Change the model / Reconfigure / Uninstall
 mav restart · mav status · mav logs</code></pre>
             <div class="docs-note">
               <strong>Coming from the Telegram version?</strong> Telegram
-              support was removed. <code>mav update</code> replaces the
+              support was removed. Older versions of <code>mav update</code>
+              did not download anything, so run the one-line installer once and
+              choose <em>Update</em>. It replaces the
               <code>mav-bot</code> service with <code>mav-worker</code> and keeps
               your memory (now in Postgres — the old <code>memory.json</code> is
               imported automatically), your routines, your model and your

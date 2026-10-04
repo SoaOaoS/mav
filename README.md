@@ -67,7 +67,7 @@ prints, and say hello.
 ## Manage it
 
 ```bash
-mav update        # new version, keep your settings
+mav update        # download the latest version, keep your settings
 mav reconfigure   # change the model, or re-run the setup
 mav restart       # restart the assistant
 mav status        # services
@@ -112,7 +112,11 @@ to the model provider you chose — or nothing at all with a local Ollama.
 ## Upgrading from the Telegram version
 
 Telegram support was removed: Mav is now a web app (installable on your phone)
-with push notifications. `mav update` migrates for you — it replaces the
+with push notifications. Older versions of `mav update` only reinstalled the
+local copy, so run the one-line installer once
+(`curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`)
+and choose **Update**; from then on `mav update` downloads new versions by
+itself. The update migrates for you — it replaces the
 `mav-bot` service with `mav-worker`, keeps your memory (it now lives in
 Postgres; the old `memory.json` is imported automatically), your routines, your
 model and your settings. Helper files you already had in
