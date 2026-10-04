@@ -12,8 +12,15 @@ CREATE TABLE IF NOT EXISTS conversations (
     answer      text    NOT NULL,
     ts          bigint  NOT NULL
 );
+-- source = where the exchange happened (dashboard…), agent = the helper that answered.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS source text;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS agent  text;
+-- Full-text index used by memory recall (bot/ocmemory.py).
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS tsv tsvector
+    GENERATED ALWAYS AS (to_tsvector('simple', question || ' ' || answer)) STORED;
 CREATE INDEX IF NOT EXISTS idx_conv_chat ON conversations (chat_id);
 CREATE INDEX IF NOT EXISTS idx_conv_ts   ON conversations (ts);
+CREATE INDEX IF NOT EXISTS idx_conv_tsv  ON conversations USING gin (tsv);
 
 CREATE TABLE IF NOT EXISTS facts (
     id       bigserial PRIMARY KEY,
@@ -33,7 +40,7 @@ CREATE TABLE IF NOT EXISTS preferences (
     UNIQUE (chat_id, key)
 );
 
--- ---------------------------------------------------------------- veille
+-- ---------------------------------------------------------------- watch
 CREATE TABLE IF NOT EXISTS watch_items (
     id            bigserial PRIMARY KEY,
     chat_id       bigint  NOT NULL,
@@ -73,5 +80,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     channels   text[],
     delivered  boolean DEFAULT true
 );
+-- Where tapping the notification leads (e.g. the routine's chat).
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link text;
 CREATE INDEX IF NOT EXISTS notifications_ts_idx    ON notifications (ts DESC);
 CREATE INDEX IF NOT EXISTS notifications_dedup_idx ON notifications (dedup_key, ts DESC);
