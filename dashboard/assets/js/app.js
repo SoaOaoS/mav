@@ -812,11 +812,13 @@ function appendMessage(
         <div class="msg-tools"></div>
         <div class="msg-actions">
           <button class="icon-btn" data-act="copy" title="Copy">${I("copy")}</button>
+          <button class="icon-btn" data-act="download" title="Download as Markdown">${I("download")}</button>
           <button class="icon-btn" data-act="retry" title="Regenerate">${I("refresh")}</button>
           <button class="icon-btn" data-act="speak" title="Read aloud">${I("volume")}</button>
         </div>
       </div>`;
     el.querySelector(".bubble").innerHTML = mdToHtml(m.text || "");
+    hydrateCharts(el);
   }
   el._msg = m;
   t.appendChild(el);
@@ -853,12 +855,26 @@ messagesEl.addEventListener("click", async (e) => {
     setTimeout(() => (copy.innerHTML = `${I("copy")} Copy`), 1500);
     return;
   }
+  const refresh = e.target.closest(".chart-refresh");
+  if (refresh) {
+    const fig = refresh.closest(".md-chart");
+    if (fig) {
+      fig.removeAttribute("data-loaded");
+      fig.querySelector(".md-chart-plot").innerHTML =
+        '<div class="md-chart-load">Loading chart…</div>';
+      fig.dataset.loaded = "1";
+      loadChart(fig);
+    }
+    return;
+  }
   const act = e.target.closest("[data-act]");
   if (act) {
     const msg = act.closest(".msg")._msg;
     if (act.dataset.act === "copy") {
       await copyText(msg.text);
       toast("Copied.");
+    } else if (act.dataset.act === "download") {
+      downloadMessage(msg);
     } else if (act.dataset.act === "retry") {
       const lastUser = [...state.chat.messages]
         .reverse()
@@ -893,6 +909,33 @@ async function copyText(text) {
     document.execCommand("copy");
     ta.remove();
   }
+}
+
+/* Save any answer as a local Markdown file (works standalone, no server). */
+function safeFileName(s) {
+  return (
+    String(s || "mav")
+      .replace(/[^\w\-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "mav"
+  );
+}
+function downloadMessage(msg) {
+  const text = msg && msg.text ? msg.text : "";
+  if (!text) return;
+  const stamp = new Date((msg && msg.ts) || Date.now())
+    .toISOString()
+    .slice(0, 10);
+  const base = safeFileName((String(text).split("\n")[0] || "").slice(0, 50));
+  const blob = new Blob([text + "\n"], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${stamp}-${base}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 function openLightbox(src) {
@@ -1478,6 +1521,7 @@ async function send(raw, opts = {}) {
       } else {
         const stick = nearBottom();
         el.querySelector(".bubble").innerHTML = mdToHtml(reply.text);
+        hydrateCharts(el);
         renderToolChips(el.querySelector(".msg-tools"), tools);
         if (stick) scrollToBottom(true);
       }
@@ -1693,6 +1737,107 @@ function renderTable(lines) {
     .join("");
   return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* ---- Rich directives: [[chart:SYMBOL:PERIOD]] and [[file:PATH]] ----
+   Rendered on a line of their own. The chart pulls /api/chart (Yahoo
+   proxy), the file becomes a download card to /api/download. */
+const CHART_PERIODS = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"];
+
+function chartBlock(spec) {
+  const parts = String(spec).split(":");
+  const sym = (parts[0] || "").trim();
+  let period = (parts[1] || "1mo").trim().toLowerCase();
+  if (!CHART_PERIODS.includes(period)) period = "1mo";
+  if (!sym) return "";
+  const uid = "ch" + Math.random().toString(36).slice(2, 9);
+  return `<figure class="md-chart" id="${uid}" data-symbol="${esc(sym)}" data-range="${esc(period)}">
+    <div class="md-chart-head"><span class="md-chart-name">${esc(sym)}</span><span class="md-chart-quote"></span></div>
+    <div class="md-chart-plot"><div class="md-chart-load">Loading chart…</div></div>
+    <figcaption class="md-chart-foot"><span class="md-chart-range"></span><button type="button" class="chart-refresh" title="Refresh">${I("refresh")}</button></figcaption>
+  </figure>`;
+}
+
+function fileCardHtml(raw) {
+  const name = String(raw).trim();
+  const base = name.split(/[\\/]/).pop() || name;
+  const ext = (base.match(/\.([a-z0-9]+)$/i) || [null, ""])[1].toLowerCase();
+  const url = "/api/download?path=" + encodeURIComponent(name);
+  return `<a class="md-file" href="${escapeHtml(url)}" download="${escapeHtml(base)}">
+    <span class="md-file-ico">${I("download")}</span>
+    <span class="md-file-main"><strong>${esc(base)}</strong><span>${ext ? ext.toUpperCase() + " · " : ""}Click to download</span></span>
+  </a>`;
+}
+
+function fmtChartNum(v, cur) {
+  if (v == null || isNaN(v)) return "—";
+  const abs = Math.abs(v);
+  const digits = abs >= 1000 ? 0 : abs >= 1 ? 2 : 4;
+  const n = Number(v).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+  return cur ? `${n} ${cur}` : n;
+}
+
+function sparkSvg(closes, positive, uid) {
+  const w = 640,
+    h = 180,
+    pad = 10;
+  const n = closes.length;
+  if (n < 2) return "";
+  let lo = Math.min(...closes),
+    hi = Math.max(...closes);
+  if (hi === lo) hi = lo + 1;
+  const x = (i) => pad + (i * (w - 2 * pad)) / (n - 1);
+  const y = (v) => h - pad - ((v - lo) / (hi - lo)) * (h - 2 * pad);
+  const pts = closes.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const line = "M" + pts.join(" L");
+  const area = `${line} L${x(n - 1).toFixed(1)},${(h - pad).toFixed(1)} L${x(0).toFixed(1)},${(h - pad).toFixed(1)} Z`;
+  const col = positive ? "var(--ok)" : "var(--danger)";
+  const gid = (uid || "ch") + "g";
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="md-chart-svg" aria-hidden="true">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${col}" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+async function loadChart(fig) {
+  const sym = fig.dataset.symbol,
+    range = fig.dataset.range;
+  const plot = fig.querySelector(".md-chart-plot");
+  const quote = fig.querySelector(".md-chart-quote");
+  const foot = fig.querySelector(".md-chart-range");
+  try {
+    const r = await fetch(
+      `/api/chart?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!r.ok) throw new Error("no data");
+    const d = await r.json();
+    if (!d.series || d.series.length < 2) throw new Error("no series");
+    const up = (d.range_pct || 0) >= 0;
+    plot.innerHTML = sparkSvg(d.series, up, fig.id);
+    const chg = d.range_pct != null ? d.range_pct : 0;
+    quote.innerHTML = `<span class="md-chart-price">${esc(fmtChartNum(d.price, d.currency))}</span><span class="md-chart-chg ${up ? "up" : "down"}">${up ? "+" : ""}${chg.toFixed(2)}%</span>`;
+    fig.querySelector(".md-chart-name").textContent = d.name || sym;
+    foot.textContent = `${range} · ${d.symbol || sym}`;
+    fig.classList.toggle("is-up", up);
+    fig.classList.toggle("is-down", !up);
+  } catch (_) {
+    plot.innerHTML = `<div class="md-chart-load">Chart unavailable</div>`;
+  }
+}
+
+function hydrateCharts(root = document) {
+  $$(".md-chart:not([data-loaded])", root).forEach((fig) => {
+    fig.dataset.loaded = "1";
+    loadChart(fig);
+  });
+}
+
 function inline(s) {
   let t = escapeHtml(s);
   t = t.replace(/`([^`\n]+)`/g, '<code class="md-inline">$1</code>');
@@ -1765,6 +1910,20 @@ function mdToHtml(src) {
       if (m) {
         flush();
         out += codeBlocks[Number(m[1])] || "";
+        i++;
+        continue;
+      }
+      m = line.match(/^\[\[chart:([^\]\s]+)\]\]$/i);
+      if (m) {
+        flush();
+        out += chartBlock(m[1]);
+        i++;
+        continue;
+      }
+      m = line.match(/^\[\[(?:file|download):(.+?)\]\]$/i);
+      if (m) {
+        flush();
+        out += fileCardHtml(m[1].trim());
         i++;
         continue;
       }

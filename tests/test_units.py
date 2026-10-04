@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 
+import mav_api  # noqa: E402
 import mav_provider  # noqa: E402
 import ocdebates  # noqa: E402
 import ocjobs  # noqa: E402
@@ -193,6 +194,96 @@ class Catalog(unittest.TestCase):
             for v in json.dumps({k: it.get(k) for k in ("command", "url", "headers", "environment")}).split("{{")[1:]:
                 used.add(v.split("}}")[0])
             self.assertEqual(used, keys, it["id"])
+
+
+class ChartData(unittest.TestCase):
+    def test_rejects_bad_symbol(self):
+        for bad in ("", "SPY; rm -rf", "a b", "x" * 40):
+            with self.assertRaises(ValueError):
+                mav_api.chart_data(bad)
+
+    def test_shape_and_cache(self):
+        calls = []
+
+        def fake(sym, rng):
+            calls.append((sym, rng))
+            return [10.0, 11.0, 12.0], {"shortName": "Test", "currency": "USD"}
+
+        orig = mav_api._yahoo_closes
+        mav_api._chart_cache.clear()
+        try:
+            mav_api._yahoo_closes = fake
+            out = mav_api.chart_data("SPY", "1mo")
+            self.assertEqual(out["symbol"], "SPY")
+            self.assertEqual(out["price"], 12.0)
+            self.assertEqual(out["name"], "Test")
+            self.assertAlmostEqual(out["range_pct"], 20.0)
+            self.assertAlmostEqual(out["change_pct"], (12 - 11) / 11 * 100)
+            self.assertEqual(len(out["series"]), 3)
+            mav_api.chart_data("SPY", "1mo")
+            self.assertEqual(len(calls), 1)  # second hit served from cache
+            mav_api.chart_data("SPY", "5d")
+            self.assertEqual(len(calls), 2)
+        finally:
+            mav_api._yahoo_closes = orig
+            mav_api._chart_cache.clear()
+
+    def test_bad_range_falls_back(self):
+        orig = mav_api._yahoo_closes
+        mav_api._chart_cache.clear()
+        seen = {}
+        try:
+            mav_api._yahoo_closes = lambda s, r: (seen.setdefault("r", r), [1.0, 2.0], {})[1:]
+            mav_api.chart_data("SPY", "bogus")
+            self.assertEqual(seen["r"], "1mo")
+        finally:
+            mav_api._yahoo_closes = orig
+            mav_api._chart_cache.clear()
+
+
+class Downloads(unittest.TestCase):
+    # /tmp/opencode is one of the allowed asset roots in a normal install.
+    def setUp(self):
+        root = Path("/tmp/opencode")
+        if root not in mav_api.ASSET_ROOTS:
+            mav_api.ASSET_ROOTS.append(root)
+        root.mkdir(parents=True, exist_ok=True)
+
+    def test_extension_gate(self):
+        p = Path("/tmp/opencode/mav-test-notes.exe")
+        p.write_text("x")
+        try:
+            self.assertIsNone(mav_api.download_response(str(p)))
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_serves_allowed_file(self):
+        p = Path("/tmp/opencode/mav-test-rapport.md")
+        p.write_text("# Salut")
+        try:
+            data, mime, name = mav_api.download_response(str(p))
+            self.assertEqual(data, b"# Salut")
+            self.assertTrue(mime.startswith("text/markdown"))
+            self.assertEqual(name, "mav-test-rapport.md")
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_bare_name_is_resolved(self):
+        p = Path("/tmp/opencode/mav-test-bare.csv")
+        p.write_text("a,b\n1,2\n")
+        try:
+            data, _mime, name = mav_api.download_response("mav-test-bare.csv")
+            self.assertEqual(name, "mav-test-bare.csv")
+            self.assertIn(b"a,b", data)
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_outside_root_blocked(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "secret.md"
+            p.write_text("nope")
+            self.assertIsNone(mav_api.download_response(str(p)))
+        self.assertIsNone(mav_api.resolve_download("/etc/passwd"))
 
 
 if __name__ == "__main__":
