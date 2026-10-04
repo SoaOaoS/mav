@@ -799,13 +799,33 @@ TASK_SOFT=1 task "Giving ${A[INSTALL_USER]} access to Docker" usermod -aG docker
 
 install_engine "${A[INSTALL_HOME]}" "${A[INSTALL_USER]}"
 
+# The shipped bot/jobs.json is an empty placeholder. Copying it over an
+# existing file wiped every routine on update, so snapshot the user's routines
+# before the copy and restore them after. (Kept as small helpers so the
+# installer test can exercise them without touching the machine.)
+snapshot_file() { [[ -f "$1" ]] && cat "$1" || true; }
+restore_file() { [[ -n "$2" ]] && printf '%s' "$2" >"$1" || true; }
+
 copy_files() {
   mkdir -p "$BOT_DIR" "$DASH_DIR" "$(dirname "$COMPOSE_FILE")"
+  # Never overwrite the user's routines: the shipped bot/jobs.json is an empty
+  # placeholder, so copying it over an existing file would wipe every routine.
+  # (The dashboard's data/jobs.json is a mirror and gets refreshed afterwards.)
+  local keep_jobs keep_jobs_state
+  keep_jobs="$(snapshot_file "$BOT_DIR/jobs.json")"
+  keep_jobs_state="$(snapshot_file "$BOT_DIR/jobs_state.json")"
   cp -a "$SCRIPT_DIR/bot/." "$BOT_DIR/"
   cp -a "$SCRIPT_DIR/dashboard/." "$DASH_DIR/"
+  restore_file "$BOT_DIR/jobs.json" "$keep_jobs"
+  restore_file "$BOT_DIR/jobs_state.json" "$keep_jobs_state"
   # Files from the former Telegram bridge.
   rm -f "$BOT_DIR/opencode_bot.py" "$BOT_DIR/ocformat.py" "$BOT_DIR/sessions.json"
   [[ -f "$BOT_DIR/jobs.json" ]] || echo "[]" >"$BOT_DIR/jobs.json"
+  # Keep the dashboard's mirror in sync with the file the worker actually reads.
+  if [[ -f "$BOT_DIR/jobs.json" ]]; then
+    mkdir -p "$DASH_DIR/data"
+    cp -f "$BOT_DIR/jobs.json" "$DASH_DIR/data/jobs.json"
+  fi
   chown -R "$(owner)" "$BOT_DIR" "$DASH_DIR" "${A[INSTALL_HOME]}/workspace"
 
   # Persistent copy of the installer, for `mav update`.
