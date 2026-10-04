@@ -1,29 +1,29 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="description" content="Mav — your personal AI companion" />
+    <meta name="description" content="Mav — your personal assistant" />
     <title>Mav</title>
+
+    <!-- Apply the saved theme before first paint (no flash). -->
+    <script>
+      try {
+        var t = localStorage.getItem("mav-theme");
+        if (t === "light" || t === "dark")
+          document.documentElement.dataset.theme = t;
+      } catch (_) {}
+    </script>
 
     <!-- PWA -->
     <link rel="manifest" href="manifest.webmanifest" />
-    <meta name="theme-color" content="#2f6f5e" />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="192x192"
-      href="icons/icon-192.png"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="512x512"
-      href="icons/icon-512.png"
-    />
+    <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -33,502 +33,426 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="assets/css/style.css" />
   </head>
   <body>
-    <!-- ============ MOBILE HEADER ============ -->
-    <header class="mobile-top" id="mobileTop">
-      <div class="mobile-top-left">
-        <div class="orb small" aria-hidden="true"></div>
-        <span class="mobile-title" id="mobileTitle">Mav</span>
-      </div>
-      <div class="mobile-top-actions">
-        <button class="mobile-icon" id="mobileNotify" title="Notifications">
-          <span class="nav-ico" data-ico="bell"></span>
-        </button>
-        <button
-          class="mobile-icon"
-          id="mobileNotifyTest"
-          title="Tester les notifications"
-        >
-          <span class="nav-ico" data-ico="bolt"></span>
-        </button>
-        <button class="mobile-icon" id="mobileNew" title="New conversation">
-          <span class="nav-ico" data-ico="plus"></span>
-        </button>
-        <button class="mobile-icon" id="mobileSearch" title="Rechercher">
-          <span class="nav-ico" data-ico="search"></span>
-        </button>
-      </div>
+    <!-- ============ MOBILE TOP BAR ============ -->
+    <header class="topbar">
+      <button class="icon-btn" id="menuBtn" aria-label="Open menu">
+        <i data-i="menu"></i>
+      </button>
+      <span class="topbar-title" id="topbarTitle">Mav</span>
+      <button class="icon-btn" id="topbarNew" aria-label="New chat">
+        <i data-i="edit"></i>
+      </button>
     </header>
 
     <div class="app">
       <!-- ============ SIDEBAR ============ -->
-      <aside class="sidebar">
-        <div class="profile">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
           <div class="orb" aria-hidden="true"></div>
-          <div class="profile-text">
-            <div class="profile-name">Mav</div>
-            <div class="profile-tag">Your AI companion</div>
-          </div>
+          <span class="brand-name">Mav</span>
+          <button class="icon-btn" id="searchOpen" title="Search (⌘K)" aria-label="Search">
+            <i data-i="search"></i>
+          </button>
+          <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Close menu">
+            <i data-i="x"></i>
+          </button>
         </div>
 
-        <button class="side-search" id="searchOpen">
-          <span class="nav-ico" data-ico="search"></span>
-          <span>Rechercher…</span>
-          <kbd>⌘K</kbd>
+        <button class="btn btn-primary new-chat" id="newChat">
+          <i data-i="edit"></i> New chat
+          <kbd class="kbd-hint">⌥N</kbd>
         </button>
 
-        <nav class="nav">
-          <button class="nav-item is-active" data-view="home">
-            <span class="nav-ico" data-ico="home"></span> Home
-          </button>
-          <button class="nav-item" data-view="chat">
-            <span class="nav-ico" data-ico="chat"></span> Conversations
-          </button>
-          <button class="nav-item" data-view="jobs">
-            <span class="nav-ico" data-ico="bolt"></span> Automations
-            <span class="nav-count" id="navJobsCount">3</span>
+        <div class="recents">
+          <div class="recents-head">
+            <span>Chats</span>
+            <input type="search" id="convFilter" placeholder="Filter" aria-label="Filter chats" />
+          </div>
+          <div class="conv-list" id="convList"></div>
+        </div>
+
+        <nav class="nav" aria-label="Main">
+          <button class="nav-item" data-view="routines">
+            <i data-i="bolt"></i> Routines
+            <span class="nav-count" id="navRoutinesCount"></span>
           </button>
           <button class="nav-item" data-view="memory">
-            <span class="nav-ico" data-ico="heart"></span> Memories
-          </button>
-          <button class="nav-item" data-view="watch">
-            <span class="nav-ico" data-ico="eye"></span> Watch
-          </button>
-          <button class="nav-item" data-view="system">
-            <span class="nav-ico" data-ico="cpu"></span> Infra
+            <i data-i="brain"></i> Memory
           </button>
           <button class="nav-item" data-view="settings">
-            <span class="nav-ico" data-ico="sliders"></span> Settings
+            <i data-i="settings"></i> Settings
           </button>
         </nav>
 
-        <div class="side-block">
-          <div class="side-title">Connexions</div>
-          <ul class="conn" id="connList"></ul>
-        </div>
-
-        <div class="side-tools">
-          <button class="side-tool" id="notifyToggle" title="Notifications">
-            <span class="nav-ico" data-ico="bell"></span>
-          </button>
-          <button class="side-tool" id="voiceToggle" title="Lecture vocale">
-            <span class="nav-ico" data-ico="speaker"></span>
-          </button>
-        </div>
-
         <div class="side-foot">
-          <span class="dot-online"></span> Disponible ·
-          <span id="clock">--:--</span>
+          <button class="engine-chip" id="engineChip" title="Assistant status and model">
+            <span class="dot" id="engineChipDot"></span>
+            <span class="engine-chip-text" id="engineChipText">connecting…</span>
+          </button>
+          <div class="side-tools">
+            <button class="icon-btn" id="notifyToggle" title="Notifications">
+              <i data-i="bell"></i>
+            </button>
+            <button class="icon-btn" id="themeToggle" title="Theme">
+              <i data-i="moon"></i>
+            </button>
+          </div>
         </div>
       </aside>
+      <div class="scrim" id="scrim" hidden></div>
 
       <!-- ============ CONTENT ============ -->
       <main class="content">
-        <!-- HOME -->
-        <section class="view is-active" id="view-home">
-          <header class="hello">
-            <h1 id="greeting">Hello</h1>
-            <p id="greetingSub">Good to see you. What are we doing today?</p>
-          </header>
-
-          <form class="composer composer-hero" id="heroForm" autocomplete="off">
-            <label class="attach" title="Attach a file">
-              <span class="nav-ico" data-ico="paperclip"></span>
-              <input type="file" id="heroFile" multiple hidden />
-            </label>
-            <input
-              type="text"
-              id="heroInput"
-              placeholder="Write to Mav… 'prepare a summary of my mail'"
-              aria-label="Message"
-            />
-            <button
-              type="button"
-              class="mic-btn"
-              id="heroMic"
-              aria-label="Dicter"
-            >
-              <span class="nav-ico" data-ico="mic"></span>
-            </button>
-            <button type="submit" class="send" aria-label="Send">
-              <span class="nav-ico" data-ico="send"></span>
-            </button>
-          </form>
-          <div class="chips" id="heroChips">
-            <button class="chip" data-cmd="status">
-              How is the system doing?
-            </button>
-            <button class="chip" data-cmd="automations">My automations</button>
-            <button class="chip" data-cmd="memories">
-              What do you remember?
-            </button>
-            <button class="chip" data-cmd="watch">Any alerts?</button>
-          </div>
-
-          <div class="stats" id="stats"></div>
-
-          <div class="cards two">
-            <section class="card">
-              <div class="card-head">
-                <h2>Today</h2>
-                <span class="card-sub">What I did for you</span>
+        <!-- ---------- CHAT (main screen; empty = new chat) ---------- -->
+        <section class="view view-chat is-active" id="view-chat">
+          <div class="chat is-empty" id="chat">
+            <header class="chat-head">
+              <div class="chat-title-wrap">
+                <h1 class="chat-title" id="chatTitle" title="Click to rename" tabindex="0">New chat</h1>
               </div>
-              <ul class="timeline" id="today"></ul>
-            </section>
-            <section class="card">
-              <div class="card-head">
-                <h2>Automations</h2>
-                <button class="link" data-goto="jobs">View all</button>
+              <div class="chat-actions">
+                <button type="button" class="agent-pill agent-pill-lg" id="chatAgent" title="Choose who you talk to"></button>
+                <button class="icon-btn" id="pinBtn" title="Pin"><i data-i="pin"></i></button>
+                <button class="icon-btn" id="summaryBtn" title="Summarise"><i data-i="sparkle"></i></button>
+                <button class="icon-btn" id="exportBtn" title="Download as Markdown"><i data-i="download"></i></button>
+                <button class="icon-btn" id="deleteChatBtn" title="Delete chat"><i data-i="trash"></i></button>
               </div>
-              <ul class="mini-jobs" id="homeJobs"></ul>
-            </section>
-          </div>
+            </header>
 
-          <section class="card job-results-card">
-            <div class="card-head">
-              <h2>Job results</h2>
-              <span class="card-sub">The latest generated reports</span>
-            </div>
-            <div class="job-results" id="jobResults"></div>
-          </section>
-        </section>
+            <div class="messages" id="messages" aria-live="polite"></div>
 
-        <!-- CHAT -->
-        <section class="view" id="view-chat">
-          <div class="chat-layout">
-            <aside class="conv-sidebar">
-              <button class="new-conv" id="newConv">
-                <span class="nav-ico" data-ico="plus"></span> New conversation
-              </button>
-              <div class="conv-list" id="convList"></div>
-            </aside>
-
-            <div class="card chat-card">
-              <div class="chat-head">
-                <div class="chat-head-left">
-                  <h2 id="chatTitle">New conversation</h2>
-                  <span class="chat-agent" id="chatAgentLabel"></span>
+            <div class="composer-wrap">
+              <div class="onboard" id="onboard" hidden>
+                <div>
+                  <strong>Connect a model to get started</strong>
+                  <span>Pick a provider and paste your key — it takes a minute.</span>
                 </div>
-                <div class="chat-head-actions">
-                  <button
-                    class="icon-btn"
-                    id="exportBtn"
-                    title="Exporter en markdown"
-                  >
-                    <span class="nav-ico" data-ico="download"></span>
-                  </button>
-                  <button class="icon-btn" id="summaryBtn" title="Summarize">
-                    <span class="nav-ico" data-ico="sparkle"></span>
-                  </button>
-                  <button class="icon-btn" id="renameBtn" title="Rename">
-                    <span class="nav-ico" data-ico="edit"></span>
-                  </button>
-                </div>
+                <button class="btn btn-primary btn-sm" data-goto="settings:model">Connect</button>
               </div>
-              <div class="messages" id="messages"></div>
-              <div class="typing" id="typing" hidden>
-                <span></span><span></span><span></span>
-              </div>
-              <form class="composer" id="chatForm" autocomplete="off">
-                <label class="attach" title="Attach a file">
-                  <span class="nav-ico" data-ico="paperclip"></span>
-                  <input type="file" id="chatFileInput" multiple hidden />
-                </label>
-                <input
-                  type="text"
-                  id="chatInput"
-                  placeholder="Write a message…"
-                  aria-label="Message"
-                />
-                <button
-                  type="button"
-                  class="mic-btn"
-                  id="chatMic"
-                  aria-label="Dicter"
-                >
-                  <span class="nav-ico" data-ico="mic"></span>
-                </button>
-                <button
-                  type="submit"
-                  class="send"
-                  id="sendBtn"
-                  aria-label="Send"
-                >
-                  <span class="nav-ico" data-ico="send"></span>
-                </button>
-                <button
-                  type="button"
-                  class="stop-btn"
-                  id="stopBtn"
-                  hidden
-                  aria-label="Stop"
-                >
-                  <span class="nav-ico" data-ico="stop"></span>
-                </button>
-              </form>
+              <div class="slash-menu" id="slashMenu" hidden></div>
               <div class="attachments" id="chatAttachments" hidden></div>
-              <div class="chips" id="chatChips">
-                <button class="chip" data-cmd="status">Status</button>
-                <button class="chip" data-cmd="automations">Automations</button>
-                <button class="chip" data-cmd="memories">Memories</button>
-                <button class="chip" data-cmd="watch">Watch</button>
-                <button class="chip" data-cmd="markets">Markets</button>
+              <form class="composer" id="chatForm" autocomplete="off">
+                <textarea id="chatInput" rows="1" placeholder="Ask Mav anything…" aria-label="Message"></textarea>
+                <div class="composer-bar">
+                  <label class="icon-btn" title="Attach a file">
+                    <i data-i="paperclip"></i>
+                    <input type="file" id="chatFileInput" multiple hidden />
+                  </label>
+                  <button type="button" class="agent-pill" id="composerAgent" title="Choose who you talk to"></button>
+                  <span class="composer-hint"><kbd>/</kbd> commands</span>
+                  <span class="grow"></span>
+                  <button type="button" class="icon-btn" id="chatMic" title="Dictate"><i data-i="mic"></i></button>
+                  <button type="submit" class="send" id="sendBtn" aria-label="Send"><i data-i="arrow-up"></i></button>
+                  <button type="button" class="send stop" id="stopBtn" hidden aria-label="Stop" title="Stop (Esc)"><i data-i="square"></i></button>
+                </div>
+              </form>
+              <p class="composer-foot">Mav can make mistakes. Check important information.</p>
+            </div>
+
+            <!-- Shown only on the new-chat screen -->
+            <div class="below" id="below">
+              <div class="suggest" id="suggestions">
+                <button class="chip" data-prompt="Help me plan my day. Ask me what I have on, then build a simple schedule.">
+                  <i data-i="calendar"></i> Plan my day
+                </button>
+                <button class="chip" data-prompt="Help me draft a message. Ask me who it's for and what I want to say.">
+                  <i data-i="edit"></i> Draft a message
+                </button>
+                <button class="chip" data-fill="Summarise this link: ">
+                  <i data-i="globe"></i> Summarise a link
+                </button>
+                <button class="chip" data-prompt="What do you remember about me?">
+                  <i data-i="brain"></i> What do you remember about me?
+                </button>
               </div>
+              <section class="inbox" id="inboxWrap" hidden>
+                <div class="inbox-head">
+                  <h2>For you</h2>
+                  <button class="link" data-goto="routines">Routines</button>
+                </div>
+                <ul class="inbox-list" id="inbox"></ul>
+              </section>
             </div>
           </div>
         </section>
 
-        <!-- JOBS -->
-        <section class="view" id="view-jobs">
-          <header class="view-head">
-            <h1>Automations</h1>
-            <p>What I do for you, without you having to ask.</p>
-          </header>
-          <div class="jobs" id="jobsList"></div>
+        <!-- ---------- ROUTINES + KEEP AN EYE ON ---------- -->
+        <section class="view" id="view-routines">
+          <div class="page">
+            <header class="view-head">
+              <div>
+                <h1>Routines</h1>
+                <p>Things Mav does for you on its own — and things it keeps an eye on. You get a notification when there's something to see.</p>
+              </div>
+            </header>
+            <div class="tabs" role="tablist">
+              <button class="tab is-active" data-rtab="routines">Routines</button>
+              <button class="tab" data-rtab="watch">Keep an eye on</button>
+            </div>
+
+            <div class="rpanel is-active" id="rpanel-routines">
+              <div class="panel-bar">
+                <p class="hint">Each routine has its own chat, so you can follow up on any report.</p>
+                <button class="btn btn-primary" id="routineNew"><i data-i="plus"></i> New routine</button>
+              </div>
+              <div class="jobs" id="routineList"></div>
+            </div>
+
+            <div class="rpanel" id="rpanel-watch">
+              <form class="card watch-add" id="watchForm" autocomplete="off">
+                <div class="segmented" id="watchKinds">
+                  <button type="button" data-kind="web" class="is-active">A page</button>
+                  <button type="button" data-kind="price">A price</button>
+                  <button type="button" data-kind="news">News</button>
+                </div>
+                <div class="watch-fields">
+                  <input type="text" id="watchTarget" placeholder="https://example.com/page" />
+                  <input type="number" id="watchBelow" placeholder="Alert below (optional)" min="0" step="0.01" hidden />
+                  <button class="btn btn-primary" type="submit">Keep an eye on it</button>
+                </div>
+                <p class="hint" id="watchHint"></p>
+              </form>
+              <div class="watch" id="watchList"></div>
+            </div>
+          </div>
         </section>
 
-        <!-- MEMORY -->
+        <!-- ---------- MEMORY ---------- -->
         <section class="view" id="view-memory">
-          <header class="view-head">
-            <h1>Memories</h1>
-            <p>The things I remember from one conversation to the next.</p>
-          </header>
-          <div class="search-inline">
-            <span class="nav-ico" data-ico="search"></span>
-            <input
-              type="search"
-              id="memorySearch"
-              placeholder="Search memory and documents…"
-            />
+          <div class="page">
+            <header class="view-head">
+              <div>
+                <h1>Memory</h1>
+                <p>What Mav knows about you. It's used to personalise new chats. You can add, delete, or turn memory off anytime.</p>
+              </div>
+              <span class="badge" id="memoryBackend"></span>
+            </header>
+
+            <form class="inline-form" id="factForm" autocomplete="off">
+              <input type="text" id="factInput" placeholder="Tell Mav something to remember — e.g. “I'm vegetarian and live in Lyon”" />
+              <button class="btn btn-primary" type="submit">Remember</button>
+            </form>
+
+            <div class="tabs" role="tablist">
+              <button class="tab is-active" data-mtab="facts">About you <span class="count" id="factCount"></span></button>
+              <button class="tab" data-mtab="exchanges">From past chats <span class="count" id="exCount"></span></button>
+            </div>
+            <div class="mpanel is-active" id="mpanel-facts">
+              <ul class="list" id="factList"></ul>
+            </div>
+            <div class="mpanel" id="mpanel-exchanges">
+              <div class="inline-form">
+                <input type="search" id="memorySearch" placeholder="Search what Mav remembers…" />
+                <button class="btn btn-ghost danger" id="forgetAll" type="button">Clear chat memory</button>
+              </div>
+              <ul class="list" id="exchangeList"></ul>
+            </div>
           </div>
-          <div class="card">
-            <ul class="memory" id="memoryList"></ul>
-          </div>
         </section>
 
-        <!-- WATCH -->
-        <section class="view" id="view-watch">
-          <header class="view-head">
-            <h1>Watch</h1>
-            <p>I watch this for you and only ping you when it change.</p>
-          </header>
-          <form class="watch-add" id="watchForm">
-            <select id="watchKind" aria-label="Type">
-              <option value="web">web</option>
-              <option value="mail">mail</option>
-              <option value="github">github</option>
-              <option value="moodle">moodle</option>
-              <option value="proxmox">proxmox</option>
-              <option value="health">health</option>
-            </select>
-            <input
-              type="text"
-              id="watchTarget"
-              placeholder="URL, query, owner/repo…"
-            />
-            <button type="submit">Add</button>
-          </form>
-          <div class="watch" id="watchList"></div>
-        </section>
-
-        <!-- SYSTEM / INFRA -->
-        <section class="view" id="view-system">
-          <header class="view-head">
-            <h1>Infra</h1>
-            <p>Your hypervisor and its machines, live from Proxmox.</p>
-          </header>
-          <div class="infra-nodes" id="infraNodes"></div>
-          <div class="infra-vms" id="infraVms"></div>
-        </section>
-
-        <!-- SETTINGS -->
+        <!-- ---------- SETTINGS ---------- -->
         <section class="view" id="view-settings">
-          <header class="view-head">
-            <h1>Settings</h1>
-            <p>Your agent, your rules — edit AGENTS.md and MCP servers.</p>
-          </header>
-
-          <!-- Engine status -->
-          <div class="card engine-card" id="engineCard">
-            <div class="engine-head">
-              <div class="engine-title">
-                <span class="engine-dot" id="engineDot"></span>
-                <strong id="engineLabel">Engine status</strong>
+          <div class="page">
+            <header class="view-head">
+              <div>
+                <h1>Settings</h1>
+                <p>Your model, your helpers, and how Mav behaves.</p>
               </div>
-              <button class="ghost-btn" id="engineRefresh" title="Re-check">
-                Refresh
-              </button>
-            </div>
-            <div class="engine-meta" id="engineMeta"></div>
-            <div class="engine-actions">
-              <button class="btn-primary" id="engineRestart">
-                Restart engine
-              </button>
-              <span class="hint">Applies AGENTS.md and MCP changes.</span>
-            </div>
-          </div>
+            </header>
 
-          <!-- Tabs -->
-          <div class="settings-tabs">
-            <button class="settings-tab is-active" data-stab="agents">
-              AGENTS.md
-            </button>
-            <button class="settings-tab" data-stab="agentfiles">Agents</button>
-            <button class="settings-tab" data-stab="mcp">MCP servers</button>
-          </div>
-
-          <!-- AGENTS.md editor -->
-          <div class="settings-panel is-active" id="panel-agents">
-            <div class="editor-bar">
-              <span class="editor-path" id="agentsPath"></span>
-              <div class="editor-actions">
-                <span class="editor-status" id="agentsStatus"></span>
-                <button class="ghost-btn" id="agentsReload">Reload</button>
-                <button class="btn-primary" id="agentsSave">Save</button>
-              </div>
+            <div class="tabs" role="tablist">
+              <button class="tab is-active" data-stab="model">Model</button>
+              <button class="tab" data-stab="instructions">Custom instructions</button>
+              <button class="tab" data-stab="helpers">Helpers</button>
+              <button class="tab" data-stab="connections">Connections</button>
+              <button class="tab" data-stab="general">General</button>
             </div>
-            <textarea
-              class="code-editor"
-              id="agentsEditor"
-              spellcheck="false"
-              placeholder="# Your agent instructions&#10;&#10;Write in Markdown how you want your agent to behave…"
-            ></textarea>
-            <p class="editor-hint">
-              This file is loaded at the start of every session. Restart the
-              engine to apply it.
-            </p>
-          </div>
 
-          <!-- Agent files -->
-          <div class="settings-panel" id="panel-agentfiles">
-            <div class="editor-bar">
-              <span class="editor-path" id="agentFilesPath"></span>
-              <div class="editor-actions">
-                <span class="editor-status" id="agentFilesStatus"></span>
-                <button class="ghost-btn" id="agentNew">New agent</button>
-              </div>
+            <!-- Model -->
+            <div class="spanel is-active" id="spanel-model">
+              <div class="card current-model" id="currentModel"></div>
+              <h3 class="sub">Provider</h3>
+              <div class="provider-grid" id="providerGrid"></div>
+              <form class="card form" id="providerForm" autocomplete="off" hidden>
+                <div class="field" id="fCustomId" hidden>
+                  <label for="pCustomId">Name</label>
+                  <input id="pCustomId" placeholder="e.g. groq, lmstudio, mistral" />
+                </div>
+                <div class="field" id="fBase">
+                  <label for="pBase">Address</label>
+                  <input id="pBase" placeholder="https://…/v1" />
+                  <small id="pBaseHint"></small>
+                </div>
+                <div class="field" id="fKey">
+                  <label for="pKey">API key</label>
+                  <input id="pKey" type="password" autocomplete="new-password" />
+                  <small id="pKeyHint"></small>
+                </div>
+                <div class="field">
+                  <label for="pModel">Model</label>
+                  <div class="row">
+                    <input id="pModel" list="pModelList" placeholder="model name" />
+                    <datalist id="pModelList"></datalist>
+                    <button class="btn btn-ghost" type="button" id="pTest"><i data-i="plug"></i> Check &amp; list models</button>
+                  </div>
+                  <small id="pTestResult"></small>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary" type="submit" id="pSave">Save</button>
+                  <span class="hint">Mav restarts for a few seconds to apply it.</span>
+                </div>
+              </form>
             </div>
-            <p class="editor-hint">
-              Your own specialised agents. Each is a Markdown file (YAML
-              frontmatter + prompt) that opencode loads as a subagent you can
-              call by name. Restart the engine to make them available.
-            </p>
-            <div class="agent-cards" id="agentCards"></div>
 
-            <div class="agent-editor-wrap" id="agentEditorWrap" hidden>
-              <div class="editor-bar">
-                <span class="editor-path" id="agentEditName"></span>
-                <div class="editor-actions">
-                  <button class="ghost-btn" id="agentCancel">Cancel</button>
-                  <button class="danger-btn" id="agentDelete">Delete</button>
-                  <button class="btn-primary" id="agentSave">Save</button>
+            <!-- Custom instructions -->
+            <div class="spanel" id="spanel-instructions">
+              <div class="panel-bar">
+                <p class="hint">What should Mav know and how should it answer? This applies to every chat and every helper.</p>
+                <div class="row">
+                  <span class="status-text" id="agentsStatus"></span>
+                  <button class="btn btn-primary" id="agentsSave">Save</button>
                 </div>
               </div>
-              <textarea
-                class="code-editor"
-                id="agentEditor"
-                spellcheck="false"
-                placeholder="---&#10;description: What this agent does&#10;mode: subagent&#10;---&#10;&#10;You are…"
-              ></textarea>
+              <textarea class="code-editor prose" id="agentsEditor" spellcheck="true"
+                placeholder="Examples:&#10;- Answer in French, briefly.&#10;- I'm a nurse working night shifts; plan around that.&#10;- Prefer metric units and 24-hour times."></textarea>
             </div>
-          </div>
 
-          <!-- MCP editor -->
-          <div class="settings-panel" id="panel-mcp">
-            <div class="editor-bar">
-              <span class="editor-path" id="mcpPath"></span>
-              <div class="editor-actions">
-                <span class="editor-status" id="mcpStatus"></span>
-                <button class="ghost-btn" id="mcpReload">Reload</button>
-                <button class="btn-primary" id="mcpSave">Save</button>
+            <!-- Helpers -->
+            <div class="spanel" id="spanel-helpers">
+              <div class="panel-bar">
+                <p class="hint">Helpers are assistants with a speciality. Talk to one directly, or let the Assistant call them when useful.</p>
+                <button class="btn btn-primary" id="agentNew"><i data-i="plus"></i> New helper</button>
               </div>
+              <div class="agent-cards" id="agentCards"></div>
             </div>
-            <p class="editor-hint">
-              JSON object of MCP servers (same shape as opencode.json's
-              <code>"mcp"</code> key). Secrets are masked — leave the dots to
-              keep an existing value. Restart the engine to connect them.
-            </p>
-            <div class="mcp-cards" id="mcpCards"></div>
-            <details class="mcp-raw">
-              <summary>Advanced: edit raw JSON</summary>
-              <textarea
-                class="code-editor code-editor--json"
-                id="mcpEditor"
-                spellcheck="false"
-                placeholder='{ "my-server": { "type": "remote", "url": "https://...", "enabled": true } }'
-              ></textarea>
-            </details>
+
+            <!-- Connections -->
+            <div class="spanel" id="spanel-connections">
+              <div class="panel-bar">
+                <p class="hint">Connect Mav to other apps and services (calendar, files, notes…) so it can use them for you.</p>
+                <div class="row">
+                  <span class="status-text" id="mcpStatus"></span>
+                  <button class="btn btn-primary" id="mcpAdd"><i data-i="plus"></i> Add a connection</button>
+                </div>
+              </div>
+              <div class="mcp-cards" id="mcpCards"></div>
+            </div>
+
+            <!-- General -->
+            <div class="spanel" id="spanel-general">
+              <div class="card">
+                <div class="setting-row">
+                  <div>
+                    <strong>Notifications</strong>
+                    <span>Routine reports and alerts on this device, even when Mav is closed.</span>
+                  </div>
+                  <div class="row">
+                    <button class="btn btn-ghost btn-sm" id="pushTest">Send a test</button>
+                    <button class="switch" id="pushSwitch" role="switch" aria-checked="false" aria-label="Notifications"></button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Memory</strong>
+                    <span>Recall facts and past chats when you start a new chat.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" data-goto="memory">Manage</button>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Read answers aloud</strong>
+                    <span>Uses your browser's voice.</span>
+                  </div>
+                  <button class="switch" id="voiceSwitch" role="switch" aria-checked="false" aria-label="Read aloud"></button>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Theme</strong>
+                    <span>Follow your device, or pick one.</span>
+                  </div>
+                  <div class="segmented" id="themeSeg">
+                    <button data-theme-set="auto">Auto</button>
+                    <button data-theme-set="light">Light</button>
+                    <button data-theme-set="dark">Dark</button>
+                  </div>
+                </div>
+              </div>
+
+              <details class="card advanced" id="advanced">
+                <summary>Advanced</summary>
+                <div class="engine-head">
+                  <div class="engine-title">
+                    <span class="dot" id="engineDot"></span>
+                    <strong id="engineLabel">Assistant</strong>
+                  </div>
+                  <div class="row">
+                    <button class="btn btn-ghost btn-sm" id="engineRefresh">Refresh</button>
+                    <button class="btn btn-primary btn-sm" id="engineRestart">Restart assistant</button>
+                  </div>
+                </div>
+                <div class="kv" id="engineMeta"></div>
+
+                <h3 class="sub">Files</h3>
+                <div class="kv" id="advPaths"></div>
+
+                <h3 class="sub">Connections (raw JSON)</h3>
+                <p class="hint">The <code>mcp</code> block of the engine config. Secrets are masked; leave the dots to keep a saved value.</p>
+                <textarea class="code-editor code-editor-json" id="mcpEditor" spellcheck="false"></textarea>
+                <div class="form-actions">
+                  <button class="btn btn-ghost btn-sm" id="mcpReload">Reload</button>
+                  <button class="btn btn-primary btn-sm" id="mcpSave">Save JSON</button>
+                </div>
+              </details>
+            </div>
           </div>
         </section>
       </main>
     </div>
 
-    <!-- ============ BOTTOM NAVBAR (mobile) ============ -->
-    <nav class="tabbar" id="tabbar">
-      <button class="tab is-active" data-view="home">
-        <span class="nav-ico" data-ico="home"></span>
-        <span class="tab-label">Home</span>
-      </button>
-      <button class="tab" data-view="chat">
-        <span class="nav-ico" data-ico="chat"></span>
-        <span class="tab-label">Chats</span>
-      </button>
-      <button class="tab" data-view="jobs">
-        <span class="nav-ico" data-ico="bolt"></span>
-        <span class="tab-label">Autos</span>
-      </button>
-      <button class="tab" data-view="memory">
-        <span class="nav-ico" data-ico="heart"></span>
-        <span class="tab-label">Memories</span>
-      </button>
-      <button class="tab" data-view="system">
-        <span class="nav-ico" data-ico="cpu"></span>
-        <span class="tab-label">Infra</span>
-      </button>
-      <button class="tab" data-view="settings">
-        <span class="nav-ico" data-ico="sliders"></span>
-        <span class="tab-label">Settings</span>
-      </button>
-    </nav>
+    <!-- ============ POPOVERS / OVERLAYS ============ -->
+    <div class="popover agent-menu" id="agentMenu" hidden></div>
 
-    <!-- ============ COMMAND PALETTE ============ -->
     <div class="palette" id="palette" hidden>
       <div class="palette-box">
         <div class="palette-input">
-          <span class="nav-ico" data-ico="search"></span>
-          <input
-            type="text"
-            id="paletteInput"
-            placeholder="Search a conversation, a memory, an action…"
-            autocomplete="off"
-          />
+          <i data-i="search"></i>
+          <input type="text" id="paletteInput" placeholder="Search chats, memory, or jump to…" autocomplete="off" />
+          <kbd>Esc</kbd>
         </div>
         <div class="palette-results" id="paletteResults"></div>
       </div>
     </div>
 
-    <!-- PWA install banner -->
-    <div class="install-banner" id="installBanner" hidden>
-      <div class="install-text">
-        <strong>Installer Mav</strong>
-        <span>Add it to your home screen, like an app.</span>
-      </div>
-      <div class="install-actions">
-        <button class="install-btn" id="installBtn">Installer</button>
-        <button class="install-close" id="installClose" aria-label="Plus tard">
-          ×
-        </button>
+    <div class="modal" id="modal" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <header class="modal-head">
+          <h2 id="modalTitle"></h2>
+          <button class="icon-btn" id="modalClose" aria-label="Close"><i data-i="x"></i></button>
+        </header>
+        <div class="modal-body" id="modalBody"></div>
+        <footer class="modal-foot" id="modalFoot"></footer>
       </div>
     </div>
 
-    <div class="toast" id="toast" hidden></div>
+    <div class="install-banner" id="installBanner" hidden>
+      <div class="install-text">
+        <strong>Install Mav</strong>
+        <span>Add it to your home screen, like an app.</span>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" id="installBtn">Install</button>
+        <button class="icon-btn" id="installClose" aria-label="Later"><i data-i="x"></i></button>
+      </div>
+    </div>
 
-    <script src="assets/vendor/lightweight-charts.js"></script>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
     <script src="assets/js/app.js"></script>
   </body>
 </html>

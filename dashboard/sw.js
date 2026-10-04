@@ -4,7 +4,7 @@
    /api/* (the agent's live state).
 */
 
-const CACHE = "mav-shell-v13";
+const CACHE = "mav-shell-v20";
 const SHELL = [
   "./",
   "./index.html",
@@ -118,6 +118,9 @@ self.addEventListener("notificationclick", (event) => {
   const url = new URL(raw, self.location.origin).href;
   const m = url.match(/[?&]notif=(\d+)/);
   const notifId = m ? m[1] : null;
+  // Routine reports link straight to the routine's chat.
+  const c = url.match(/#chat\/([^&?#]+)/);
+  const chatId = c ? decodeURIComponent(c[1]) : null;
   event.waitUntil(
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
@@ -128,6 +131,7 @@ self.addEventListener("notificationclick", (event) => {
           if ("focus" in c) {
             try {
               if (notifId) c.postMessage({ type: "open-notif", id: notifId });
+              else if (chatId) c.postMessage({ type: "open-chat", id: chatId });
             } catch (_) {}
             return c.focus();
           }
