@@ -1019,11 +1019,12 @@ chatInput.addEventListener("keydown", (e) => {
 $("#chatForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = chatInput.value;
-  if (state.streaming) return;
   if (!text.trim() && !state.pendingFiles.length) return;
   chatInput.value = "";
   autoGrow(chatInput);
   hideSlash();
+  // send() runs slash commands immediately and queues a normal message while
+  // an answer is streaming (interrupt with "Send now").
   send(text);
 });
 
