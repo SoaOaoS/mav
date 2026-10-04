@@ -46,6 +46,21 @@ def load_jobs(path: Path) -> list[dict]:
     return [j for j in data if validate(j)]
 
 
+def plain_summary(answer: str, limit: int = 220) -> str:
+    """Strip to a short, plain-text summary for notifications.
+
+    Answers may carry dashboard-only directives ([[chart:SPY:1mo]],
+    [[file:rapport.md]]) and images; those must not leak into the plain-text
+    notification and inbox summary, which cannot render them.
+    """
+    text = re.sub(r"\[\[(?:chart|file|download):[^\]]*\]\]", " ", answer or "", flags=re.I)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
+    text = " ".join(re.sub(r"[*_`#>|]+", "", text).split())
+    if limit and len(text) > limit:
+        text = text[: limit - 3].rstrip() + "…"
+    return text
+
+
 def interval(job: dict) -> int:
     """Repeat interval in minutes (0 = runs at a fixed time instead)."""
     try:

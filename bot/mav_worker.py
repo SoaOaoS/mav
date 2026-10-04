@@ -24,7 +24,7 @@ from pathlib import Path
 import httpx
 
 from ocbus import EventBus
-from ocjobs import Scheduler, load_jobs
+from ocjobs import Scheduler, load_jobs, plain_summary
 from ocmemory import Memory
 from ocnotify import ensure_schema, notify
 from ocprogress import ProgressTracker, follow
@@ -187,9 +187,9 @@ async def run_job(job: dict) -> None:
         log.info("routine %s: nothing to report", name)
         return
 
-    summary = " ".join(re.sub(r"[*_`#>|]+", "", answer).split())
-    if len(summary) > 220:
-        summary = summary[:217].rstrip() + "…"
+    # Directives ([[chart:…]], [[file:…]]) and images are rendered in the
+    # routine chat but cannot show in plain-text notifications: drop them.
+    summary = plain_summary(answer)
     notify(
         f"🔁 {name}",
         summary,
