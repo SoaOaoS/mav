@@ -124,6 +124,9 @@ CREATE TABLE IF NOT EXISTS drafts (
     status   text DEFAULT 'pending',
     source   text
 );
+-- For email drafts, who to answer and with which subject.
+ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_to text;
+ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_subject text;
 CREATE INDEX IF NOT EXISTS drafts_status_idx ON drafts (status, ts DESC);
 
 -- Background actions (bot/ocactions.py): long tasks running on their own.

@@ -466,6 +466,40 @@ class DraftsAndActions(unittest.TestCase):
         d.delete(did)
         self.assertEqual(len(d.list("all")), 0)
 
+    def test_draft_recipient_and_edit(self):
+        d = ocdrafts.Drafts(self.tmp / "drafts2.json")
+        d._pg = None
+        d.backend = "file"
+        did = d.add(0, "reply", "Re: devis", "Bonjour", to="a@b.fr", subject="Re: devis")
+        got = d.get(did)
+        self.assertEqual(got["email_to"], "a@b.fr")
+        self.assertEqual(got["email_subject"], "Re: devis")
+        d.update(did, body="Bonjour, corrigé", to="c@d.fr")
+        got = d.get(did)
+        self.assertEqual(got["body"], "Bonjour, corrigé")
+        self.assertEqual(got["email_to"], "c@d.fr")
+        self.assertEqual(got["email_subject"], "Re: devis")  # untouched
+
+    def test_mail_config_roundtrip(self):
+        import mav_mail
+
+        conf = self.tmp / "mail.conf"
+        self.assertFalse(mav_mail.status(conf)["configured"])
+        mav_mail.save("imap.x.tld", "smtp.x.tld", "me@x.tld", "secret", conf)
+        st = mav_mail.status(conf)
+        self.assertTrue(st["configured"])
+        self.assertTrue(st["has_password"])
+        self.assertNotIn("secret", json.dumps(st))  # never leaks the password
+        mav_mail.forget(conf)
+        self.assertFalse(mav_mail.status(conf)["configured"])
+
+    def test_mail_send_requires_config(self):
+        import mav_mail
+
+        conf = self.tmp / "empty.conf"
+        r = mav_mail.send("a@b.fr", "Hi", "Body", path=conf)
+        self.assertFalse(r["ok"])
+
     def test_actions_lifecycle(self):
         a = ocactions.Actions(self.tmp / "actions.json")
         a._pg = None

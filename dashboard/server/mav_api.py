@@ -1732,9 +1732,45 @@ def draft_action(action: str, payload: dict) -> dict:
         body = str(payload.get("body") or "").strip()
         if not title or not body:
             return {"ok": False, "error": "Title and body required."}
-        did = DRAFTS.add(DEFAULT_CHAT_ID, str(payload.get("kind") or "other"), title, body, "dashboard")
+        did = DRAFTS.add(
+            DEFAULT_CHAT_ID,
+            str(payload.get("kind") or "other"),
+            title,
+            body,
+            "dashboard",
+            to=str(payload.get("to") or ""),
+            subject=str(payload.get("subject") or ""),
+        )
         return {"ok": did is not None, "id": did}
+    if action == "edit":
+        did = int(payload.get("id") or 0)
+        ok = DRAFTS.update(
+            did,
+            title=payload.get("title"),
+            body=payload.get("body"),
+            to=payload.get("to"),
+            subject=payload.get("subject"),
+        )
+        return {"ok": ok}
     return {"ok": False, "error": "unknown action"}
+
+
+def send_draft(draft_id: int) -> dict:
+    """Send a draft as an email through the configured mail (Settings → Mail)."""
+    d = DRAFTS.get(draft_id) if DRAFTS else None
+    if not d:
+        return {"ok": False, "error": "Unknown draft."}
+    to = str(d.get("email_to") or "").strip()
+    if not to:
+        return {"ok": False, "error": "No recipient on this draft — add one in Edit."}
+    try:
+        import mav_mail  # noqa: PLC0415
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"Mail module unavailable: {str(exc)[:120]}"}
+    res = mav_mail.send(to, d.get("email_subject") or d.get("title") or "", d.get("body") or "")
+    if res.get("ok"):
+        DRAFTS.set_status(draft_id, "sent")
+    return res
 
 
 def get_actions() -> dict:
@@ -1770,6 +1806,61 @@ def hook_event(kind: str, payload: dict, token: str = "") -> dict:
         return {"ok": eid is not None, "id": eid}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)[:200]}
+
+
+def mail_config() -> dict:
+    """Mail status (no password!) + providers to pre-fill the form."""
+    try:
+        import mav_mail  # noqa: PLC0415
+
+        return mav_mail.status()
+    except Exception as exc:  # noqa: BLE001
+        return {"configured": False, "error": str(exc)[:200], "presets": []}
+
+
+def mail_save(payload: dict) -> dict:
+    try:
+        import mav_mail  # noqa: PLC0415
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+    imap = str(payload.get("imap") or "").strip()
+    smtp = str(payload.get("smtp") or "").strip()
+    user = str(payload.get("user") or "").strip()
+    password = str(payload.get("password") or "")
+    if not (imap and smtp and user and password):
+        # A blank password keeps the stored one (like the model provider form).
+        cur = mav_mail.load()
+        password = password or cur.get("MAIL_PASS", "")
+        if not (imap and smtp and user and password):
+            return {"ok": False, "error": "Fill in the servers, your address and the password."}
+    mav_mail.save(imap, smtp, user, password)
+    return {"ok": True}
+
+
+def mail_forget() -> dict:
+    try:
+        import mav_mail  # noqa: PLC0415
+
+        mav_mail.forget()
+        return {"ok": True}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+
+
+def mail_test(payload: dict) -> dict:
+    try:
+        import mav_mail  # noqa: PLC0415
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+    cur = mav_mail.load()
+    password = str(payload.get("password") or "") or cur.get("MAIL_PASS", "")
+    res = mav_mail.test(
+        str(payload.get("imap") or cur.get("MAIL_IMAP_SERVER") or "").strip(),
+        str(payload.get("smtp") or cur.get("MAIL_SMTP_SERVER") or "").strip(),
+        str(payload.get("user") or cur.get("MAIL_USER") or "").strip(),
+        password,
+    )
+    return res
 
 
 def draft_notify(draft_id: int) -> dict:
@@ -3117,6 +3208,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_actions())
             if path == "/api/events":
                 return self._send(200, get_events(int(p.get("limit", 30) or 30)))
+            if path == "/api/mail/status":
+                return self._send(200, mail_config())
             if path == "/api/memory":
                 return self._send(200, get_memory())
             if path == "/api/watch":
@@ -3344,6 +3437,19 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/drafts/notify":
                 res = draft_notify(int(payload.get("id") or 0))
                 return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/drafts/edit":
+                res = draft_action("edit", payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/drafts/send":
+                res = send_draft(int(payload.get("id") or 0))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/mail/save":
+                res = mail_save(payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/mail/test":
+                return self._send(200, mail_test(payload))
+            if path == "/api/mail/forget":
+                return self._send(200, mail_forget())
             if path == "/api/hooks/event":
                 res = hook_event(
                     payload.get("kind", "custom"),
@@ -3480,6 +3586,9 @@ def ensure_schema() -> None:
             "delivered boolean DEFAULT true)"
         )
         pg_exec("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link text")
+        # Email drafts: recipient and subject, added with the Mail feature.
+        pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_to text")
+        pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_subject text")
     except Exception:  # noqa: BLE001
         pass
 
