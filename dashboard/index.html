@@ -329,19 +329,37 @@
                 Routines
               </button>
               <button class="tab" data-rtab="watch">Keep an eye on</button>
+              <button class="tab" data-rtab="drafts">
+                Drafts <span class="count" id="draftCount"></span>
+              </button>
             </div>
 
             <div class="rpanel is-active" id="rpanel-routines">
               <div class="panel-bar">
                 <p class="hint">
                   Each routine has its own chat, so you can follow up on any
-                  report.
+                  report. Start from a template or build your own.
                 </p>
-                <button class="btn btn-primary" id="routineNew">
-                  <i data-i="plus"></i> New routine
-                </button>
+                <div class="row">
+                  <button class="btn btn-ghost" id="routineTemplate">
+                    <i data-i="bolt"></i> Templates
+                  </button>
+                  <button class="btn btn-primary" id="routineNew">
+                    <i data-i="plus"></i> New routine
+                  </button>
+                </div>
               </div>
               <div class="jobs" id="routineList"></div>
+            </div>
+
+            <div class="rpanel" id="rpanel-drafts">
+              <div class="panel-bar">
+                <p class="hint">
+                  Replies, messages and notes Mav prepared for you. Copy, mark
+                  as sent, or discard.
+                </p>
+              </div>
+              <div class="drafts" id="draftList"></div>
             </div>
 
             <div class="rpanel" id="rpanel-watch">
@@ -608,6 +626,23 @@
                       aria-checked="false"
                       aria-label="Notifications"
                     ></button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>How proactive is Mav?</strong>
+                    <span
+                      >Quiet only interrupts for what's critical. Chatty also
+                      sends the small stuff (and collects the rest into a daily
+                      recap).</span
+                    >
+                  </div>
+                  <div class="segmented" id="proactivitySeg">
+                    <button data-proactivity="quiet">Quiet</button>
+                    <button data-proactivity="normal" class="is-active">
+                      Normal
+                    </button>
+                    <button data-proactivity="chatty">Chatty</button>
                   </div>
                 </div>
                 <div class="setting-row">

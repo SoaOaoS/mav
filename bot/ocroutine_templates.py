@@ -1,0 +1,134 @@
+"""Ready-made routines, so creating one takes two clicks instead of a form.
+
+Each template is a plain job skeleton (same shape as jobs.json) plus a short
+label and description shown in the dashboard. Nothing here calls the model or
+the network; the API just copies a template into jobs.json when asked.
+"""
+
+from __future__ import annotations
+
+__all__ = ["TEMPLATES", "get", "as_jobs"]
+
+# `when` is kept human-readable here and expanded by the API into the concrete
+# time/days/every_minutes fields. `agent` must be one of the everyday helpers.
+TEMPLATES: list[dict] = [
+    {
+        "id": "morning-brief",
+        "label": "Brief du matin",
+        "description": "Un résumé de la journée : agenda, météo, ce qui compte.",
+        "icon": "☀️",
+        "agent": "assistant",
+        "when": {"time": "07:30", "days": ["mon", "tue", "wed", "thu", "fri"]},
+        "prompt": (
+            "Fais-moi un brief de la journée : la météo de mon lieu, "
+            "les événements de mon agenda, et les 3 choses qui méritent mon "
+            "attention aujourd'hui. Va à l'essentiel, en quelques lignes."
+        ),
+    },
+    {
+        "id": "evening-recap",
+        "label": "Bilan du soir",
+        "description": "Ce qui s'est passé aujourd'hui et ce qu'il reste à faire.",
+        "icon": "🌙",
+        "agent": "assistant",
+        "when": {"time": "20:00", "days": ["mon", "tue", "wed", "thu", "fri"]},
+        "prompt": (
+            "Fais le point sur ma journée : ce qui a été fait, ce qui reste, "
+            "et ce qu'il vaut mieux préparer pour demain. Sois bref."
+        ),
+    },
+    {
+        "id": "weekly-review",
+        "label": "Revue hebdo",
+        "description": "Un récap de la semaine, le vendredi en fin de journée.",
+        "icon": "📋",
+        "agent": "assistant",
+        "when": {"time": "17:30", "days": ["fri"]},
+        "prompt": (
+            "Fais ma revue hebdomadaire : ce qui a avancé, ce qui a bloqué, "
+            "et 3 priorités concrètes pour la semaine prochaine."
+        ),
+    },
+    {
+        "id": "monthly-review",
+        "label": "Revue mensuelle",
+        "description": "Un bilan le dernier jour du mois.",
+        "icon": "🗓️",
+        "agent": "assistant",
+        "when": {"time": "18:00", "last_day_of_month": True},
+        "prompt": (
+            "Fais mon bilan mensuel : ce qui compte ce mois-ci, les dépenses "
+            "notables si tu les connais, et un objectif clair pour le mois prochain."
+        ),
+    },
+    {
+        "id": "rain-reminder",
+        "label": "Parapluie s'il pleut",
+        "description": "Un rappel le matin, mais seulement s'il va pleuvoir.",
+        "icon": "☔",
+        "agent": "assistant",
+        "when": {"time": "07:00", "days": ["mon", "tue", "wed", "thu", "fri"]},
+        "prompt": (
+            "Dis-moi s'il va pleuvoir dans la journée et à quelle heure, "
+            "pour que je prenne un parapluie. Si tu n'as pas la météo, réponds RAS."
+        ),
+    },
+    {
+        "id": "news-digest",
+        "label": "Veille d'actualité",
+        "description": "Les titres qui comptent sur un sujet, chaque matin.",
+        "icon": "📰",
+        "agent": "researcher",
+        "when": {"time": "08:00", "days": ["mon", "tue", "wed", "thu", "fri"]},
+        "prompt": (
+            "Résume l'actualité du jour sur les sujets qui me concernent, "
+            "en 5 titres maximum, avec la source et pourquoi ça compte."
+        ),
+    },
+    {
+        "id": "inbox-triage",
+        "label": "Tri des mails",
+        "description": "Un résumé de ce qui mérite une réponse, le matin.",
+        "icon": "✉️",
+        "agent": "assistant",
+        "when": {"time": "08:30", "days": ["mon", "tue", "wed", "thu", "fri"]},
+        "prompt": (
+            "Regarde ma boîte mail et dis-moi ce qui mérite une réponse "
+            "aujourd'hui, avec une proposition de réponse courte pour chaque. "
+            "S'il n'y a rien d'urgent, réponds RAS."
+        ),
+    },
+    {
+        "id": "weekly-planning",
+        "label": "Planning de la semaine",
+        "description": "Anticipe la semaine, le dimanche soir.",
+        "icon": "🧭",
+        "agent": "planner",
+        "when": {"time": "19:00", "days": ["sun"]},
+        "prompt": (
+            "Aide-moi à préparer ma semaine : les rendez-vous, les échéances, "
+            "et un plan réaliste pour les 3 choses les plus importantes."
+        ),
+    },
+]
+
+
+def get(template_id: str) -> dict | None:
+    return next((t for t in TEMPLATES if t["id"] == template_id), None)
+
+
+def as_jobs() -> list[dict]:
+    """The catalog as sent to the dashboard (no schedule expansion here)."""
+    return [
+        {
+            "id": t["id"],
+            "label": t["label"],
+            "description": t["description"],
+            "icon": t.get("icon", "🔁"),
+            "agent": t.get("agent", ""),
+            "when": t.get("when", {}),
+            "prompt": t["prompt"],
+            "conditional": bool(t.get("skip_if")),
+        }
+        for t in TEMPLATES
+    ]

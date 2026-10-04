@@ -366,6 +366,8 @@ const state = {
   jobs: [],
   memory: { conversations: [], facts: [], preferences: [] },
   inbox: [],
+  drafts: [],
+  proactivity: "normal",
   view: "chat",
 };
 
@@ -2103,14 +2105,24 @@ async function tellMeMore(n) {
    9. Routines
    ================================================================ */
 function jobMode(j) {
+  if (j.on_event) return "event";
   if (j.every_minutes) return "hours";
+  if (j.days_of_month && j.days_of_month.length) return "monthly";
+  if (j.last_day_of_month) return "monthly";
   return j.days && j.days.length && j.days.length < 7 ? "weekly" : "daily";
 }
 function jobWhen(j) {
   const mode = jobMode(j);
+  if (mode === "event")
+    return `when ${(j.on_event && j.on_event.kind) || "an event"} fires`;
   if (mode === "hours") {
     const h = Math.max(1, Math.round(Number(j.every_minutes) / 60));
     return h === 1 ? "every hour" : `every ${h} hours`;
+  }
+  if (mode === "monthly") {
+    if (j.last_day_of_month) return `last day of the month at ${j.time}`;
+    const dom = (j.days_of_month || []).join(", ");
+    return `the ${dom} of the month at ${j.time}`;
   }
   return mode === "daily"
     ? `every day at ${j.time}`
@@ -2129,6 +2141,7 @@ function openRoutinesTab(tab) {
     p.classList.toggle("is-active", p.id === `rpanel-${tab}`),
   );
   if (tab === "watch") loadWatch();
+  else if (tab === "drafts") loadDrafts();
   else loadRoutines();
 }
 $$("[data-rtab]").forEach((t) =>
@@ -2177,6 +2190,119 @@ function renderRoutines() {
     )
     .join("");
 }
+async function loadProactivity() {
+  if (LIVE) {
+    try {
+      const r = await api.get("proactivity");
+      state.proactivity = r.level || "normal";
+    } catch (_) {}
+  }
+  $$("#proactivitySeg [data-proactivity]").forEach((b) =>
+    b.classList.toggle(
+      "is-active",
+      b.dataset.proactivity === state.proactivity,
+    ),
+  );
+}
+$$("#proactivitySeg [data-proactivity]").forEach((b) =>
+  b.addEventListener("click", async () => {
+    if (!needLive()) return;
+    const level = b.dataset.proactivity;
+    try {
+      await api.post("proactivity", { level });
+      state.proactivity = level;
+      await loadProactivity();
+      toast(
+        level === "quiet"
+          ? "Mav only interrupts for what's critical."
+          : level === "chatty"
+            ? "Mav will also send the small stuff."
+            : "Back to normal proactivity.",
+      );
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  }),
+);
+
+async function loadDrafts() {
+  if (!LIVE) return;
+  try {
+    const r = await api.get("drafts?status=pending");
+    state.drafts = r.drafts || [];
+  } catch (_) {
+    state.drafts = [];
+  }
+  renderDrafts();
+}
+const DRAFT_KIND = {
+  reply: "Reply",
+  message: "Message",
+  note: "Note",
+  plan: "Plan",
+  other: "Draft",
+};
+function renderDrafts() {
+  const items = state.drafts || [];
+  $("#draftCount").textContent = items.length || "";
+  const box = $("#draftList");
+  if (!box) return;
+  if (!items.length) {
+    box.innerHTML = `<div class="empty-state"><strong>No draft waiting</strong>
+      When Mav notices a mail to answer or a follow-up to send, it writes a
+      draft here for you to review.</div>`;
+    return;
+  }
+  box.innerHTML = items
+    .map(
+      (d) => `<div class="draft">
+      <div class="dhead"><span class="badge">${esc(DRAFT_KIND[d.kind] || "Draft")}</span>
+        <strong>${esc(d.title)}</strong>
+        <span class="dmeta">${esc(fmtRel(d.ts))}</span></div>
+      <div class="dbody">${mdToHtml(d.body || "")}</div>
+      <div class="dacts">
+        <button class="btn btn-ghost btn-sm" data-dcopy="${d.id}">${I("copy") || ""} Copy</button>
+        <button class="btn btn-ghost btn-sm" data-dsend="${d.id}">Send to my phone</button>
+        <button class="btn btn-ghost btn-sm danger" data-ddiscard="${d.id}">Discard</button>
+      </div></div>`,
+    )
+    .join("");
+}
+$("#draftList").addEventListener("click", async (e) => {
+  const copy = e.target.closest("[data-dcopy]");
+  const send = e.target.closest("[data-dsend]");
+  const disc = e.target.closest("[data-ddiscard]");
+  const b = copy || send || disc;
+  if (!b) return;
+  const id = Number(
+    (copy || send || disc).dataset[
+      copy ? "dcopy" : send ? "dsend" : "ddiscard"
+    ],
+  );
+  const d = (state.drafts || []).find((x) => x.id === id);
+  if (copy && d) {
+    try {
+      await navigator.clipboard.writeText(d.body || "");
+      return toast("Copied.");
+    } catch (_) {
+      return toast("Could not copy.", { error: true });
+    }
+  }
+  if (!needLive()) return;
+  try {
+    if (send) {
+      await api.post("drafts/notify", { id });
+      toast("Sent to your phone.");
+    } else {
+      await api.post("drafts/status", { id, status: "discarded" });
+      toast("Draft discarded.");
+    }
+    loadDrafts();
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+});
+
 const ROUTINE_IDEAS = [
   {
     label: "☀️ Morning briefing",
@@ -2272,6 +2398,41 @@ function pollRoutineDone(name, n = 0) {
   }, 4000);
 }
 $("#routineNew").addEventListener("click", () => editRoutine(null));
+$("#routineTemplate").addEventListener("click", openTemplatePicker);
+async function openTemplatePicker() {
+  if (!needLive()) return;
+  let templates = [];
+  try {
+    templates = (await api.get("job-templates")).templates || [];
+  } catch (_) {}
+  const body = templates.length
+    ? `<div class="tpl-grid">${templates
+        .map(
+          (t) => `<button class="tpl" data-tpl="${esc(t.id)}">
+            <span class="tpl-ico">${esc(t.icon || "🔁")}</span>
+            <strong>${esc(t.label)}</strong>
+            <span>${esc(t.description)}</span></button>`,
+        )
+        .join("")}</div>`
+    : `<p class="hint">No template available.</p>`;
+  modal.open({
+    title: "Start from a template",
+    body,
+    actions: [{ label: "Close" }],
+  });
+  $("#modalBody").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-tpl]");
+    if (!b) return;
+    try {
+      const r = await api.post("job/template", { id: b.dataset.tpl });
+      if (!r.job) return toast("Unknown template.", { error: true });
+      modal.close();
+      editRoutine(r.job);
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
+}
 
 /* Turn "every morning at 7, give me the weather" into a routine draft. */
 const WEEKDAYS = {
@@ -2283,66 +2444,160 @@ const WEEKDAYS = {
   saturday: "sat",
   sunday: "sun",
 };
-const RECUR_RE =
-  /\b(every|each)\s+(day|morning|evening|night|afternoon|week|weekday|weekend|hour|\d+\s*h(ours?)?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays)\b|\b(daily|weekly|hourly)\b|\bon\s+(mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays|weekdays)\b/i;
+// Multilingual recurrence detection (EN/FR/ES), mirroring bot/ocroutine_nl.py
+// so the chat offer matches what the backend recognises.
+const RECUR_LANGS = {
+  en: {
+    days: WEEKDAYS,
+    part: {
+      morning: "08:00",
+      noon: "12:00",
+      lunch: "12:00",
+      afternoon: "15:00",
+      evening: "19:00",
+      night: "21:00",
+    },
+    weekdays: ["weekday", "weekdays"],
+    weekend: ["weekend", "weekends"],
+    recur:
+      /\b(every|each)\s+(day|morning|evening|night|afternoon|week|weekday|weekend|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d+\s*h(ours?|rs?)?)s?\b|\b(daily|weekly|hourly)\b|\bon\s+(mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays|weekdays)\b/i,
+    weekly: /\b(every|each)\s+week\b|\bweekly\b/i,
+    interval: /\b(?:every|each)\s+(\d+)\s*h(?:ours?|rs?)?\b/i,
+    hourly: /\b(?:every|each)\s+hour\b|\bhourly\b/i,
+    at: /\bat\s+(\d{1,2})(?:[:h.](\d{2}))?\s*(am|pm)?\b/i,
+  },
+  fr: {
+    days: {
+      lundi: "mon",
+      mardi: "tue",
+      mercredi: "wed",
+      jeudi: "thu",
+      vendredi: "fri",
+      samedi: "sat",
+      dimanche: "sun",
+    },
+    part: {
+      matin: "08:00",
+      matinée: "08:00",
+      midi: "12:00",
+      déjeuner: "12:00",
+      "après-midi": "15:00",
+      aprèm: "15:00",
+      soir: "19:00",
+      soirée: "19:00",
+      nuit: "21:00",
+    },
+    weekdays: ["jour ouvré", "jours ouvrés", "jours ouvrables", "semaine"],
+    weekend: ["week-end", "weekend", "weekends"],
+    recur:
+      /\b(tous?\s+les|chaque|toutes?\s+les)\s+(jours?|matins?|matinées?|soirs?|soirées?|nuits?|après-midis?|semaines?|week-?ends?|heures?|lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?|\d+\s*h(?:eures?)?)\b|\b(quotidien(?:ne)?|hebdomadaire|horaire)\b|\b(le|les)\s+(lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?)\b/i,
+    weekly: /\b(tous?\s+les|chaque)\s+semaines?\b|\bhebdomadaire\b/i,
+    interval:
+      /\b(?:tous?\s+les|toutes?\s+les|chaque)\s+(\d+)\s*h(?:eures?)?\b/i,
+    hourly: /\b(toutes?\s+les|chaque)\s+heures?\b|\bhoraire\b/i,
+    at: /\b(?:à|a|vers)\s+(\d{1,2})\s*(?:[:h.](\d{2}))?\s*h?\b/i,
+  },
+  es: {
+    days: {
+      lunes: "mon",
+      martes: "tue",
+      miércoles: "wed",
+      miercoles: "wed",
+      jueves: "thu",
+      viernes: "fri",
+      sábado: "sat",
+      sabado: "sat",
+      domingo: "sun",
+    },
+    part: {
+      mañana: "08:00",
+      manana: "08:00",
+      mediodía: "12:00",
+      mediodia: "12:00",
+      almuerzo: "12:00",
+      tarde: "15:00",
+      noche: "21:00",
+    },
+    weekdays: ["día laborable", "días laborables", "entre semana"],
+    weekend: ["fin de semana", "fines de semana"],
+    recur:
+      /\b(todos?\s+los|cada)\s+(días?|mañanas?|tardes?|noches?|semanas?|horas?|fines?\s+de\s+semana|\d+\s*h(?:oras?)?)\b|\b(diariamente|semanal(?:mente)?|cada\s+hora)\b|\b(los|el)\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)\b/i,
+    weekly: /\b(todos?\s+los|cada)\s+semanas?\b|\bsemanal(?:mente)?\b/i,
+    interval: /\b(?:todos?\s+los|cada)\s+(\d+)\s*h(?:oras?)?\b/i,
+    hourly: /\b(cada|todas?\s+las)\s+horas?\b|\bcada\s+hora\b/i,
+    at: /\b(?:a|las)\s+(\d{1,2})(?:[:h.](\d{2}))?\s*h?\b/i,
+  },
+};
+const RECUR_ORDER = ["fr", "en", "es"];
+function recurLang(text) {
+  return RECUR_ORDER.find((l) => RECUR_LANGS[l].recur.test(text)) || "en";
+}
 function detectRoutine(text) {
   if (!text || text.length > 400 || text.startsWith("/")) return null;
-  return RECUR_RE.test(text) ? draftRoutine(text) : null;
+  const lang = RECUR_ORDER.find((l) => RECUR_LANGS[l].recur.test(text));
+  return lang ? draftRoutine(text) : null;
 }
 function draftRoutine(text) {
   const t = text.toLowerCase();
-  const d = { mode: "daily", time: "09:00", days: [...ALL_DAYS], hours: 0 };
+  const lang = recurLang(text);
+  const L = RECUR_LANGS[lang];
+  const d = {
+    mode: "daily",
+    time: "09:00",
+    days: [...ALL_DAYS],
+    hours: 0,
+    lang,
+  };
+  const consumed = [];
   let m;
-  if ((m = t.match(/every\s+(\d+)\s*h(ours?)?/))) {
+  if ((m = t.match(L.interval))) {
     d.mode = "hours";
     d.hours = Number(m[1]);
-  } else if (/\b(every|each)\s+hour\b|\bhourly\b/.test(t)) {
+    consumed.push(m[0]);
+  } else if ((m = t.match(L.hourly))) {
     d.mode = "hours";
     d.hours = 1;
+    consumed.push(m[0]);
   }
-  const days = Object.entries(WEEKDAYS)
-    .filter(([w]) => t.includes(w))
+  const days = Object.entries(L.days)
+    .filter(([w]) => new RegExp(`\\b${w}s?\\b`).test(t))
     .map(([, v]) => v);
-  if (/weekdays?\b/.test(t)) d.days = ["mon", "tue", "wed", "thu", "fri"];
-  else if (/weekends?\b/.test(t)) d.days = ["sat", "sun"];
-  else if (days.length) d.days = days;
-  else if (/\b(every|each)\s+week\b|\bweekly\b/.test(t)) d.days = ["mon"];
-  if (d.mode !== "hours" && d.days.length < 7) d.mode = "weekly";
-  const parts = [
-    { re: /\bmorning\b/, h: "08:00" },
-    { re: /\b(noon|lunch(time)?)\b/, h: "12:00" },
-    { re: /\bafternoon\b/, h: "15:00" },
-    { re: /\bevening\b/, h: "19:00" },
-    { re: /\bnight\b/, h: "21:00" },
-  ];
-  parts.forEach((p) => {
-    if (p.re.test(t)) d.time = p.h;
-  });
-  const tm =
-    t.match(/\bat\s+(\d{1,2})(?:[:h.](\d{2}))?\s*(am|pm)?\b/) ||
-    t.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b/) ||
-    t.match(/\b(\d{1,2})[:h](\d{2})\b/);
-  if (tm) {
-    let h = Number(tm[1]);
-    if (tm[3] === "pm" && h < 12) h += 12;
-    if (tm[3] === "am" && h === 12) h = 0;
-    if (h < 24) d.time = `${String(h).padStart(2, "0")}:${tm[2] || "00"}`;
+  if (L.weekdays.some((w) => t.includes(w))) {
+    d.days = ["mon", "tue", "wed", "thu", "fri"];
+    consumed.push(...L.weekdays.filter((w) => t.includes(w)));
+  } else if (L.weekend.some((w) => t.includes(w))) {
+    d.days = ["sat", "sun"];
+    consumed.push(...L.weekend.filter((w) => t.includes(w)));
+  } else if (days.length) d.days = days;
+  else if ((m = t.match(L.weekly))) {
+    d.days = ["mon"];
+    consumed.push(m[0]);
   }
-  // What to do = the sentence without the scheduling words.
-  let what = text
-    .replace(
-      /\b(every|each)\s+(\d+\s*h(ours?)?|day|morning|evening|night|afternoon|week|weekday|weekend|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/gi,
-      "",
-    )
-    .replace(/\b(daily|weekly|hourly)\b/gi, "")
-    .replace(
-      /\bon\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday)s?\b/gi,
-      "",
-    )
-    .replace(/\bat\s+\d{1,2}(?:[:h.]\d{2})?\s*(am|pm)?\b/gi, "")
-    .replace(/\b\d{1,2}(?:[:.]\d{2})?\s*(am|pm)\b/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, "");
+  if (d.mode !== "hours" && d.days.length < 7) d.mode = "weekly";
+  for (const [word, h] of Object.entries(L.part)) {
+    if (new RegExp(`\\b${word}\\b`).test(t)) {
+      d.time = h;
+      consumed.push(word);
+      break;
+    }
+  }
+  if ((m = t.match(L.at))) {
+    let h = Number(m[1]);
+    if (m[3] === "pm" && h < 12) h += 12;
+    if (m[3] === "am" && h === 12) h = 0;
+    if (h < 24) {
+      d.time = `${String(h).padStart(2, "0")}:${m[2] || "00"}`;
+      consumed.push(m[0]);
+    }
+  }
+  // What to do = the sentence without the fragments we recognised.
+  let what = text;
+  [...new Set(consumed)]
+    .sort((a, b) => b.length - a.length)
+    .forEach((frag) => {
+      what = what.replace(new RegExp(escRe(frag), "gi"), " ");
+    });
+  what = what.replace(/\s{2,}/g, " ").replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, "");
   const remind = what.match(/^(please\s+)?remind me (to |about |that )?(.*)$/i);
   d.prompt = remind
     ? `Send me a short, friendly reminder: ${remind[3]}. One or two sentences.`
@@ -2354,6 +2609,9 @@ function draftRoutine(text) {
   d.name = d.name.charAt(0).toUpperCase() + d.name.slice(1);
   d.agent = currentAgent();
   return d;
+}
+function escRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function draftWhen(d) {
   return d.mode === "hours"
@@ -2382,9 +2640,25 @@ function draftToJob(d) {
     description: d.description || "",
   };
   if (d.mode === "hours") job.every_minutes = Math.max(1, d.hours) * 60;
-  else {
+  else if (d.mode === "monthly") {
+    job.time = d.time;
+    if (d.last_day_of_month) job.last_day_of_month = true;
+    if (d.days_of_month && d.days_of_month.length)
+      job.days_of_month = d.days_of_month;
+  } else if (d.mode === "event") {
+    job.on_event = { kind: d.event_kind || "custom" };
+    if (d.event_contains) job.on_event.contains = d.event_contains;
+  } else {
     job.time = d.time;
     job.days = d.mode === "weekly" ? d.days : [...ALL_DAYS];
+  }
+  if (d.condition_type && d.condition_type !== "none") {
+    job.condition_type = d.condition_type;
+    if (d.condition_value) job.condition_value = d.condition_value;
+    if (d.condition_source) job.condition_source = d.condition_source;
+    if (d.condition_negate) job.condition_negate = true;
+    if (d.condition_type === "number")
+      job.condition_op = d.condition_op || ">=";
   }
   return job;
 }
@@ -2433,6 +2707,7 @@ function editRoutine(src, existing = false) {
     };
   else if (existing) {
     const mode = jobMode(src);
+    const cond = src.skip_if || {};
     d = {
       ...src,
       mode,
@@ -2440,8 +2715,26 @@ function editRoutine(src, existing = false) {
         mode === "hours" ? Math.max(1, Math.round(src.every_minutes / 60)) : 4,
       days: src.days && src.days.length ? src.days : [...ALL_DAYS],
       time: src.time || "08:00",
+      days_of_month: src.days_of_month || [],
+      last_day_of_month: !!src.last_day_of_month,
+      event_kind: (src.on_event && src.on_event.kind) || "custom",
+      event_contains: (src.on_event && src.on_event.contains) || "",
+      condition_type: cond.type || "none",
+      condition_value: cond.value || "",
+      condition_source: cond.source || "",
+      condition_negate: !!cond.negate,
+      condition_op: cond.op || ">=",
     };
-  } else d = { hours: 4, days: [...ALL_DAYS], time: "08:00", ...src };
+  } else
+    d = {
+      hours: 4,
+      days: [...ALL_DAYS],
+      time: "08:00",
+      days_of_month: [],
+      event_kind: "custom",
+      condition_type: "none",
+      ...src,
+    };
   if (state.view !== "routines" && !existing) go("routines", "routines");
   const form = document.createElement("form");
   form.className = "form";
@@ -2451,11 +2744,33 @@ function editRoutine(src, existing = false) {
       <small>Write it like a message to Mav. If there's nothing worth telling you, it stays quiet.</small></div>
     <div class="field"><span class="field-label">When</span>
       <div class="segmented" data-modes>
-        <button type="button" data-m="daily">Every day</button><button type="button" data-m="weekly">Some days</button><button type="button" data-m="hours">Every few hours</button>
+        <button type="button" data-m="daily">Every day</button><button type="button" data-m="weekly">Some days</button><button type="button" data-m="monthly">Once a month</button><button type="button" data-m="hours">Every few hours</button><button type="button" data-m="event">On an event</button>
       </div></div>
     <div class="when-row">
       <div class="field" data-f="time"><label>At</label><input type="time" name="time" value="${esc(d.time)}"></div>
       <div class="field" data-f="days"><span class="field-label">On</span><div class="days">${ALL_DAYS.map((x) => `<button type="button" data-day="${x}" class="${d.days.includes(x) ? "is-on" : ""}">${DAY_NAMES[x]}</button>`).join("")}</div></div>
+      <div class="field" data-f="monthly">
+        <label>Day(s) of the month</label>
+        <div class="row"><input type="text" name="days_of_month" value="${esc((d.days_of_month || []).join(", "))}" placeholder="1, 15" style="width:110px">
+        <label class="check"><input type="checkbox" name="last_day_of_month" ${d.last_day_of_month ? "checked" : ""}> last day</label></div>
+      </div>
+      <div class="field" data-f="event">
+        <label>When this event fires</label>
+        <div class="row"><select name="event_kind">${[
+          "github",
+          "calendar",
+          "form",
+          "payment",
+          "iot",
+          "custom",
+        ]
+          .map(
+            (k) =>
+              `<option ${k === d.event_kind ? "selected" : ""} value="${k}">${k}</option>`,
+          )
+          .join("")}</select>
+        <input type="text" name="event_contains" value="${esc(d.event_contains || "")}" placeholder="contains… (optional)"></div>
+      </div>
       <div class="field" data-f="hours"><label>Every</label><div class="row"><input type="number" min="1" max="72" name="hours" value="${esc(d.hours)}" style="width:90px"> <span>hours</span></div></div>
     </div>
     <div class="field-grid">
@@ -2466,15 +2781,39 @@ function editRoutine(src, existing = false) {
         )
         .join("")}</select></div>
       <div class="field"><label>Name</label><input name="name" value="${esc(d.name || "")}" placeholder="Morning briefing"></div>
-    </div>`;
+    </div>
+    <details class="field">
+      <summary>Only run when… (optional)</summary>
+      <div class="row" style="margin-top:0.5rem">
+        <select name="condition_type">${[
+          ["none", "always"],
+          ["text_contains", "text contains"],
+          ["text_matches", "text matches regex"],
+          ["number", "number"],
+          ["weekday", "weekday"],
+          ["exists", "not empty"],
+        ]
+          .map(
+            ([v, l]) =>
+              `<option ${v === (d.condition_type || "none") ? "selected" : ""} value="${v}">${l}</option>`,
+          )
+          .join("")}</select>
+        <input type="text" name="condition_value" value="${esc(d.condition_value || "")}" placeholder="value">
+        <input type="text" name="condition_source" value="${esc(d.condition_source || "")}" placeholder="source (optional)">
+      </div>
+      <small>Checked before Mav runs — if it isn't met, the routine is skipped.</small>
+    </details>`;
   let mode = d.mode;
   const setMode = (x) => {
     mode = x;
     form
       .querySelectorAll("[data-m]")
       .forEach((b) => b.classList.toggle("is-active", b.dataset.m === x));
-    form.querySelector('[data-f="time"]').hidden = x === "hours";
+    form.querySelector('[data-f="time"]').hidden =
+      x === "hours" || x === "event";
     form.querySelector('[data-f="days"]').hidden = x !== "weekly";
+    form.querySelector('[data-f="monthly"]').hidden = x !== "monthly";
+    form.querySelector('[data-f="event"]').hidden = x !== "event";
     form.querySelector('[data-f="hours"]').hidden = x !== "hours";
   };
   setMode(mode);
@@ -2498,6 +2837,7 @@ function editRoutine(src, existing = false) {
           .join(" ")
           .replace(/[^\w\s.-]/g, "")
           .trim() || "Routine";
+    const domRaw = String(fd.get("days_of_month") || "");
     const job = draftToJob({
       original: existing ? d.name : "",
       name,
@@ -2509,10 +2849,24 @@ function editRoutine(src, existing = false) {
       days: [...form.querySelectorAll("[data-day].is-on")].map(
         (b) => b.dataset.day,
       ),
+      days_of_month: domRaw
+        .split(/[,\s]+/)
+        .map((x) => parseInt(x, 10))
+        .filter((n) => n >= 1 && n <= 31),
+      last_day_of_month: !!fd.get("last_day_of_month"),
+      event_kind: fd.get("event_kind"),
+      event_contains: String(fd.get("event_contains") || "").trim(),
+      condition_type: fd.get("condition_type"),
+      condition_value: String(fd.get("condition_value") || "").trim(),
+      condition_source: String(fd.get("condition_source") || "").trim(),
       description: existing ? d.description : "",
     });
     if (mode === "weekly" && !job.days.length) {
       toast("Pick at least one day.", { error: true });
+      return false;
+    }
+    if (mode === "monthly" && !job.days_of_month && !job.last_day_of_month) {
+      toast("Pick a day of the month.", { error: true });
       return false;
     }
     job.original = existing ? d.name : "";
@@ -4411,6 +4765,7 @@ async function boot() {
     loadAgentsList(),
     loadConvs(),
     loadRoutines(),
+    loadProactivity(),
     checkVersion(),
   ]);
   route();

@@ -19,14 +19,17 @@ import os
 import re
 import signal
 import time
+from datetime import datetime
 from pathlib import Path
 
 import httpx
 
+import ocevents
 from ocbus import EventBus
-from ocjobs import Scheduler, load_jobs, plain_summary
+from occonditions import should_run
+from ocjobs import DAYS, Scheduler, load_jobs
 from ocmemory import Memory
-from ocnotify import ensure_schema, notify
+from ocnotify import ensure_schema, flush_digest, notify
 from ocprogress import ProgressTracker, follow
 from ocwatch import Watch
 
@@ -52,6 +55,11 @@ JOBS_STATE = Path(os.environ.get("JOBS_STATE", BOT_DIR / "jobs_state.json"))
 
 JOB_RETRIES = int(os.environ.get("JOB_RETRIES", "1"))
 JOB_RETRY_DELAY = float(os.environ.get("JOB_RETRY_DELAY", "60"))
+
+# Digest: collect alerts below the proactivity bar and send one recap per day
+# at this hour (0-23), instead of a dozen small pushes. DIGEST_HOUR=0 disables.
+DIGEST_HOUR = int(os.environ.get("DIGEST_HOUR", "19"))
+DIGEST_STATE = BOT_DIR / "digest_state.json"
 
 # Routine chats, shared with the dashboard (same title scheme).
 CHAT_PREFIX = "dash: "
@@ -156,8 +164,33 @@ async def run_prompt(session_id: str, prompt: str, agent: str) -> tuple[str, Pro
 # ------------------------------------------------------------- scheduled jobs
 
 
+def _resolve_condition(job: dict) -> tuple[bool, str]:
+    """Evaluate a routine's ``skip_if`` without touching the model.
+
+    The `source` is the condition's own literal when present; otherwise an
+    empty source makes Mav run anyway (unknown = do not silently skip a
+    report), except for an explicit "only if X" which is skipped when unknown.
+    """
+    cond = job.get("skip_if")
+    if not cond:
+        return True, ""
+    source = str(cond.get("source") or "")
+    day = DAYS[datetime.now().weekday()]
+    try:
+        ok = should_run(job, source=source, weekday=day)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("condition for %s failed (%s), running anyway", job.get("name"), exc)
+        ok = True
+    why = "" if ok else f"condition {cond.get('type', '?')} not met"
+    return ok, why
+
+
 async def run_job(job: dict) -> None:
     name = job["name"]
+    ok, why = _resolve_condition(job)
+    if not ok:
+        log.info("routine %s skipped: %s", name, why)
+        return
     agent = job.get("agent") or DEFAULT_AGENT
     if not await agent_known(agent):
         agent = ""
@@ -200,6 +233,89 @@ async def run_job(job: dict) -> None:
     )
 
 
+# ---------------------------------------------------------------- events
+
+
+async def run_events_once() -> int:
+    """Fire every routine subscribed to the events received since last tick.
+
+    Events are consumed even when no routine matches, so they do not pile up.
+    Returns how many routines were launched.
+    """
+    events = ocevents.pending()
+    if not events:
+        return 0
+    jobs = load_jobs(JOBS_FILE)
+    fired = 0
+    for event in events:
+        for job in jobs:
+            if job.get("enabled", True) and ocevents.matches(job, event):
+                log.info("event %s/%s -> routine %s", event.get("kind"), event.get("id"), job["name"])
+                asyncio.create_task(_safe_run_job(job))
+                fired += 1
+        ocevents.consume(event["id"])
+    return fired
+
+
+async def _safe_run_job(job: dict) -> None:
+    try:
+        await run_job(job)
+    except Exception:  # noqa: BLE001
+        log.exception("event-triggered routine %s failed", job.get("name"))
+
+
+async def events_loop() -> None:
+    while True:
+        try:
+            await run_events_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("events loop error")
+        await asyncio.sleep(30)
+
+
+# ---------------------------------------------------------------- digest
+
+
+def _digest_time(now: datetime) -> bool:
+    if DIGEST_HOUR <= 0 or now.hour != DIGEST_HOUR:
+        return False
+    try:
+        import json  # noqa: PLC0415
+
+        last = json.loads(DIGEST_STATE.read_text()).get("last")
+    except Exception:
+        last = None
+    return last != now.strftime("%Y-%m-%d")
+
+
+def _mark_digest(now: datetime) -> None:
+    try:
+        import json  # noqa: PLC0415
+
+        DIGEST_STATE.write_text(json.dumps({"last": now.strftime("%Y-%m-%d")}))
+    except Exception:
+        pass
+
+
+async def digest_loop() -> None:
+    """Once a day, send the collected low-priority alerts as one recap."""
+    while True:
+        try:
+            now = datetime.now()
+            if _digest_time(now):
+                res = flush_digest(OWNER_ID)
+                _mark_digest(now)
+                if res.get("count"):
+                    log.info("digest sent: %d item(s)", res["count"])
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("digest loop error")
+        await asyncio.sleep(60)
+
+
 # ---------------------------------------------------------------- lifecycle
 
 
@@ -224,10 +340,17 @@ async def main() -> None:
     async def runner(job: dict) -> None:
         await run_job(job)
 
+    try:
+        ocevents.ensure_schema()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("events schema unavailable: %s", exc)
+
     scheduler = Scheduler(JOBS_FILE, JOBS_STATE, runner)
     scheduler.start()
     watch = Watch(OWNER_ID)
     watch_task = asyncio.create_task(watch.run())
+    events_task = asyncio.create_task(events_loop())
+    digest_task = asyncio.create_task(digest_loop())
     log.info("worker ready: %d routine(s), owner %s", len(load_jobs(JOBS_FILE)), OWNER_ID)
 
     stop = asyncio.Event()
@@ -241,6 +364,8 @@ async def main() -> None:
 
     log.info("stopping")
     watch_task.cancel()
+    events_task.cancel()
+    digest_task.cancel()
     await scheduler.stop()
     await bus.stop()
     await http.aclose()

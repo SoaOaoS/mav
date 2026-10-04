@@ -26,13 +26,24 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   chats, in new conversations. See, add and delete everything on the Memory
   page, or type `/remember …` in a chat. Stored in Postgres on your machine.
 - **Routines** — "every morning at 7, tell me if I need an umbrella". Create
-  them from a simple form, with `/routine`, or just say it in a chat and
-  confirm. Each routine has its own chat you can open and follow up in, and
-  you get a push notification when it has something for you.
+  them from a simple form, a ready-made template, with `/routine`, or just say
+  it in a chat and confirm (English, French or Spanish). Schedules can be
+  daily, weekly, monthly (a day, or the last day of the month), every few
+  hours, or triggered by an incoming event (a webhook). A routine can also be
+  conditional — "only if it's going to rain". Each routine has its own chat
+  you can open and follow up in, and you get a push when it has something for
+  you.
+- **Proactivity** — Mav ranks what it finds (critical, important, useful,
+  fyi) so more proactivity never means more noise. Set how far it can go:
+  _Quiet_ only interrupts for what's critical, _Chatty_ also sends the small
+  stuff; anything below your level is collected into one daily recap.
+- **Drafts & background actions** — when Mav spots a mail to answer or a
+  follow-up to send, it prepares a draft for you to review. Ask for something
+  long and it runs in the background, then comes back with the result.
 - **Keep an eye on** — a web page, a product price (optionally only below a
   target), or a news topic. Alerts only when something actually changes.
 - **For you** — the new-chat screen shows your latest routine reports and
-  alerts, each with *Tell me more*.
+  alerts, each with _Tell me more_.
 - **Your model** — Anthropic, OpenAI, Ollama (local or cloud), OpenRouter or
   any OpenAI-compatible API. Switch anytime from Settings → Model: no terminal.
 - **Connections** — plug in other apps and services from Settings →
@@ -40,7 +51,7 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   search, time zones, your files, Notion, Home Assistant, GitHub) and fill in
   its key, or add any MCP server yourself.
 - **Always up to date** — a button tells you when a new version is out and
-  installs it for you; changes that need a restart show a *Restart assistant*
+  installs it for you; changes that need a restart show a _Restart assistant_
   bar until you apply them.
 
 ## Install
@@ -61,11 +72,11 @@ git clone https://github.com/SoaOaoS/mav.git && cd mav && sudo ./install.sh
 The setup asks only what it must:
 
 1. **Your model provider** (arrow keys), your **API key** — checked live — and
-   the **model**, picked from the provider's own list. Or *set it up later* in
+   the **model**, picked from the provider's own list. Or _set it up later_ in
    the dashboard.
 2. Optionally, a **contact email** for push notifications.
 
-Everything else gets sensible defaults (an *Advanced settings?* prompt lets
+Everything else gets sensible defaults (an _Advanced settings?_ prompt lets
 you change the user, ports and quiet hours). Then it installs and starts
 everything; details go to `/var/log/mav-install.log`. Open the address it
 prints, and say hello.
@@ -85,7 +96,7 @@ mav reconfigure   # change the model, or re-run the setup
 mav uninstall     # remove the services (your data is kept)
 ```
 
-Updates can also be installed from the web app (sidebar → *Update to vX.Y.Z*).
+Updates can also be installed from the web app (sidebar → _Update to vX.Y.Z_).
 
 Unattended install: `sudo ./install.sh --yes` with `MAV_PROVIDER`
 (`anthropic`, `openai`, `ollama`, `ollama-cloud-api`, `openrouter`),
@@ -142,10 +153,10 @@ and published as a GitHub release (`.github/workflows/release.yml`). The bump
 comes from the commit messages, written as
 [Conventional Commits](https://www.conventionalcommits.org):
 
-| Commit | Release |
-| --- | --- |
-| `feat!: …` or a `BREAKING CHANGE:` footer | major — `v1.4.2` → `v2.0.0` |
-| `feat: …` | minor — `v1.4.2` → `v1.5.0` |
+| Commit                                             | Release                     |
+| -------------------------------------------------- | --------------------------- |
+| `feat!: …` or a `BREAKING CHANGE:` footer          | major — `v1.4.2` → `v2.0.0` |
+| `feat: …`                                          | minor — `v1.4.2` → `v1.5.0` |
 | anything else (`fix:`, `docs:`, `chore:`, merges…) | patch — `v1.4.2` → `v1.4.3` |
 
 `get.sh`, `mav update` and the update button install the latest release. CI

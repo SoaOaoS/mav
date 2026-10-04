@@ -86,6 +86,31 @@ except Exception:  # noqa: BLE001
 MEMORY_ENABLED = os.environ.get("MEMORY", "1") == "1"
 MEMORY_TOP = int(os.environ.get("MEMORY_TOP", "3") or 3)
 
+# Proactivity modules (shared with the worker): drafts proposed by Mav and the
+# pure routine/condition helpers. All optional — the dashboard still works if
+# only part of the package is present.
+try:
+    from ocdrafts import Drafts  # noqa: E402
+
+    DRAFTS = Drafts(BOT_DIR / "drafts.json")
+except Exception:  # noqa: BLE001
+    DRAFTS = None
+try:
+    from ocactions import Actions  # noqa: E402
+
+    ACTIONS = Actions(BOT_DIR / "actions.json")
+except Exception:  # noqa: BLE001
+    ACTIONS = None
+try:
+    import ocroutine_templates  # noqa: E402
+    import ocroutine_nl  # noqa: E402
+
+    ROUTINE_TEMPLATES = ocroutine_templates.TEMPLATES
+except Exception:  # noqa: BLE001
+    ocroutine_templates = None
+    ocroutine_nl = None
+    ROUTINE_TEMPLATES = []
+
 import mav_provider  # noqa: E402
 
 # Agents offered in the dashboard selector.
@@ -1231,6 +1256,11 @@ def get_jobs() -> dict:
                 "agent": j.get("agent", ""),
                 "prompt": j.get("prompt", ""),
                 "enabled": j.get("enabled", True),
+                "days_of_month": j.get("days_of_month", []),
+                "last_day_of_month": bool(j.get("last_day_of_month")),
+                "on_event": j.get("on_event"),
+                "skip_if": j.get("skip_if"),
+                "snooze_until": j.get("snooze_until", 0),
                 "last_run": state.get(j.get("name")),
                 "running": j.get("name") in _running_jobs,
                 "session": chats.get(j.get("name")),
@@ -1243,35 +1273,123 @@ JOB_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}$")
 JOB_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
+def delete_job(name: str) -> bool:
+    jobs = read_json(JOBS_FILE, [])
+    keep = [j for j in jobs if j.get("name") != name]
+    if len(keep) == len(jobs):
+        return False
+    write_json(JOBS_FILE, keep)
+    return True
+
+
+# ----------------------------------------------------------- proactivity
+# Layers added on top of simple time-based routines: richer schedules (monthly,
+# every-N-weeks), events/webhooks, conditions ("only if…"), ready-made
+# templates, plus the drafts and background actions Mav produces on its own.
+
+def _schedule_from_payload(payload: dict) -> dict:
+    """Translate the web form's schedule fields into jobs.json keys."""
+    every = payload.get("every_minutes")
+    try:
+        every = int(every) if every not in (None, "", 0, "0") else 0
+    except (TypeError, ValueError):
+        every = -1  # sentinel: invalid
+    out: dict = {"every_minutes": every}
+    if every < 0:
+        return out
+    if every:
+        return out
+    out["every_minutes"] = 0
+    time_ = str(payload.get("time") or "").strip()
+    if time_:
+        out["time"] = time_
+    mode = str(payload.get("schedule_mode") or "").strip().lower()
+    if mode == "monthly":
+        dom = payload.get("days_of_month") or []
+        if isinstance(dom, str):
+            dom = [d for d in re.split(r"[,\s]+", dom) if d]
+        dom = [int(d) for d in dom if str(d).strip().isdigit()]
+        last = bool(payload.get("last_day_of_month"))
+        if not dom and not last:
+            return {**out, "_error": "Choisis un jour du mois (ou le dernier jour)."}
+        if dom:
+            out["days_of_month"] = dom
+        if last:
+            out["last_day_of_month"] = True
+        return out
+    if mode == "event":
+        kind = str(payload.get("event_kind") or "custom").strip()
+        ev: dict = {"kind": kind}
+        needle = str(payload.get("event_contains") or "").strip()
+        if needle:
+            ev["contains"] = needle
+        out["on_event"] = ev
+        return out
+    days = [d for d in (payload.get("days") or []) if d in JOB_DAYS]
+    out["days"] = days or JOB_DAYS
+    return out
+
+
+def _condition_from_payload(payload: dict) -> dict | None:
+    """Build a ``skip_if`` block, or None when there is no condition."""
+    ctype = str(payload.get("condition_type") or "").strip().lower()
+    if not ctype or ctype == "none":
+        return None
+    cond: dict = {"type": ctype}
+    value = payload.get("condition_value")
+    if value not in (None, ""):
+        cond["value"] = value
+    source = str(payload.get("condition_source") or "").strip()
+    if source:
+        cond["source"] = source
+    negate = payload.get("condition_negate")
+    if negate in (True, "true", "on", 1, "1"):
+        cond["negate"] = True
+    if ctype == "number":
+        op = str(payload.get("condition_op") or ">=").strip()
+        cond["op"] = op if op in (">", "<", ">=", "<=", "==", "!=") else ">="
+    return cond
+
+
 def save_job(payload: dict) -> dict:
-    """Create or update a job (`original` = name before a rename)."""
+    """Create or update a routine (`original` = name before a rename).
+
+    Extends the simple form with: monthly schedules, event triggers, a
+    condition (`skip_if`) and snooze (`snooze_until`, an epoch second).
+    """
     name = str(payload.get("name") or "").strip()
     if not JOB_NAME_RE.match(name):
         return {"ok": False, "error": "Give the automation a name (letters, digits, - _ .)."}
     prompt = str(payload.get("prompt") or "").strip()
     if not prompt:
         return {"ok": False, "error": "Write what Mav should do."}
-    every = payload.get("every_minutes")
-    try:
-        every = int(every) if every not in (None, "", 0, "0") else 0
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "The interval must be a number of minutes."}
-    time_ = str(payload.get("time") or "").strip()
-    if not every and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", time_):
-        return {"ok": False, "error": "Pick a time (HH:MM) or an interval."}
-    days = [d for d in (payload.get("days") or []) if d in JOB_DAYS] or JOB_DAYS
+
+    sched = _schedule_from_payload(payload)
+    if sched.pop("_error", None):
+        return {"ok": False, "error": sched.pop("_error", "Invalid schedule.")}
+    if not sched.get("every_minutes") and not sched.get("on_event"):
+        # A timed job needs a valid time; an event job does not.
+        if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", str(sched.get("time") or "")):
+            return {"ok": False, "error": "Pick a time (HH:MM), an interval, or an event."}
+
     job = {
         "name": name,
         "description": str(payload.get("description") or "").strip()[:200],
         "prompt": prompt,
         "agent": str(payload.get("agent") or "").strip(),
-        "days": days,
         "enabled": bool(payload.get("enabled", True)),
+        **sched,
     }
-    if every:
-        job["every_minutes"] = max(5, every)
-    else:
-        job["time"] = time_
+    cond = _condition_from_payload(payload)
+    if cond:
+        job["skip_if"] = cond
+    try:
+        snooze = int(payload.get("snooze_until") or 0)
+    except (TypeError, ValueError):
+        snooze = 0
+    if snooze > int(time.time()):
+        job["snooze_until"] = snooze
+
     jobs = read_json(JOBS_FILE, [])
     if not isinstance(jobs, list):
         jobs = []
@@ -1282,7 +1400,10 @@ def save_job(payload: dict) -> dict:
     for i, j in enumerate(jobs):
         if j.get("name") == (original or name):
             # Keep unknown keys (retries, chat_id…) from hand-edited files.
-            keep = {k: v for k, v in j.items() if k not in ("time", "every_minutes")}
+            keep = {k: v for k, v in j.items() if k not in (
+                "time", "every_minutes", "days", "days_of_month",
+                "last_day_of_month", "on_event", "skip_if", "snooze_until",
+            )}
             jobs[i] = {**keep, **job}
             replaced = True
             break
@@ -1293,13 +1414,92 @@ def save_job(payload: dict) -> dict:
     return {"ok": True, "job": job}
 
 
-def delete_job(name: str) -> bool:
+def job_templates() -> dict:
+    """Ready-made routines for the dashboard's two-click creation."""
+    return {"templates": ROUTINE_TEMPLATES}
+
+
+def template_to_job(template_id: str, *, name: str = "") -> dict:
+    """Expand a template into a concrete job (not saved here)."""
+    if not ocroutine_templates:
+        return {"ok": False, "error": "Templates unavailable."}
+    tpl = ocroutine_templates.get(template_id)
+    if not tpl:
+        return {"ok": False, "error": "Unknown template."}
+    when = dict(tpl.get("when") or {})
+    job = {
+        "name": (name or tpl["label"])[:61].strip(),
+        "description": tpl.get("description", "")[:200],
+        "prompt": tpl["prompt"],
+        "agent": tpl.get("agent", ""),
+        "enabled": True,
+    }
+    job.update(when)
+    if tpl.get("skip_if"):
+        job["skip_if"] = dict(tpl["skip_if"])
+    return {"ok": True, "job": job}
+
+
+def detect_routine(text: str) -> dict:
+    """Turn a chat sentence into a routine draft (multilingual)."""
+    if not ocroutine_nl:
+        return {"draft": None}
+    draft = ocroutine_nl.detect(text)
+    return {"draft": draft}
+
+
+def get_proactivity() -> dict:
+    """The user's proactivity preference + what is waiting per level."""
+    level = "normal"
+    try:
+        rows = pg_query("select value from preferences where key = 'notify.proactivity' limit 1")
+        if rows and rows[0].get("value"):
+            level = rows[0]["value"]
+    except Exception:  # noqa: BLE001
+        pass
+    counts = {"pending": 0, "low": 0}
+    try:
+        counts["pending"] = len(pg_query(
+            "select 1 from notify_digest where not sent"
+        ))
+        counts["low"] = counts["pending"]
+    except Exception:  # noqa: BLE001
+        pass
+    drafts = len(DRAFTS.list("pending", limit=200)) if DRAFTS else 0
+    actions = ACTIONS.list("running", limit=200) if ACTIONS else []
+    return {"level": level, "digest_pending": counts["pending"],
+            "drafts_pending": drafts, "actions_running": len(actions)}
+
+
+def set_proactivity(level: str) -> dict:
+    level = (level or "normal").strip().lower()
+    if level not in ("quiet", "normal", "chatty"):
+        return {"ok": False, "error": "Level must be quiet, normal or chatty."}
+    try:
+        pg_exec(
+            "insert into preferences (chat_id, key, value, ts) values (%s, 'notify.proactivity', %s, %s) "
+            "on conflict (chat_id, key) do update set value = excluded.value, ts = excluded.ts",
+            (DEFAULT_CHAT_ID, level, int(time.time())),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+    return {"ok": True, "level": level}
+
+
+def snooze_job(name: str, until: int) -> bool:
     jobs = read_json(JOBS_FILE, [])
-    keep = [j for j in jobs if j.get("name") != name]
-    if len(keep) == len(jobs):
-        return False
-    write_json(JOBS_FILE, keep)
-    return True
+    found = False
+    for j in jobs:
+        if j.get("name") == name:
+            if until > 0:
+                j["snooze_until"] = until
+            else:
+                j.pop("snooze_until", None)
+            found = True
+    if found:
+        write_json(JOBS_FILE, jobs)
+    return found
+
 
 
 _running_jobs: set = set()
@@ -1360,6 +1560,46 @@ def run_job_now(name: str) -> dict:
 
     threading.Thread(target=work, daemon=True).start()
     return {"ok": True, "session": sid}
+
+
+ACTION_PREFIX = "Action · "
+
+
+def start_action(prompt: str, name: str = "", agent: str = "") -> dict:
+    """Run a long task in the background and deliver its result later.
+
+    Unlike a routine, an action is a one-off: it gets its own chat, is tracked
+    in the `actions` table while it runs, and pushes the answer when done.
+    """
+    prompt = (prompt or "").strip()
+    if not prompt:
+        return {"ok": False, "error": "Give the action something to do."}
+    title = (name or prompt)[:60].strip() or "Action"
+    agent = agent or DEFAULT_AGENT
+    sid = create_session(ACTION_PREFIX + title, agent)["id"]
+    set_session_meta(sid, title_locked=True, titled=True, action=title)
+    aid = ACTIONS.add(DEFAULT_CHAT_ID, title, "task", f"./#chat/{sid}") if ACTIONS else None
+
+    def work():
+        if ACTIONS and aid:
+            ACTIONS.update(aid, "running")
+        try:
+            text = ask(prompt, agent, sid, raw_session=True, with_memory=True)
+            failed = not text or text.startswith("Error:")
+            if ACTIONS and aid:
+                ACTIONS.update(aid, "failed" if failed else "done", result=text or "")
+            if not failed:
+                summary = " ".join(re.sub(r"[*_`#>|]+", "", text).split())
+                if len(summary) > 220:
+                    summary = summary[:217] + "…"
+                record_notification("action", f"✅ {title}", summary, f"./#chat/{sid}")
+                send_push(f"✅ {title}", summary, f"./#chat/{sid}")
+        except Exception as exc:  # noqa: BLE001
+            if ACTIONS and aid:
+                ACTIONS.update(aid, "failed", result=str(exc)[:500])
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"ok": True, "id": aid, "session": sid}
 
 
 def set_job_enabled(name: str, enabled: bool) -> bool:
@@ -1472,6 +1712,86 @@ def get_notification(nid: int) -> dict:
     except Exception:
         rows = []
     return {"notification": rows[0] if rows else None}
+
+
+def get_drafts(status: str = "pending") -> dict:
+    status = status if status in ("pending", "sent", "discarded", "all") else "pending"
+    items = DRAFTS.list(status, limit=100) if DRAFTS else []
+    return {"drafts": items, "backend": DRAFTS.backend if DRAFTS else "none"}
+
+
+def draft_action(action: str, payload: dict) -> dict:
+    if not DRAFTS:
+        return {"ok": False, "error": "Drafts unavailable."}
+    if action == "status":
+        return {"ok": DRAFTS.set_status(int(payload.get("id") or 0), str(payload.get("status") or "pending"))}
+    if action == "delete":
+        return {"ok": DRAFTS.delete(int(payload.get("id") or 0))}
+    if action == "add":
+        title = str(payload.get("title") or "").strip()
+        body = str(payload.get("body") or "").strip()
+        if not title or not body:
+            return {"ok": False, "error": "Title and body required."}
+        did = DRAFTS.add(DEFAULT_CHAT_ID, str(payload.get("kind") or "other"), title, body, "dashboard")
+        return {"ok": did is not None, "id": did}
+    return {"ok": False, "error": "unknown action"}
+
+
+def get_actions() -> dict:
+    items = ACTIONS.list("all", limit=100) if ACTIONS else []
+    return {"actions": items, "backend": ACTIONS.backend if ACTIONS else "none"}
+
+
+def get_events(limit: int = 30) -> dict:
+    try:
+        from ocevents import recent  # noqa: PLC0415
+
+        return {"events": recent(limit)}
+    except Exception:  # noqa: BLE001
+        return {"events": []}
+
+
+def hook_event(kind: str, payload: dict, token: str = "") -> dict:
+    """Record an incoming event and (best-effort) kick the worker."""
+    try:
+        from ocevents import ensure_schema, push  # noqa: PLC0415
+
+        ensure_schema()
+        # Optional shared-secret guard, configured in Settings → Proactivity.
+        want = ""
+        try:
+            rows = pg_query("select value from preferences where key = 'hooks.token' limit 1")
+            want = (rows[0].get("value") or "") if rows else ""
+        except Exception:  # noqa: BLE001
+            want = ""
+        if want and token != want:
+            return {"ok": False, "error": "bad token"}
+        eid = push(kind, payload)
+        return {"ok": eid is not None, "id": eid}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+
+
+def draft_notify(draft_id: int) -> dict:
+    """Turn a pending draft into a notification, so it reaches the phone."""
+    d = DRAFTS.get(draft_id) if DRAFTS else None
+    if not d:
+        return {"ok": False, "error": "Unknown draft."}
+    try:
+        from ocnotify import notify  # noqa: PLC0415
+
+        res = notify(
+            f"✍️ Brouillon prêt · {d['title']}",
+            (d.get("body") or "")[:600],
+            chat_id=DEFAULT_CHAT_ID,
+            topic="draft",
+            level="important",
+            dedup_key=f"draft:{draft_id}",
+        )
+        DRAFTS.set_status(draft_id, "sent")
+        return {"ok": True, "notify": res}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
 
 
 # --------------------------------------------------------------- debates
@@ -2785,8 +3105,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_status())
             if path == "/api/jobs":
                 return self._send(200, get_jobs())
+            if path == "/api/job-templates":
+                return self._send(200, job_templates())
             if path == "/api/job-results":
                 return self._send(200, get_job_results())
+            if path == "/api/proactivity":
+                return self._send(200, get_proactivity())
+            if path == "/api/drafts":
+                return self._send(200, get_drafts(p.get("status", "pending")))
+            if path == "/api/actions":
+                return self._send(200, get_actions())
+            if path == "/api/events":
+                return self._send(200, get_events(int(p.get("limit", 30) or 30)))
             if path == "/api/memory":
                 return self._send(200, get_memory())
             if path == "/api/watch":
@@ -2984,9 +3314,50 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/job/save":
                 res = save_job(payload)
                 return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/job/template":
+                res = template_to_job(payload.get("id", ""), name=payload.get("name", ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/job/snooze":
+                try:
+                    until = int(payload.get("until") or 0)
+                except (TypeError, ValueError):
+                    until = 0
+                ok = snooze_job(payload.get("name", ""), until)
+                return self._send(200 if ok else 404, {"ok": ok})
             if path == "/api/job/delete":
                 ok = delete_job(payload.get("name", ""))
                 return self._send(200 if ok else 404, {"ok": ok})
+            if path == "/api/routine/detect":
+                return self._send(200, detect_routine(payload.get("text", "")))
+            if path == "/api/proactivity":
+                res = set_proactivity(payload.get("level", ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/drafts/add":
+                res = draft_action("add", payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/drafts/status":
+                res = draft_action("status", payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/drafts/delete":
+                res = draft_action("delete", payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/drafts/notify":
+                res = draft_notify(int(payload.get("id") or 0))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/hooks/event":
+                res = hook_event(
+                    payload.get("kind", "custom"),
+                    payload.get("payload") or payload,
+                    str(payload.get("token") or ""),
+                )
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/actions/start":
+                res = start_action(
+                    payload.get("prompt", ""),
+                    payload.get("name", ""),
+                    payload.get("agent", ""),
+                )
+                return self._send(200 if res.get("ok") else 400, res)
             if path.startswith("/api/memory/"):
                 res = memory_action(path[len("/api/memory/"):], payload)
                 return self._send(200 if res.get("ok") else 400, res)
