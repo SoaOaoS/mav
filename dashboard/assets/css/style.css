@@ -611,6 +611,19 @@ small {
   color: var(--ink-3);
   font-size: 0.82rem;
 }
+.hint.warn {
+  color: var(--warn);
+}
+fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+fieldset legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 0.2rem;
+}
 .badge {
   display: inline-flex;
   align-items: center;

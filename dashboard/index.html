@@ -614,10 +614,72 @@
 
             <!-- Connections -->
             <div class="spanel" id="spanel-connections">
+              <h3 class="sub">Mail</h3>
               <p class="hint">
-                Connect Mav to other apps and services so it can use them for
-                you.
+                Let Mav read your inbox and send replies. Uses IMAP + SMTP;
+                credentials stay on this machine.
               </p>
+              <div class="card" id="mailCard">
+                <fieldset>
+                  <legend>Mail</legend>
+                  <div class="row">
+                    <div class="field">
+                      <label for="mailProvider">Provider</label>
+                      <select id="mailProvider"></select>
+                    </div>
+                    <div class="field" style="flex: 1">
+                      <label for="mailUser">Your email address</label>
+                      <input
+                        type="email"
+                        id="mailUser"
+                        placeholder="you@example.com"
+                        autocomplete="off"
+                      />
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="field">
+                      <label for="mailImap">IMAP server</label>
+                      <input
+                        type="text"
+                        id="mailImap"
+                        placeholder="imap.example.com"
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="mailSmtp">SMTP server</label>
+                      <input
+                        type="text"
+                        id="mailSmtp"
+                        placeholder="smtp.example.com"
+                      />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="mailPass">Password / app password</label>
+                    <input
+                      type="password"
+                      id="mailPass"
+                      placeholder="leave blank to keep the current one"
+                      autocomplete="new-password"
+                    />
+                  </div>
+                  <p class="hint warn" id="mailHint"></p>
+                  <div class="row">
+                    <span class="status-text" id="mailStatus"></span>
+                    <button class="btn btn-ghost btn-sm" id="mailTest">
+                      Check connection
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="mailSave">
+                      Save
+                    </button>
+                    <button class="btn btn-ghost btn-sm danger" id="mailForget">
+                      Forget
+                    </button>
+                  </div>
+                </fieldset>
+              </div>
+
               <h3 class="sub">Your connections</h3>
               <div class="mcp-cards" id="mcpCards"></div>
               <div class="panel-bar catalog-bar">

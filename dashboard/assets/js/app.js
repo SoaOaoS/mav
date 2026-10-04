@@ -2261,24 +2261,33 @@ function renderDrafts() {
         <span class="dmeta">${esc(fmtRel(d.ts))}</span></div>
       <div class="dbody">${mdToHtml(d.body || "")}</div>
       <div class="dacts">
+        ${
+          d.email_to
+            ? `<button class="btn btn-primary btn-sm" data-dmail="${d.id}">${I("send") || ""} Send email</button>`
+            : ""
+        }
+        <button class="btn btn-ghost btn-sm" data-dedit="${d.id}">${I("edit") || ""} Edit</button>
         <button class="btn btn-ghost btn-sm" data-dcopy="${d.id}">${I("copy") || ""} Copy</button>
-        <button class="btn btn-ghost btn-sm" data-dsend="${d.id}">Send to my phone</button>
+        <button class="btn btn-ghost btn-sm" data-dnotify="${d.id}">Send to my phone</button>
         <button class="btn btn-ghost btn-sm danger" data-ddiscard="${d.id}">Discard</button>
-      </div></div>`,
+      </div>
+      ${d.email_to ? `<div class="dmeta-to">To: ${esc(d.email_to)}</div>` : ""}</div>`,
     )
     .join("");
 }
 $("#draftList").addEventListener("click", async (e) => {
-  const copy = e.target.closest("[data-dcopy]");
-  const send = e.target.closest("[data-dsend]");
-  const disc = e.target.closest("[data-ddiscard]");
-  const b = copy || send || disc;
+  const pick = (attr) => e.target.closest(`[data-${attr}]`);
+  const copy = pick("dcopy");
+  const edit = pick("dedit");
+  const mail = pick("dmail");
+  const notify = pick("dnotify");
+  const disc = pick("ddiscard");
+  const b = copy || edit || mail || notify || disc;
   if (!b) return;
-  const id = Number(
-    (copy || send || disc).dataset[
-      copy ? "dcopy" : send ? "dsend" : "ddiscard"
-    ],
+  const key = ["dedit", "dmail", "dnotify", "dcopy", "ddiscard"].find(
+    (k) => b.dataset[k],
   );
+  const id = Number(b.dataset[key]);
   const d = (state.drafts || []).find((x) => x.id === id);
   if (copy && d) {
     try {
@@ -2288,20 +2297,69 @@ $("#draftList").addEventListener("click", async (e) => {
       return toast("Could not copy.", { error: true });
     }
   }
+  if (edit && d) return editDraft(d);
   if (!needLive()) return;
   try {
-    if (send) {
+    if (mail) {
+      if (
+        !(await confirmDialog("Send this email?", `To: ${d.email_to}`, "Send"))
+      )
+        return;
+      const r = await api.post("drafts/send", { id });
+      toast(r.ok ? "Email sent." : r.error || "Send failed.", { error: !r.ok });
+      loadDrafts();
+    } else if (notify) {
       await api.post("drafts/notify", { id });
       toast("Sent to your phone.");
+      loadDrafts();
     } else {
       await api.post("drafts/status", { id, status: "discarded" });
       toast("Draft discarded.");
+      loadDrafts();
     }
-    loadDrafts();
   } catch (err) {
     toast(err.message, { error: true });
   }
 });
+
+function editDraft(d) {
+  const form = document.createElement("form");
+  form.className = "form";
+  form.innerHTML = `
+    <div class="field"><label>To</label>
+      <input type="email" name="to" value="${esc(d.email_to || "")}" placeholder="someone@example.com"></div>
+    <div class="field"><label>Subject</label>
+      <input type="text" name="subject" value="${esc(d.email_subject || d.title || "")}"></div>
+    <div class="field"><label>Message</label>
+      <textarea name="body" rows="10">${esc(d.body || "")}</textarea></div>`;
+  const save = async () => {
+    if (!needLive()) return false;
+    const fd = new FormData(form);
+    try {
+      await api.post("drafts/edit", {
+        id: d.id,
+        to: String(fd.get("to") || "").trim(),
+        subject: String(fd.get("subject") || "").trim(),
+        body: String(fd.get("body") || ""),
+      });
+      toast("Draft saved.");
+      loadDrafts();
+      return true;
+    } catch (err) {
+      toast(err.message, { error: true });
+      return false;
+    }
+  };
+  modal.open({
+    title: "Edit draft",
+    size: "wide",
+    body: form,
+    actions: [
+      { label: "Cancel" },
+      { label: "Save", kind: "btn-primary", run: save },
+    ],
+  });
+}
 
 const ROUTINE_IDEAS = [
   {
@@ -3149,7 +3207,10 @@ function openSettingsTab(tab) {
       model: loadProvider,
       helpers: loadAgentFiles,
       instructions: loadInstructions,
-      connections: loadMcp,
+      connections: () => {
+        loadMcp();
+        loadMail();
+      },
       general: () => {
         loadAdvanced();
         checkVersion();
@@ -3598,6 +3659,116 @@ async function loadMcp() {
   } catch (_) {}
   renderMcp();
 }
+let MAIL = { presets: [], configured: false };
+
+async function loadMail() {
+  if (!LIVE) return;
+  let m = null;
+  try {
+    m = await api.get("mail/status");
+  } catch (_) {}
+  if (!m) return;
+  MAIL = m;
+  const sel = $("#mailProvider");
+  const current = m.presets || [];
+  sel.innerHTML = current
+    .map((p) => `<option value="${esc(p.id)}">${esc(p.label)}</option>`)
+    .join("");
+  if (m.user) $("#mailUser").value = m.user;
+  if (m.imap) $("#mailImap").value = m.imap;
+  if (m.smtp) $("#mailSmtp").value = m.smtp;
+  $("#mailPass").value = "";
+  $("#mailPass").placeholder = m.has_password
+    ? "leave blank to keep the current one"
+    : "app password";
+  setMailHint(sel.value);
+  setMailStatus(
+    m.configured
+      ? "Connected as " + m.user
+      : "Not configured — Mav cannot read or send mail yet.",
+    m.configured ? "ok" : "",
+  );
+}
+function setMailHint(presetId) {
+  const p = (MAIL.presets || []).find((x) => x.id === presetId);
+  $("#mailHint").textContent = p && p.hint ? p.hint : "";
+}
+function setMailStatus(text, kind) {
+  const el = $("#mailStatus");
+  el.textContent = text || "";
+  el.classList.toggle("is-ok", kind === "ok");
+  el.classList.toggle("is-err", kind === "err");
+}
+$("#mailProvider").addEventListener("change", (e) => {
+  const p = (MAIL.presets || []).find((x) => x.id === e.target.value);
+  if (p) {
+    if (p.imap) $("#mailImap").value = p.imap;
+    if (p.smtp) $("#mailSmtp").value = p.smtp;
+  }
+  setMailHint(e.target.value);
+});
+function mailFields() {
+  return {
+    imap: $("#mailImap").value.trim(),
+    smtp: $("#mailSmtp").value.trim(),
+    user: $("#mailUser").value.trim(),
+    password: $("#mailPass").value,
+  };
+}
+$("#mailTest").addEventListener("click", async () => {
+  if (!needLive()) return;
+  setMailStatus("Checking…", "");
+  try {
+    const r = await api.post("mail/test", mailFields());
+    if (r.ok) setMailStatus("Both IMAP and SMTP work.", "ok");
+    else
+      setMailStatus(
+        (r.errors || []).join(" · ") || "Connection failed.",
+        "err",
+      );
+  } catch (err) {
+    setMailStatus(err.message, "err");
+  }
+});
+$("#mailSave").addEventListener("click", async () => {
+  if (!needLive()) return;
+  const f = mailFields();
+  if (!f.imap || !f.smtp || !f.user)
+    return setMailStatus("Fill the servers and your address.", "err");
+  if (!f.password && !MAIL.has_password)
+    return setMailStatus("Enter the password (or an app password).", "err");
+  try {
+    const r = await api.post("mail/save", f);
+    if (r.error) throw new Error(r.error);
+    await loadMail();
+    toast("Mail saved.");
+  } catch (err) {
+    setMailStatus(err.message, "err");
+  }
+});
+$("#mailForget").addEventListener("click", async () => {
+  if (!needLive()) return;
+  if (
+    !(await confirmDialog(
+      "Forget mail access?",
+      "Mav will no longer read or send your mail.",
+      "Forget",
+    ))
+  )
+    return;
+  try {
+    await api.post("mail/forget", {});
+    $("#mailUser").value = "";
+    $("#mailImap").value = "";
+    $("#mailSmtp").value = "";
+    $("#mailPass").value = "";
+    loadMail();
+    toast("Mail access removed.");
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+});
+
 let CATALOG = { items: [], runtimes: {} };
 async function loadCatalog() {
   if (!LIVE) return renderCatalog();
