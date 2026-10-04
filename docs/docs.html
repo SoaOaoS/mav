@@ -136,10 +136,27 @@ sudo ./install.sh --yes        # unattended, see below</code></pre>
 
           <section id="update">
             <h2>Updating</h2>
-            <pre><code>mav update        # download the latest version, keep everything
-mav update --local  # reinstall the local copy (offline)
-mav reconfigure   # Update / Change the model / Reconfigure / Uninstall
-mav restart · mav status · mav logs</code></pre>
+            <p>
+              When a new version is out, the web app shows
+              <em>Update to vX.Y.Z</em> in the sidebar (and in Settings →
+              General): it shows what's new and installs it for you. From a
+              terminal:
+            </p>
+            <pre><code>mav update            # install the latest release, keep everything
+mav update --check    # only tell whether one is available
+mav update --local    # reinstall the local copy (offline)
+mav status            # what's running, the address, the model
+mav doctor            # check everything, with a hint for each problem
+mav restart [engine|worker|web]
+mav logs [engine|worker|web|install] [-n 50]
+mav backup            # memory, routines, settings → /var/backups/mav/
+mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</code></pre>
+            <p>
+              Versions follow <a href="https://semver.org" target="_blank" rel="noopener">semantic versioning</a>:
+              every change merged into <code>main</code> is released
+              automatically, as a major (breaking change), minor (new feature)
+              or patch version, depending on its commit messages.
+            </p>
             <div class="docs-note">
               <strong>Coming from the Telegram version?</strong> Telegram
               support was removed. Older versions of <code>mav update</code>
@@ -344,13 +361,17 @@ mav restart · mav status · mav logs</code></pre>
           <section id="connections">
             <h2>Connections</h2>
             <p>
-              Settings → Connections lets Mav use other apps and services —
-              calendar, notes, files, smart home — through the
+              Settings → Connections lets Mav use other apps and services
+              through the
               <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">MCP</a>
-              standard. Add an online service by its address, or a program
-              that runs on your server, with its settings (tokens are masked
-              once saved). Then <em>Apply</em>. The raw configuration is in
-              Settings → General → Advanced.
+              standard. Pick one from the catalog — read web pages, a web
+              browser, Brave search, time zones, your files, Notion, Home
+              Assistant, GitHub — fill in its key, and press
+              <em>Restart assistant</em> in the bar that appears. Or add any
+              MCP server with <em>Custom…</em>. Tokens are masked once saved;
+              the raw configuration is in Settings → General → Advanced.
+              Some connections need Node.js or uv on the server — Mav tells
+              you which, and how to install them.
             </p>
             <pre><code>// online service
 { "type": "remote", "url": "https://…/mcp", "enabled": true }
@@ -428,6 +449,14 @@ sudo systemctl restart mav-server</code></pre>
             <p>
               Installed elsewhere? Set <code>MAV_OPENCODE_BIN</code> in
               <code>/etc/mav-server.env</code>.
+            </p>
+            <h3>Check everything at once</h3>
+            <pre><code>mav doctor</code></pre>
+            <p>
+              It checks the services, the assistant, the model, the web app,
+              the database, disk space, file permissions, the HTTPS
+              certificate and available updates, and says what to do for each
+              problem.
             </p>
             <h3>A connection broke the assistant</h3>
             <p>

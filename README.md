@@ -35,8 +35,13 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   alerts, each with *Tell me more*.
 - **Your model** — Anthropic, OpenAI, Ollama (local or cloud), OpenRouter or
   any OpenAI-compatible API. Switch anytime from Settings → Model: no terminal.
-- **Connections** — plug in other apps and services (calendar, notes, files…)
-  through the MCP standard, from Settings → Connections.
+- **Connections** — plug in other apps and services from Settings →
+  Connections: pick one from the catalog (read web pages, web browser, Brave
+  search, time zones, your files, Notion, Home Assistant, GitHub) and fill in
+  its key, or add any MCP server yourself.
+- **Always up to date** — a button tells you when a new version is out and
+  installs it for you; changes that need a restart show a *Restart assistant*
+  bar until you apply them.
 
 ## Install
 
@@ -67,13 +72,19 @@ prints, and say hello.
 ## Manage it
 
 ```bash
-mav update        # download the latest version, keep your settings
+mav status        # what's running, the address, the model
+mav doctor        # check everything, with a hint for each problem
+mav update        # install the latest release, keep your settings
+                  #   --check · --local (no download) · --channel main · --force
+mav version       # installed and latest version
+mav restart [engine|worker|web]
+mav logs [engine|worker|web|install] [-n 50]
+mav backup        # memory, routines and settings → /var/backups/mav/
 mav reconfigure   # change the model, or re-run the setup
-mav restart       # restart the assistant
-mav status        # services
-mav logs          # follow the logs
 mav uninstall     # remove the services (your data is kept)
 ```
+
+Updates can also be installed from the web app (sidebar → *Update to vX.Y.Z*).
 
 Unattended install: `sudo ./install.sh --yes` with `MAV_PROVIDER`
 (`anthropic`, `openai`, `ollama`, `ollama-cloud-api`, `openrouter`),
@@ -123,6 +134,23 @@ model and your settings. Helper files you already had in
 `~/.config/opencode/agent/` are left untouched; the new everyday helpers are
 added next to them.
 
+## Versions
+
+Every push to `main` is tagged with a [semantic version](https://semver.org)
+and published as a GitHub release (`.github/workflows/release.yml`). The bump
+comes from the commit messages, written as
+[Conventional Commits](https://www.conventionalcommits.org):
+
+| Commit | Release |
+| --- | --- |
+| `feat!: …` or a `BREAKING CHANGE:` footer | major — `v1.4.2` → `v2.0.0` |
+| `feat: …` | minor — `v1.4.2` → `v1.5.0` |
+| anything else (`fix:`, `docs:`, `chore:`, merges…) | patch — `v1.4.2` → `v1.4.3` |
+
+`get.sh`, `mav update` and the update button install the latest release. CI
+(`.github/workflows/ci.yml`) runs shellcheck, syntax checks and the tests in
+`tests/` on every pull request.
+
 ## Repository
 
 ```
@@ -132,7 +160,9 @@ mav/
 ├── agents/             # the everyday helpers (Assistant, Researcher, …)
 ├── bot/                # mav-worker: routines, watching, memory, notifications
 ├── dashboard/          # the web app (front-end + server/)
-├── scripts/schema.sql  # database schema
+├── scripts/mav         # the mav command
+├── scripts/            # database schema, version helper
+├── tests/              # unit and script tests (run by CI)
 ├── systemd/            # service templates
 └── docs/               # website and documentation
 ```
