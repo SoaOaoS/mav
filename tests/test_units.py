@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 
 import mav_provider  # noqa: E402
+import ocdebates  # noqa: E402
 import ocjobs  # noqa: E402
 import ocwatch  # noqa: E402
 
@@ -118,6 +119,51 @@ class Provider(unittest.TestCase):
     def test_rejects_bad_input(self):
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "Bad Id!", "m")["ok"])
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "openai", "")["ok"])
+
+
+class Debates(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.file = self.tmp / "threads.json"
+        self.file.write_text(json.dumps({
+            "debate-1": [
+                {"id": 1, "thread": "debate-1", "author": "system",
+                 "text": "**Faut-il migrer ?**\n\nQuestion : Postgres ou SQLite ?",
+                 "ts": "2026-10-04T16:00:00.000Z"},
+                {"id": 2, "thread": "debate-1", "author": "dev",
+                 "text": "Postgres.", "ts": "2026-10-04T16:01:00.000Z"},
+                {"id": 3, "thread": "debate-1", "author": "reviewer",
+                 "text": "SQLite suffit.", "ts": "2026-10-04T16:02:00.000Z"},
+            ]
+        }))
+        self._orig = ocdebates.DEBATE_FILE
+        ocdebates.DEBATE_FILE = self.file
+
+    def tearDown(self):
+        ocdebates.DEBATE_FILE = self._orig
+
+    def test_intro_and_messages(self):
+        threads = ocdebates.list_threads()
+        self.assertEqual(len(threads), 1)
+        t = threads[0]
+        self.assertEqual(t["title"], "Faut-il migrer ?")
+        self.assertEqual(t["question"], "Postgres ou SQLite ?")
+        self.assertEqual(t["messages"], 3)
+        self.assertEqual(t["authors"], ["system", "dev", "reviewer"])
+        self.assertEqual(t["last_author"], "reviewer")
+
+    def test_get_thread_orders_messages(self):
+        d = ocdebates.get_thread("debate-1")
+        self.assertIsNotNone(d)
+        self.assertEqual([m["author"] for m in d["messages"]],
+                         ["system", "dev", "reviewer"])
+        self.assertEqual(d["messages"][1]["text"], "Postgres.")
+        self.assertGreater(d["messages"][1]["ts"], 0)
+
+    def test_missing_file_and_thread(self):
+        ocdebates.DEBATE_FILE = self.tmp / "absent.json"
+        self.assertEqual(ocdebates.list_threads(), [])
+        self.assertIsNone(ocdebates.get_thread("debate-1"))
 
 
 class Catalog(unittest.TestCase):

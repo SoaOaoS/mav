@@ -389,6 +389,7 @@ const VIEW_TITLES = {
   chat: "Mav",
   routines: "Routines",
   memory: "Memory",
+  debates: "Debates",
   settings: "Settings",
 };
 
@@ -407,6 +408,7 @@ function go(view, sub, { push = true } = {}) {
   if (view === "settings") openSettingsTab(sub || currentSettingsTab());
   if (view === "memory") loadMemory();
   if (view === "routines") openRoutinesTab(sub || currentRoutinesTab());
+  if (view === "debates") loadDebates();
   if (view === "chat" && !state.chat.id) refreshInbox();
   if (push) {
     const h =
@@ -3467,6 +3469,112 @@ setInterval(() => {
 }, 15000);
 
 /* ================================================================
+   13b. Debates — live multi-agent threads
+   ================================================================ */
+let debateTimer = null;
+let debateOpenId = null;
+let debateLastCount = 0;
+
+function debateCard(t) {
+  const authors = (t.authors || []).filter((a) => a !== "system");
+  const faces = authors
+    .slice(0, 5)
+    .map(
+      (a) =>
+        `<span class="deb-avatar" title="${esc(agentDisplay(a))}">${esc(
+          (agentDisplay(a)[0] || "?").toUpperCase(),
+        )}</span>`,
+    )
+    .join("");
+  return `<button class="deb-card" data-debate="${esc(t.id)}">
+    <div class="deb-card-head">
+      <strong>${esc(t.title || "Debate")}</strong>
+      <span class="deb-meta">${t.messages} message${t.messages === 1 ? "" : "s"}${
+        t.last_ts ? " · " + fmtRel(t.last_ts) : ""
+      }</span>
+    </div>
+    <p class="deb-q">${esc((t.question || "").slice(0, 180))}</p>
+    <div class="deb-foot">${faces}<span class="deb-open">${I("arrow")} open</span></div>
+  </button>`;
+}
+
+async function loadDebates() {
+  if (!$("#view-debates")) return;
+  try {
+    const r = await api.get("debates");
+    const items = r.debates || [];
+    $("#debatesLive").hidden = !items.length;
+    $("#debateList").innerHTML = items.length
+      ? items.map(debateCard).join("")
+      : `<p class="hint">No debates yet. Ask Mav for one — “debate whether I should…” — and it will appear here.</p>`;
+  } catch (_) {
+    $("#debateList").innerHTML = `<p class="hint">Could not load debates.</p>`;
+  }
+}
+
+async function openDebate(id) {
+  debateOpenId = id;
+  debateLastCount = 0;
+  history.pushState(null, "", `#debates/${encodeURIComponent(id)}`);
+  modal.open({
+    title: "Debate",
+    size: "wide",
+    body: `<div class="deb-thread" id="debThread"><p class="hint">Loading…</p></div>`,
+    actions: [{ label: "Close" }],
+    onClose: () => {
+      debateOpenId = null;
+    },
+  });
+  await refreshDebate(id);
+  clearInterval(debateTimer);
+  debateTimer = setInterval(() => {
+    if (debateOpenId && !document.hidden) refreshDebate(debateOpenId);
+  }, 4000);
+}
+
+async function refreshDebate(id) {
+  try {
+    const r = await api.get(`debate?id=${encodeURIComponent(id)}`);
+    const d = r.debate;
+    if (!d) return;
+    const el = $("#debThread");
+    if (!el) {
+      clearInterval(debateTimer);
+      return;
+    }
+    const msgs = (d.messages || []).filter((m) => m.author !== "system");
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    el.innerHTML =
+      `<div class="deb-question">
+         <span class="deb-tag">Question</span>
+         <p>${mdToHtml(d.question || "")}</p>
+       </div>` +
+      msgs
+        .map(
+          (m) => `<div class="deb-msg" style="--ac:${agentColor(m.author)}">
+            <div class="deb-who">
+              <span class="deb-avatar">${esc(
+                (agentDisplay(m.author)[0] || "?").toUpperCase(),
+              )}</span>
+              <span>${esc(agentDisplay(m.author))}</span>
+              <time>${fmtClock(m.ts)}</time>
+            </div>
+            <div class="deb-body">${mdToHtml(m.text || "")}</div>
+          </div>`,
+        )
+        .join("");
+    if (msgs.length !== debateLastCount || atBottom)
+      el.scrollTop = el.scrollHeight;
+    debateLastCount = msgs.length;
+  } catch (_) {}
+}
+
+document.addEventListener("click", (e) => {
+  const card = e.target.closest("[data-debate]");
+  if (card) openDebate(card.dataset.debate);
+});
+
+/* ================================================================
    14. Voice (dictation + read aloud)
    ================================================================ */
 const S = { speak: store.get("mav-speak") === "1", recog: null };
@@ -3734,27 +3842,23 @@ function searchPalette(q) {
     try {
       const r = await api.get(`search?q=${encodeURIComponent(q)}`);
       if ($("#paletteInput").value.trim() !== q) return;
-      (r.facts || [])
-        .slice(0, 4)
-        .forEach((f) =>
-          palItems.push({
-            group: "Memory",
-            text: f.fact,
-            ico: "brain",
-            run: () => go("memory"),
-          }),
-        );
-      (r.conversations || [])
-        .slice(0, 4)
-        .forEach((c) =>
-          palItems.push({
-            group: "Memory",
-            text: c.question,
-            ico: "clock",
-            kind: fmtRel(c.ts),
-            run: () => go("memory"),
-          }),
-        );
+      (r.facts || []).slice(0, 4).forEach((f) =>
+        palItems.push({
+          group: "Memory",
+          text: f.fact,
+          ico: "brain",
+          run: () => go("memory"),
+        }),
+      );
+      (r.conversations || []).slice(0, 4).forEach((c) =>
+        palItems.push({
+          group: "Memory",
+          text: c.question,
+          ico: "clock",
+          kind: fmtRel(c.ts),
+          run: () => go("memory"),
+        }),
+      );
       drawPalette();
     } catch (_) {}
   }, 220);
@@ -4073,6 +4177,7 @@ setInterval(() => {
   if (!LIVE || document.hidden) return;
   refreshStatus();
   if (state.view === "chat" && !state.chat.id) refreshInbox();
+  if (state.view === "debates" && !debateOpenId) loadDebates();
 }, 30000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && LIVE) {

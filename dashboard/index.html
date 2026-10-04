@@ -117,6 +117,9 @@
           <button class="nav-item" data-view="memory">
             <i data-i="brain"></i> Memory
           </button>
+          <button class="nav-item" data-view="debates">
+            <i data-i="chat"></i> Debates
+          </button>
           <button class="nav-item" data-view="settings">
             <i data-i="settings"></i> Settings
           </button>
@@ -424,6 +427,27 @@
                 </button>
               </div>
               <ul class="list" id="exchangeList"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- DEBATES ---------- -->
+        <section class="view" id="view-debates">
+          <div class="page">
+            <header class="view-head">
+              <div>
+                <h1>Debates</h1>
+                <p>
+                  When Mav asks its helpers to argue a question, the thread
+                  shows up here. Open one to read it live, turn by turn.
+                </p>
+              </div>
+              <span class="badge" id="debatesLive" hidden>
+                <i data-i="activity"></i> live
+              </span>
+            </header>
+            <div class="debates" id="debateList">
+              <p class="hint">Loading…</p>
             </div>
           </div>
         </section>
