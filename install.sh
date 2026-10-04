@@ -683,11 +683,17 @@ fi
 [[ $DO_UNINSTALL -eq 1 ]] && uninstall
 
 if [[ -f /etc/os-release ]]; then
+  # Read the distro identifiers in a subshell: sourcing /etc/os-release into
+  # this shell defines VERSION (e.g. "13 (trixie)"), which would clobber Mav's
+  # own $VERSION. That wrong value then gets written to /etc/mav/version and
+  # breaks `mav version` and the update check.
   # shellcheck disable=SC1091
-  . /etc/os-release
-  case " ${ID:-} ${ID_LIKE:-} " in
+  os_id="$(. /etc/os-release; printf '%s' "${ID:-}")"
+  os_id_like="$(. /etc/os-release; printf '%s' "${ID_LIKE:-}")"
+  os_pretty="$(. /etc/os-release; printf '%s' "${PRETTY_NAME:-unknown}")"
+  case " ${os_id} ${os_id_like} " in
     *" debian "*|*" ubuntu "*|*" raspbian "*|*" arch "*|*" fedora "*) ;;
-    *) warn "Untested system (${PRETTY_NAME:-unknown}) — continuing anyway." ;;
+    *) warn "Untested system (${os_pretty}) — continuing anyway." ;;
   esac
 fi
 if [[ -z "$PKG" && $DRY_RUN -eq 0 ]]; then
