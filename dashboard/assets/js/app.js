@@ -809,6 +809,7 @@ function appendMessage(
         <div class="msg-meta"><span class="who">${esc(agentDisplay(ag))}</span>${m.ts ? `<span>${esc(fmtClock(m.ts))}</span>` : ""}</div>
         <div class="bubble"></div>
         ${m.recalled ? `<div class="recall-note">${I("brain")} Used ${m.recalled} thing${m.recalled > 1 ? "s" : ""} from memory</div>` : ""}
+        <div class="msg-tools"></div>
         <div class="msg-actions">
           <button class="icon-btn" data-act="copy" title="Copy">${I("copy")}</button>
           <button class="icon-btn" data-act="retry" title="Regenerate">${I("refresh")}</button>
@@ -1243,13 +1244,20 @@ document.addEventListener("paste", (e) => {
 
 /* ---------- Sending (SSE streaming) ---------- */
 let streamCtl = null;
+// Messages typed while an answer is running: sent in order once it settles.
+let messageQueue = [];
+// Set when the queue must take over the current answer (a queued send while
+// streaming interrupts and reprocesses with the extra context).
+let takeOver = false;
 
 function setStreaming(on) {
   state.streaming = on;
   document.body.classList.toggle("is-thinking", on);
   $("#sendBtn").hidden = on;
   $("#stopBtn").hidden = !on;
+  renderQueue();
 }
+
 function stopStreaming() {
   if (streamCtl) streamCtl.abort();
   streamCtl = null;
@@ -1257,20 +1265,128 @@ function stopStreaming() {
     api.post("session/abort", { id: state.chat.id }).catch(() => {});
   setStreaming(false);
 }
+
+function renderQueue() {
+  const bar = $("#queueBar");
+  if (!bar) return;
+  if (!messageQueue.length) {
+    bar.hidden = true;
+    bar.innerHTML = "";
+    return;
+  }
+  bar.hidden = false;
+  bar.innerHTML =
+    `<span class="queue-label">${I("arrow")} queued</span>` +
+    messageQueue
+      .map(
+        (q, i) =>
+          `<span class="queue-chip"><span class="queue-text">${esc(
+            q.text.slice(0, 60),
+          )}</span><button class="queue-x" data-qi="${i}" title="Remove">${I(
+            "x",
+          )}</button></span>`,
+      )
+      .join("") +
+    `<button class="queue-send" id="queueInterrupt">${I(
+      "arrow",
+    )} Send now</button>`;
+}
+
+function enqueueMessage(text, files) {
+  messageQueue.push({ text, files: files || [] });
+  renderQueue();
+  toast("Queued — “Send now” to interrupt and send.");
+}
+
+function clearQueue() {
+  messageQueue = [];
+  takeOver = false;
+  renderQueue();
+  setToolChips([]);
+}
+
 $("#stopBtn").addEventListener("click", () => {
   stopStreaming();
+  clearQueue();
   toast("Stopped.");
 });
 
-async function send(raw) {
+/* Queue bar interactions (remove / interrupt-and-send) */
+document.addEventListener("click", (e) => {
+  const x = e.target.closest("[data-qi]");
+  if (x) {
+    messageQueue.splice(Number(x.dataset.qi), 1);
+    renderQueue();
+    return;
+  }
+  if (e.target.closest("#queueInterrupt")) {
+    takeOver = true;
+    if (state.chat.id && LIVE)
+      api.post("session/interrupt", { id: state.chat.id }).catch(() => {});
+    if (streamCtl) streamCtl.abort();
+  }
+});
+
+/* ---------- Live tool activity (shown under the streaming answer) ---------- */
+const TOOL_LABELS = {
+  bash: "Running a command",
+  read: "Reading a file",
+  edit: "Editing a file",
+  write: "Writing a file",
+  grep: "Searching the code",
+  glob: "Finding files",
+  webfetch: "Reading a web page",
+  websearch: "Searching the web",
+  task: "Delegating to a helper",
+};
+function toolLabel(name) {
+  if (TOOL_LABELS[name]) return TOOL_LABELS[name];
+  const m = /^([a-z0-9]+)_(.+)$/.exec(name || "");
+  if (m) return `${m[2].replace(/[_-]/g, " ")} · ${m[1]}`;
+  return name || "tool";
+}
+function renderToolChips(host, tools) {
+  if (!host) return;
+  if (!tools.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = tools
+    .map(
+      (t) =>
+        `<span class="tool-chip ${t.status === "running" ? "is-run" : ""}">${I(
+          "tool",
+        )}<span>${esc(toolLabel(t.name))}</span></span>`,
+    )
+    .join("");
+}
+function setToolChips(list) {
+  const host = document.querySelector(".msg.is-streaming .msg-tools");
+  renderToolChips(host, list || []);
+}
+
+async function send(raw, opts = {}) {
   const text = (raw || "").trim();
   if (text.startsWith("/") && runSlash(text)) return;
   if (state.pendingFiles.some((f) => f.loading))
     return toast("Wait for the upload to finish.");
-  if (!text && !state.pendingFiles.length) return;
+
+  const hasFiles = opts.files ? opts.files.length : state.pendingFiles.length;
+  if (!text && !hasFiles) return;
   if (state.view !== "chat") go("chat");
 
-  const files = state.pendingFiles.slice();
+  // A message typed while an answer runs joins the queue: it is sent once the
+  // current answer settles, unless the user hits "Send now" (interrupt).
+  if (state.streaming && !opts.force) {
+    enqueueMessage(text, opts.files || state.pendingFiles.slice());
+    if (!opts.files) {
+      state.pendingFiles = [];
+      renderAttachments();
+    }
+    return;
+  }
+
+  const files = opts.files || state.pendingFiles.slice();
   state.pendingFiles = [];
   renderAttachments();
 
@@ -1339,6 +1455,7 @@ async function send(raw) {
   let error = null;
   let finished = false;
   let raf = 0;
+  const tools = [];
   streamCtl = new AbortController();
   const sid = state.chat.id;
 
@@ -1356,9 +1473,11 @@ async function send(raw) {
       if (!el) {
         thinking.remove();
         el = appendMessage(reply, { last: true, streaming: true });
+        renderToolChips(el.querySelector(".msg-tools"), tools);
       } else {
         const stick = nearBottom();
         el.querySelector(".bubble").innerHTML = mdToHtml(reply.text);
+        renderToolChips(el.querySelector(".msg-tools"), tools);
         if (stick) scrollToBottom(true);
       }
     };
@@ -1391,8 +1510,15 @@ async function send(raw) {
         } else if (ev === "delta") {
           reply.text += d.delta || "";
           if (!raf) raf = requestAnimationFrame(paint);
+        } else if (ev === "tool") {
+          const i = tools.findIndex((t) => t.name === d.name);
+          const entry = { name: d.name, status: d.status || "running" };
+          if (i >= 0) tools[i] = entry;
+          else tools.push(entry);
+          if (!raf) raf = requestAnimationFrame(paint);
         } else if (ev === "done") {
           if (!reply.text && d.text) reply.text = d.text;
+          if (d.interrupted) reply.interrupted = true;
           finished = true;
         } else if (ev === "error") {
           error = d.message || "Something went wrong.";
@@ -1404,17 +1530,20 @@ async function send(raw) {
       reader.cancel();
     } catch (_) {}
   } catch (e) {
-    error =
-      e.name === "AbortError"
-        ? reply.text
-          ? null
-          : "Stopped."
-        : "Connection lost.";
+    if (e.name === "AbortError") {
+      // An interrupt with a queued message is not an error: drop any partial
+      // text and let the queued send take over.
+      error = takeOver ? null : reply.text ? null : "Stopped.";
+    } else {
+      error = "Connection lost.";
+    }
   }
+  if (takeOver) reply.text = "";
 
   if (state.chat.id !== sid) {
     if (raf) cancelAnimationFrame(raf);
     setStreaming(false);
+    clearQueue();
     return; // the user moved to another chat meanwhile
   }
   // A paint may still be queued (the whole answer can arrive in one chunk).
@@ -1422,7 +1551,9 @@ async function send(raw) {
   raf = 0;
   thinking.remove();
   if (el) el.remove();
-  if (error && !reply.text) {
+  if (takeOver && !reply.text) {
+    // Interrupted with nothing worth keeping: no bubble, the queue takes over.
+  } else if (error && !reply.text) {
     addError(error);
   } else {
     if (!reply.text) reply.text = "_(no answer)_";
@@ -1435,6 +1566,13 @@ async function send(raw) {
   streamCtl = null;
   await loadConvs();
   if (wasNew && !error) watchForTitle(sid);
+
+  // A queued message takes over: either because the user interrupted, or
+  // simply the next queued message once this answer has settled.
+  const next = messageQueue.shift();
+  takeOver = false;
+  renderQueue();
+  if (next) send(next.text, { files: next.files, force: true });
   if (!error && ABOUT_ME_RE.test(text)) watchForMemory(sid);
   if (document.hidden && !error)
     notifyLocal(agentDisplay(reply.agent), reply.text);
