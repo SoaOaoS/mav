@@ -218,12 +218,18 @@ i[data-i] svg {
 }
 .view.is-active {
   display: block;
-  animation: fade var(--dur) var(--ease);
+  animation: viewIn 220ms var(--ease-out);
 }
 .view-chat.is-active {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+@keyframes viewIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 .page {
   max-width: 980px;
@@ -2712,6 +2718,156 @@ body[data-mode="mock"] .engine-chip-text::after {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ================================================================
+   Splash + UX motion (v1.7)
+   ================================================================ */
+
+/* Launch splash: the brand appears while the app boots, then fades away.
+   Removed by JS on first paint; a no-JS / reduced-motion fallback keeps it out
+   of the way. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition:
+    opacity 0.55s var(--ease-out),
+    visibility 0.55s;
+}
+.splash.is-done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  animation: splashIn 0.6s var(--ease-out) both;
+}
+.splash-orb {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, #fff 0 18%, transparent 42%),
+    radial-gradient(circle at 65% 70%, var(--accent), var(--accent-hover));
+  box-shadow:
+    inset -4px -5px 10px rgba(0, 0, 0, 0.22),
+    0 8px 28px rgba(47, 111, 94, 0.4);
+  animation: orbPulse 1.6s var(--ease) infinite;
+}
+.splash-name {
+  font-family: var(--display, "Fraunces", Georgia, serif);
+  font-weight: 600;
+  font-size: 1.6rem;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.splash-tag {
+  color: var(--ink-3);
+  font-size: 0.84rem;
+  margin-top: -0.3rem;
+}
+.splash-bar {
+  margin-top: 0.5rem;
+  width: 140px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  overflow: hidden;
+}
+.splash-bar i {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: splashBar 1.05s var(--ease) infinite;
+}
+@keyframes splashIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@keyframes orbPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+@keyframes splashBar {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+/* While loading, gently lift the app in as the splash fades. */
+body.is-loading .app,
+body.is-loading .topbar {
+  opacity: 0;
+}
+.app,
+.topbar {
+  transition: opacity 0.5s var(--ease-out);
+}
+
+/* New assistant messages arrive with a soft rise (already the case); user
+   bubbles pop slightly for a more tactile feel. */
+.msg.me {
+  animation: pop var(--dur) var(--ease-out) both;
+}
+
+/* Routines, drafts and cards lift on hover with a touch more life. */
+.job,
+.draft,
+.card {
+  transition:
+    transform var(--dur-med) var(--ease),
+    box-shadow var(--dur-med) var(--ease),
+    border-color var(--dur-med) var(--ease);
+}
+.job:hover,
+.draft:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+/* Nav items slide a hair on hover. */
+.nav-item {
+  transition:
+    background var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+.nav-item:hover {
+  transform: translateX(2px);
+}
+
+/* The streaming caret breathes rather than blinks harshly. */
+.msg.is-streaming .bubble > :last-child::after {
+  animation: breathe 1.4s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash {
+    display: none;
+  }
+  body.is-loading .app,
+  body.is-loading .topbar {
+    opacity: 1;
   }
 }
 

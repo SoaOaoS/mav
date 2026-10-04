@@ -3,15 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mav — your everyday AI assistant, on your own machine</title>
+    <title>Mav — the AI assistant that works while you don't</title>
     <meta
       name="description"
-      content="Mav is an everyday AI assistant you run yourself: a ChatGPT-style app with memory, routines that run on their own and alerts when things change — on your machine, with your model. Installed in one command."
+      content="Mav is an everyday AI assistant you run yourself: it remembers you, runs routines on its own, ranks what matters, prepares drafts and keeps an eye on things — on your machine, with your model. Installed in one command."
     />
-    <meta property="og:title" content="Mav — your everyday AI assistant" />
+    <meta
+      property="og:title"
+      content="Mav — the AI assistant that works while you don't"
+    />
     <meta
       property="og:description"
-      content="Like ChatGPT, but proactive and private: it remembers you, runs routines and keeps an eye on things. Your machine, your model."
+      content="Like ChatGPT, but proactive and private: it remembers you, acts on its own and comes to you with what matters. Your machine, your model."
     />
     <meta property="og:type" content="website" />
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
@@ -22,12 +25,36 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
+    <noscript
+      ><style>
+        .splash {
+          display: none;
+        }
+        [data-reveal] {
+          opacity: 1;
+          transform: none;
+        }
+      </style></noscript
+    >
   </head>
-  <body>
+  <body class="is-loading">
+    <!-- ============ SPLASH ============ -->
+    <div class="splash" id="splash" aria-hidden="true">
+      <div class="splash-inner">
+        <span class="splash-orb"></span>
+        <span class="splash-name">Mav</span>
+        <span class="splash-tag">works while you don't</span>
+        <span class="splash-bar"><i></i></span>
+      </div>
+    </div>
+
+    <div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
+
     <div class="bg-halos" aria-hidden="true">
       <span class="halo h1"></span>
       <span class="halo h2"></span>
       <span class="halo h3"></span>
+      <span class="halo h4"></span>
     </div>
 
     <header class="nav glass">
@@ -36,6 +63,7 @@
         <span class="brand-name">Mav</span>
       </a>
       <nav class="nav-links">
+        <a href="#proactive">Proactivity</a>
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
         <a href="docs.html">Docs</a>
@@ -60,15 +88,22 @@
       <!-- HERO -->
       <section class="hero">
         <div class="hero-copy">
-          <a class="pill" id="versionPill" href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener">Open source · MIT</a>
+          <a
+            class="pill"
+            id="versionPill"
+            href="https://github.com/SoaOaoS/mav/releases"
+            target="_blank"
+            rel="noopener"
+            >Open source · MIT</a
+          >
           <h1>
-            Your everyday AI assistant,<br />
-            that also works on its own.
+            The assistant that<br />
+            <span class="grad">works while you don't.</span>
           </h1>
           <p class="lede">
-            Mav is like ChatGPT — but it <strong>remembers you</strong>,
-            <strong>runs routines</strong> and <strong>keeps an eye on
-            things</strong> for you. It runs on <em>your</em> machine, with the
+            ChatGPT answers when you ask. Mav <strong>notices things</strong>,
+            <strong>decides what deserves your attention</strong> and
+            <strong>gets it done</strong>. On <em>your</em> machine, with the
             model <em>you</em> choose.
           </p>
           <div class="cta">
@@ -90,7 +125,7 @@
         </div>
 
         <div class="hero-visual">
-          <div class="mock glass">
+          <div class="mock glass" data-tilt>
             <div class="mock-top">
               <span class="dot r"></span><span class="dot y"></span
               ><span class="dot g"></span>
@@ -106,6 +141,22 @@
                 <div class="ms"><i class="ico sliders"></i> Settings</div>
               </aside>
               <div class="mock-main">
+                <div class="toast-stack" aria-hidden="true">
+                  <div class="toast t-critical">
+                    <span class="toast-ico">!</span>
+                    <div>
+                      <strong>Payment failed</strong
+                      ><small>Card declined — action needed</small>
+                    </div>
+                  </div>
+                  <div class="toast t-useful">
+                    <span class="toast-ico">↻</span>
+                    <div>
+                      <strong>Price dropped</strong
+                      ><small>129 → 99 € on your watch</small>
+                    </div>
+                  </div>
+                </div>
                 <div class="mock-card engine">
                   <span class="pulse"></span>
                   <div>
@@ -132,8 +183,100 @@
               </div>
             </div>
           </div>
-          <span class="float f1 glass">Price dropped: 129 → 99 €</span>
+          <span class="float f1 glass">Drafted a reply to your landlord</span>
           <span class="float f2 glass">Remembers what matters to you</span>
+        </div>
+      </section>
+
+      <!-- PROACTIVITY — the differentiator -->
+      <section id="proactive" class="section">
+        <header class="section-head">
+          <h2>It doesn't just answer. It acts.</h2>
+          <p>
+            Three layers keep Mav useful without turning it into a nag: it
+            notices, it decides, it does.
+          </p>
+        </header>
+
+        <div class="pillars">
+          <article class="pillar glass" data-reveal>
+            <span class="pillar-tag">1 · It notices</span>
+            <h3>Triggers that fire on their own</h3>
+            <p>
+              On a schedule — daily, weekly, <strong>monthly</strong>, or every
+              few hours. On an <strong>event</strong> from another service (a
+              new PR, a form, a payment). Or
+              <strong>only when a condition is met</strong>.
+            </p>
+            <ul class="micro">
+              <li>Say it in a chat — English, French or Spanish</li>
+              <li>Start from a ready-made template</li>
+              <li>Snooze any routine without losing it</li>
+            </ul>
+          </article>
+
+          <article class="pillar glass" data-reveal>
+            <span class="pillar-tag">2 · It decides</span>
+            <h3>Proactivity, not noise</h3>
+            <p>
+              Every alert is ranked. Mav only interrupts when it clears the bar
+              <em>you</em> set, and collects the rest into one calm daily recap.
+            </p>
+            <div class="ladder" aria-hidden="true">
+              <span class="rung l-critical"><i></i>Critical — always</span>
+              <span class="rung l-important"><i></i>Important</span>
+              <span class="rung l-useful"><i></i>Useful → recap</span>
+              <span class="rung l-fyi"><i></i>FYI — kept, silent</span>
+            </div>
+            <div class="seg-demo" aria-hidden="true">
+              <span>Quiet</span><span class="on">Normal</span
+              ><span>Chatty</span>
+            </div>
+          </article>
+
+          <article class="pillar glass" data-reveal>
+            <span class="pillar-tag">3 · It does</span>
+            <h3>Drafts and background work</h3>
+            <p>
+              When a reply is needed, Mav <strong>writes it</strong> for you to
+              review. Long tasks run in the background and come back when
+              they're done — the chat stays yours.
+            </p>
+            <div class="draft-demo glass">
+              <span class="draft-kind">Reply · ready</span>
+              <p>
+                Bonjour, oui le préavis est bien d'un mois, je vous confirme…
+              </p>
+              <span class="draft-acts"
+                ><b>Copy</b><b>Send</b><b class="ghostb">Discard</b></span
+              >
+            </div>
+          </article>
+        </div>
+
+        <div class="cycle glass" data-reveal>
+          <div class="cycle-item">
+            <span class="cycle-n">0</span>
+            <strong>Nothing to set up</strong>
+            <small
+              >It comes with routines, memory and alerts already wired.</small
+            >
+          </div>
+          <div class="cycle-item">
+            <span class="cycle-n"><span data-count="1">0</span></span>
+            <strong>command to install</strong>
+            <small>One line, then it asks only for your model.</small>
+          </div>
+          <div class="cycle-item">
+            <span class="cycle-n"><span data-count="0">0</span></span>
+            <strong>accounts, anywhere</strong>
+            <small>Self-hosted: no sign-up, no telemetry.</small>
+          </div>
+          <div class="cycle-item">
+            <span class="cycle-n">∞</span>
+            <strong>your model, forever</strong>
+            <small>Switch providers any time, from the app.</small>
+          </div>
         </div>
       </section>
 
@@ -144,111 +287,193 @@
           <p>It answers when you ask — and gets things done when you don't.</p>
         </header>
         <div class="grid cards">
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 20l1-3.3A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 20l1-3.3A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z"
+                />
+              </svg>
+            </div>
             <h3>Chat, the way you know it</h3>
             <p>
               A clean ChatGPT-style app on your computer and phone. Chats get a
               title on their own; type <code>/</code> for quick commands.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 6 4.8"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="9" cy="8" r="3.5" />
+                <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+                <circle cx="17.5" cy="9" r="2.5" />
+                <path d="M16 14.2a5 5 0 0 1 6 4.8" />
+              </svg>
+            </div>
             <h3>Helpers with a speciality</h3>
             <p>
               The Assistant calls in a Researcher, a Writer, a Planner or Money
               when it helps. You always see who's answering — and can pick.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3a3 3 0 0 0-2.9 4A3 3 0 0 0 6 13a3 3 0 0 0 1.5 5.6A3 3 0 0 0 12 21V4a3 3 0 0 0-3-1Z"/><path d="M15 3a3 3 0 0 1 2.9 4A3 3 0 0 1 18 13a3 3 0 0 1-1.5 5.6A3 3 0 0 1 12 21"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 3a3 3 0 0 0-2.9 4A3 3 0 0 0 6 13a3 3 0 0 0 1.5 5.6A3 3 0 0 0 12 21V4a3 3 0 0 0-3-1Z"
+                />
+                <path
+                  d="M15 3a3 3 0 0 1 2.9 4A3 3 0 0 1 18 13a3 3 0 0 1-1.5 5.6A3 3 0 0 1 12 21"
+                />
+              </svg>
+            </div>
             <h3>It remembers you</h3>
             <p>
               Your city, your diet, your projects. Mav learns facts about you
               and recalls them — see and edit everything on the Memory page.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></div>
-            <h3>Routines</h3>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="13" r="8" />
+                <path d="M12 9v4l2.5 2M9 2h6" />
+              </svg>
+            </div>
+            <h3>Routines that fit real life</h3>
             <p>
-              "Every morning, tell me if I need an umbrella." Say it in a chat
-              and confirm. Each routine has its own chat to follow up in.
+              "Every morning, tell me if I need an umbrella." Or monthly, or
+              when an event fires. Each routine has its own chat to follow up
+              in.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </div>
             <h3>Keeps an eye on things</h3>
             <p>
               A web page, a product's price, a news topic. You get a
               notification only when something actually changes.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
+                <path d="M10 20a2 2 0 0 0 4 0" />
+              </svg>
+            </div>
             <h3>Comes to you</h3>
             <p>
               Reports and alerts arrive as push notifications and wait in
               <em>For you</em> on the home screen — tap <em>Tell me more</em>.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5" />
+              </svg>
+            </div>
             <h3>Any model, no terminal</h3>
             <p>
               Claude, GPT, Ollama on your own hardware, OpenRouter… Switch from
               Settings: paste a key, pick a model from the list.
             </p>
           </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="4" y="10" width="16" height="11" rx="2" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              </svg>
+            </div>
             <h3>Private by design</h3>
             <p>
               Self-hosted: chats, memory and routines stay on your machine. No
               account, no telemetry — use a local model and nothing leaves home.
             </p>
           </article>
-        </div>
-      </section>
-
-      <!-- EASY -->
-      <section id="easy" class="section">
-        <header class="section-head">
-          <h2>Easy to live with</h2>
-          <p>No terminal needed after the install — and when you want one, it helps you.</p>
-        </header>
-        <div class="grid cards">
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/></svg></div>
+          <article class="card glass" data-reveal>
+            <div class="card-ico">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M4 7h16v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"
+                />
+                <path d="M8 11h8M8 15h5" />
+              </svg>
+            </div>
             <h3>Connections, ready to use</h3>
             <p>
               Read web pages, a web browser, Brave search, time zones, your
               files, Notion, Home Assistant, GitHub. Pick one, paste its key.
-            </p>
-          </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></div>
-            <h3>Updates in one click</h3>
-            <p>
-              Mav tells you when a new version is out, shows what's new and
-              installs it. Your chats, memory and routines stay put.
-            </p>
-          </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.3M20 4v7h-7"/></svg></div>
-            <h3>Changes, applied when you say</h3>
-            <p>
-              Edit instructions, helpers or connections; a bar reminds you to
-              restart the assistant, in one click, when you're ready.
-            </p>
-          </article>
-          <article class="card glass">
-            <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
-            <h3>A helpful command line</h3>
-            <p>
-              <code>mav doctor</code> checks everything and says how to fix it;
-              <code>mav update</code>, <code>mav backup</code>,
-              <code>mav logs</code> do the rest.
             </p>
           </article>
         </div>
@@ -261,7 +486,7 @@
           <p>From a spare machine to your own assistant in minutes.</p>
         </header>
         <ol class="steps">
-          <li class="glass">
+          <li class="glass" data-reveal>
             <span class="step-n">1</span>
             <h3>Install</h3>
             <p>
@@ -270,7 +495,7 @@
             </p>
             <code class="mini">curl -fsSL …/get.sh | sudo bash</code>
           </li>
-          <li class="glass">
+          <li class="glass" data-reveal>
             <span class="step-n">2</span>
             <h3>Pick your model</h3>
             <p>
@@ -279,7 +504,7 @@
             </p>
             <code class="mini">Anthropic · OpenAI · Ollama · …</code>
           </li>
-          <li class="glass">
+          <li class="glass" data-reveal>
             <span class="step-n">3</span>
             <h3>Talk, then let it work</h3>
             <p>
@@ -294,12 +519,12 @@
       <!-- ARCH -->
       <section class="section arch">
         <div class="arch-grid">
-          <div class="arch-copy">
+          <div class="arch-copy" data-reveal>
             <h2>Small, self-contained, yours</h2>
             <p>
               The opencode agent engine does the thinking, a background worker
-              handles routines and alerts, Postgres keeps the memory, and the
-              web app ties it together. Everything on your machine.
+              handles routines, events and alerts, Postgres keeps the memory,
+              and the web app ties it together. Everything on your machine.
             </p>
             <ul class="ticks">
               <li>Three services, set up for you</li>
@@ -308,19 +533,20 @@
               <li>Painless updates: <code>mav update</code></li>
             </ul>
           </div>
-          <pre class="arch-pre glass"><code>Browser / phone
+          <pre class="arch-pre glass" data-reveal><code>Browser / phone
        │
        ▼
   mav-dashboard ──▶ opencode engine
        │                 ▲
        ▼                 │
    Postgres ◀──── mav-worker
- (memory, inbox)   (routines, alerts)</code></pre>
+ (memory, inbox)  routines · events
+                  alerts · drafts</code></pre>
         </div>
       </section>
 
       <!-- CTA -->
-      <section class="final-cta glass">
+      <section class="final-cta glass" data-reveal>
         <div class="orb big" aria-hidden="true"></div>
         <h2>Give it a home.</h2>
         <p>Open source, MIT-licensed, yours to keep.</p>
@@ -344,7 +570,12 @@
       </div>
       <nav>
         <a href="docs.html">Docs</a>
-        <a href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener">Releases</a>
+        <a
+          href="https://github.com/SoaOaoS/mav/releases"
+          target="_blank"
+          rel="noopener"
+          >Releases</a
+        >
         <a href="https://github.com/SoaOaoS/mav" target="_blank" rel="noopener"
           >GitHub</a
         >

@@ -64,6 +64,8 @@
             <a href="#helpers">Helpers</a>
             <a href="#memory">Memory</a>
             <a href="#routines">Routines</a>
+            <a href="#proactivity">Proactivity</a>
+            <a href="#drafts">Drafts &amp; background actions</a>
             <a href="#watch">Keep an eye on</a>
             <a href="#notifications">Notifications</a>
             <div class="nav-group">Settings</div>
@@ -110,7 +112,10 @@
                 <strong>model</strong>, picked from the provider's own list. Or
                 <em>Set it up later</em> from the web app.
               </li>
-              <li>Optionally, a <strong>contact email</strong> for push notifications.</li>
+              <li>
+                Optionally, a <strong>contact email</strong> for push
+                notifications.
+              </li>
             </ol>
             <p>
               Everything else gets sensible defaults; answer <em>yes</em> to
@@ -153,24 +158,32 @@ mav logs [engine|worker|web|install] [-n 50]
 mav backup            # memory, routines, settings → /var/backups/mav/
 mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</code></pre>
             <p>
-              Versions follow <a href="https://semver.org" target="_blank" rel="noopener">semantic versioning</a>:
-              every change merged into <code>main</code> is released
+              Versions follow
+              <a href="https://semver.org" target="_blank" rel="noopener"
+                >semantic versioning</a
+              >: every change merged into <code>main</code> is released
               automatically, as a major (breaking change), minor (new feature)
               or patch version, depending on its commit messages. What changed
               in each version is on the
-              <a href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener">releases page</a>
+              <a
+                href="https://github.com/SoaOaoS/mav/releases"
+                target="_blank"
+                rel="noopener"
+                >releases page</a
+              >
               (latest: <span data-latest-version>see releases</span>).
             </p>
             <div class="docs-note">
               <strong>Coming from the Telegram version?</strong> Telegram
-              support was removed. Older versions of <code>mav update</code>
-              did not download anything, so run the one-line installer once and
+              support was removed. Older versions of <code>mav update</code> did
+              not download anything, so run the one-line installer once and
               choose <em>Update</em>. It replaces the
-              <code>mav-bot</code> service with <code>mav-worker</code> and keeps
-              your memory (now in Postgres — the old <code>memory.json</code> is
-              imported automatically), your routines, your model and your
-              settings. Your existing agent files are left untouched; the new
-              everyday helpers are added next to them.
+              <code>mav-bot</code> service with <code>mav-worker</code> and
+              keeps your memory (now in Postgres — the old
+              <code>memory.json</code> is imported automatically), your
+              routines, your model and your settings. Your existing agent files
+              are left untouched; the new everyday helpers are added next to
+              them.
             </div>
           </section>
 
@@ -178,17 +191,23 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
             <h2>Requirements</h2>
             <ul>
               <li>
-                Debian 12+, Ubuntu 22.04+, Arch-based systems (Omarchy,
-                Manjaro, EndeavourOS…) or Fedora, with systemd and root access.
-                The installer uses <code>apt</code>, <code>pacman</code> or
+                Debian 12+, Ubuntu 22.04+, Arch-based systems (Omarchy, Manjaro,
+                EndeavourOS…) or Fedora, with systemd and root access. The
+                installer uses <code>apt</code>, <code>pacman</code> or
                 <code>dnf</code> accordingly.
               </li>
-              <li>About 1 GB of RAM for Mav itself — more if you run models locally with Ollama.</li>
+              <li>
+                About 1 GB of RAM for Mav itself — more if you run models
+                locally with Ollama.
+              </li>
               <li>An API key from a model provider, or an Ollama server.</li>
             </ul>
             <p>
               The installer brings the rest: Python, Docker (for Postgres) and
-              the <a href="https://opencode.ai" target="_blank" rel="noopener">opencode</a>
+              the
+              <a href="https://opencode.ai" target="_blank" rel="noopener"
+                >opencode</a
+              >
               agent engine.
             </p>
           </section>
@@ -201,8 +220,15 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               itself over HTTPS with a private certificate:
             </p>
             <ol>
-              <li>On the phone, open <code>https://&lt;your-mav&gt;/certs/ca.cer</code> and trust the certificate.</li>
-              <li>Open <code>https://&lt;your-mav&gt;/</code>, then <em>Add to Home Screen</em>.</li>
+              <li>
+                On the phone, open
+                <code>https://&lt;your-mav&gt;/certs/ca.cer</code> and trust the
+                certificate.
+              </li>
+              <li>
+                Open <code>https://&lt;your-mav&gt;/</code>, then
+                <em>Add to Home Screen</em>.
+              </li>
               <li>Turn on notifications (the bell, or Settings → General).</li>
             </ol>
             <p>
@@ -224,11 +250,30 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
             </p>
             <h3>Commands</h3>
             <table>
-              <tr><td><code>/remember &lt;fact&gt;</code></td><td>Save something about you to memory</td></tr>
-              <tr><td><code>/routine &lt;what, when&gt;</code></td><td>Create a routine (pre-filled from your words)</td></tr>
-              <tr><td><code>/watch &lt;url or topic&gt;</code></td><td>Keep an eye on a page, a price or a topic</td></tr>
-              <tr><td><code>/helper &lt;name&gt;</code></td><td>Switch who you talk to</td></tr>
-              <tr><td><code>/new</code> · <code>/rename</code> · <code>/summary</code> · <code>/export</code> · <code>/help</code></td><td>Chat actions</td></tr>
+              <tr>
+                <td><code>/remember &lt;fact&gt;</code></td>
+                <td>Save something about you to memory</td>
+              </tr>
+              <tr>
+                <td><code>/routine &lt;what, when&gt;</code></td>
+                <td>Create a routine (pre-filled from your words)</td>
+              </tr>
+              <tr>
+                <td><code>/watch &lt;url or topic&gt;</code></td>
+                <td>Keep an eye on a page, a price or a topic</td>
+              </tr>
+              <tr>
+                <td><code>/helper &lt;name&gt;</code></td>
+                <td>Switch who you talk to</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/new</code> · <code>/rename</code> ·
+                  <code>/summary</code> · <code>/export</code> ·
+                  <code>/help</code>
+                </td>
+                <td>Chat actions</td>
+              </tr>
             </table>
             <p>
               Shortcuts: <code>⌘K</code> search and commands,
@@ -244,10 +289,25 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               directly, and calls in a specialist when that helps:
             </p>
             <table>
-              <tr><td><strong>Researcher</strong></td><td>looks things up on the web, checks facts, compares options — with sources</td></tr>
-              <tr><td><strong>Writer</strong></td><td>emails, messages, posts and letters in the right tone</td></tr>
-              <tr><td><strong>Planner</strong></td><td>days, trips, projects, to-do lists</td></tr>
-              <tr><td><strong>Money</strong></td><td>budgets, purchases, subscriptions, comparing offers</td></tr>
+              <tr>
+                <td><strong>Researcher</strong></td>
+                <td>
+                  looks things up on the web, checks facts, compares options —
+                  with sources
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Writer</strong></td>
+                <td>emails, messages, posts and letters in the right tone</td>
+              </tr>
+              <tr>
+                <td><strong>Planner</strong></td>
+                <td>days, trips, projects, to-do lists</td>
+              </tr>
+              <tr>
+                <td><strong>Money</strong></td>
+                <td>budgets, purchases, subscriptions, comparing offers</td>
+              </tr>
             </table>
             <p>
               You can also talk to one directly: pick it on the message box or
@@ -277,8 +337,8 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               </li>
             </ul>
             <p>
-              Answers that used memory say so ("Used 3 things from memory").
-              You can delete any item, or clear chat memory entirely, from the
+              Answers that used memory say so ("Used 3 things from memory"). You
+              can delete any item, or clear chat memory entirely, from the
               Memory page.
             </p>
           </section>
@@ -286,38 +346,200 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
           <section id="routines">
             <h2>Routines</h2>
             <p>
-              Things Mav does on its own: <em>"every morning at 7, tell me if I
-              need an umbrella"</em>, <em>"every Sunday, plan 5 dinners and a
-              shopping list"</em>. Three ways to create one:
+              Things Mav does on its own:
+              <em>"every morning at 7, tell me if I need an umbrella"</em>,
+              <em>"every Sunday, plan 5 dinners and a shopping list"</em>. Four
+              ways to create one:
             </p>
             <ul>
-              <li>the form on the Routines page — what to do, when (every day at a time, some days at a time, or every few hours) and which helper;</li>
+              <li>
+                <strong>Templates</strong> — the Routines page has ready-made
+                ones (morning brief, evening recap, weekly review, monthly
+                review, weekly planning…). Two clicks and it's yours.
+              </li>
+              <li>
+                the <strong>form</strong> on the Routines page — what to do,
+                when, and which helper;
+              </li>
               <li><code>/routine</code> in a chat;</li>
-              <li>just say it — when a message sounds recurring, Mav offers <em>Make this a routine?</em> with a <em>Create routine</em> button.</li>
+              <li>
+                just <strong>say it</strong> — when a message sounds recurring,
+                Mav offers <em>Make this a routine?</em> with a
+                <em>Create routine</em> button. Recurrence is understood in
+                <strong>English, French and Spanish</strong> ("every monday",
+                "tous les matins", "cada día").
+              </li>
             </ul>
+            <p>When creating one, the schedule can be:</p>
+            <table>
+              <tr>
+                <td><strong>Every day</strong></td>
+                <td>at a time you pick</td>
+              </tr>
+              <tr>
+                <td><strong>Some days</strong></td>
+                <td>the weekdays you choose, at a time</td>
+              </tr>
+              <tr>
+                <td><strong>Once a month</strong></td>
+                <td>fixed day(s) of the month, or the last day</td>
+              </tr>
+              <tr>
+                <td><strong>Every few hours</strong></td>
+                <td>an interval, in hours</td>
+              </tr>
+              <tr>
+                <td><strong>On an event</strong></td>
+                <td>
+                  when something arrives from another service (see
+                  <em>Proactivity</em>)
+                </td>
+              </tr>
+            </table>
             <p>
               Each routine runs in its own chat (<em>Routine · name</em>), with
               what Mav remembers about you, so you can open it and follow up.
-              When there is something to report, you get a push notification
-              and an entry in <em>For you</em>; an answer like "nothing to
-              report" stays silent. Failed runs are retried once.
+              When there is something to report, you get a push notification and
+              an entry in <em>For you</em>; an answer like "nothing to report"
+              stays silent. Failed runs are retried once. You can
+              <strong>snooze</strong> a routine without deleting it; it keeps
+              its schedule and resumes on its own.
             </p>
+          </section>
+
+          <section id="proactivity">
+            <h2>Proactivity</h2>
+            <p>
+              More proactivity is only useful if Mav can rank what it finds —
+              otherwise it just sends more. Three rules keep it in hand.
+            </p>
+
+            <h3>Priority — what deserves a push</h3>
+            <p>Every alert is classified, locally and instantly, as one of:</p>
+            <table>
+              <tr>
+                <td><strong>Critical</strong></td>
+                <td>
+                  money, security, a missed deadline — always interrupts you
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Important</strong></td>
+                <td>a decision, an appointment, something to answer today</td>
+              </tr>
+              <tr>
+                <td><strong>Useful</strong></td>
+                <td>a report, a change worth knowing</td>
+              </tr>
+              <tr>
+                <td><strong>FYI</strong></td>
+                <td>background — kept in history, not pushed</td>
+              </tr>
+            </table>
+
+            <h3>How far Mav can go</h3>
+            <p>Settings → General → <em>How proactive is Mav?</em>:</p>
+            <table>
+              <tr>
+                <td><strong>Quiet</strong></td>
+                <td>only what's critical reaches you</td>
+              </tr>
+              <tr>
+                <td><strong>Normal</strong></td>
+                <td>critical and important (the default)</td>
+              </tr>
+              <tr>
+                <td><strong>Chatty</strong></td>
+                <td>everything — even the smallest alert</td>
+              </tr>
+            </table>
+            <div class="docs-note">
+              Anything below your bar is not lost: it is recorded and collected,
+              then delivered as <strong>one daily recap</strong> (at
+              <code>DIGEST_HOUR</code>, 19:00 by default). So "more proactive"
+              never means "more noise".
+            </div>
+
+            <h3>Conditions — "only if…"</h3>
+            <p>
+              A routine can carry a condition. When it isn't met, the run is
+              skipped <em>before</em> Mav is even asked — nothing is spent, and
+              nothing is sent. Conditions are: text contains / matches, a number
+              comparison, a weekday, or "not empty". A routine can also simply
+              be written so it replies <code>RAS</code> when there's nothing to
+              say — that stays silent too.
+            </p>
+            <div class="docs-note">
+              A condition without a <code>source</code> does not block a run:
+              the live data sources (weather, a price, an inbox marker) are not
+              wired into the worker yet. The evaluator is ready; for now the
+              "only if" is driven by what a routine can put in its own message.
+            </div>
+
+            <h3>Events — waking Mav from outside</h3>
+            <p>
+              A routine can be triggered by an incoming event instead of a
+              clock. Post to the webhook:
+            </p>
+            <pre><code>curl -X POST https://&lt;your-mav&gt;/api/hooks/event \
+  -H 'Content-Type: application/json' \
+  -d '{"kind":"github","payload":{"action":"opened"}}'</code></pre>
+            <p>
+              Any routine with a matching <code>on_event</code> (a kind, and
+              optionally a <code>contains</code> substring) runs on the worker's
+              next tick. Record a token in the <code>hooks.token</code>
+              preference to require it. Event kinds offered in the form:
+              <code>github</code>, <code>calendar</code>, <code>form</code>,
+              <code>payment</code>, <code>iot</code> — or
+              <code>custom</code> for anything else.
+            </p>
+          </section>
+
+          <section id="drafts">
+            <h2>Drafts &amp; background actions</h2>
+            <p>Two ways Mav does more than talk:</p>
+            <ul>
+              <li>
+                <strong>Drafts</strong> — when Mav spots something that needs an
+                action (a mail to answer, a follow-up), it writes it into the
+                <em>Drafts</em> tab of the Routines page. You review, copy, send
+                to your phone, or discard. Mav never sends anything by itself.
+              </li>
+              <li>
+                <strong>Background actions</strong> — ask for something long and
+                it runs on its own (its own chat, <em>Action · name</em>) while
+                your conversation stays free. A notification brings the result
+                when it's done.
+              </li>
+            </ul>
           </section>
 
           <section id="watch">
             <h2>Keep an eye on</h2>
             <table>
-              <tr><td><strong>A page</strong></td><td>alerts when the readable text of the page changes</td></tr>
-              <tr><td><strong>A price</strong></td><td>reads the price on a product page; alerts on any change, or only below your target</td></tr>
-              <tr><td><strong>News</strong></td><td>new headlines about a topic (Google News)</td></tr>
+              <tr>
+                <td><strong>A page</strong></td>
+                <td>alerts when the readable text of the page changes</td>
+              </tr>
+              <tr>
+                <td><strong>A price</strong></td>
+                <td>
+                  reads the price on a product page; alerts on any change, or
+                  only below your target
+                </td>
+              </tr>
+              <tr>
+                <td><strong>News</strong></td>
+                <td>new headlines about a topic (Google News)</td>
+              </tr>
             </table>
             <p>
               Items are checked about every 15 minutes
               (<code>WATCH_INTERVAL</code>). The first check only records the
-              current state; after that, you are notified only on a change.
-              News language and country follow <code>NEWS_LANG</code> /
-              <code>NEWS_COUNTRY</code> in <code>/etc/mav.env</code>
-              (default <code>en-US</code> / <code>US</code>).
+              current state; after that, you are notified only on a change. News
+              language and country follow <code>NEWS_LANG</code> /
+              <code>NEWS_COUNTRY</code> in <code>/etc/mav.env</code> (default
+              <code>en-US</code> / <code>US</code>).
             </p>
           </section>
 
@@ -328,8 +550,15 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               is closed. Tapping a routine report opens its chat; tapping an
               alert opens a chat that explains it. Quiet hours
               (<code>NOTIFY_QUIET</code>, default 23–7) hold pushes back; the
-              item still lands in <em>For you</em>. The same alert is never
-              sent twice within 6 hours.
+              item still lands in <em>For you</em>. The same alert is never sent
+              twice within 6 hours.
+            </p>
+            <p>
+              What actually gets pushed depends on your
+              <em>proactivity level</em> (see
+              <a href="#proactivity">Proactivity</a>): below your bar, an alert
+              is collected into the daily recap instead. The recap runs at
+              <code>DIGEST_HOUR</code> (19:00; set <code>0</code> to disable).
             </p>
           </section>
 
@@ -342,12 +571,32 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               the new model.
             </p>
             <table>
-              <tr><td><strong>Anthropic</strong></td><td>Claude models · API key</td></tr>
-              <tr><td><strong>OpenAI</strong></td><td>GPT models · API key</td></tr>
-              <tr><td><strong>Ollama</strong></td><td>models on your own machine or network · no key</td></tr>
-              <tr><td><strong>Ollama Cloud</strong></td><td>hosted open models · Ollama API key</td></tr>
-              <tr><td><strong>OpenRouter</strong></td><td>many models behind one key</td></tr>
-              <tr><td><strong>Custom</strong></td><td>any OpenAI-compatible API (LM Studio, vLLM, Groq, Mistral…)</td></tr>
+              <tr>
+                <td><strong>Anthropic</strong></td>
+                <td>Claude models · API key</td>
+              </tr>
+              <tr>
+                <td><strong>OpenAI</strong></td>
+                <td>GPT models · API key</td>
+              </tr>
+              <tr>
+                <td><strong>Ollama</strong></td>
+                <td>models on your own machine or network · no key</td>
+              </tr>
+              <tr>
+                <td><strong>Ollama Cloud</strong></td>
+                <td>hosted open models · Ollama API key</td>
+              </tr>
+              <tr>
+                <td><strong>OpenRouter</strong></td>
+                <td>many models behind one key</td>
+              </tr>
+              <tr>
+                <td><strong>Custom</strong></td>
+                <td>
+                  any OpenAI-compatible API (LM Studio, vLLM, Groq, Mistral…)
+                </td>
+              </tr>
             </table>
             <p>
               Keys are stored in <code>/etc/mav-server.env</code> (readable by
@@ -372,15 +621,20 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
             <p>
               Settings → Connections lets Mav use other apps and services
               through the
-              <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">MCP</a>
+              <a
+                href="https://modelcontextprotocol.io"
+                target="_blank"
+                rel="noopener"
+                >MCP</a
+              >
               standard. Pick one from the catalog — read web pages, a web
               browser, Brave search, time zones, your files, Notion, Home
               Assistant, GitHub — fill in its key, and press
-              <em>Restart assistant</em> in the bar that appears. Or add any
-              MCP server with <em>Custom…</em>. Tokens are masked once saved;
-              the raw configuration is in Settings → General → Advanced.
-              Some connections need Node.js or uv on the server — Mav tells
-              you which, and how to install them.
+              <em>Restart assistant</em> in the bar that appears. Or add any MCP
+              server with <em>Custom…</em>. Tokens are masked once saved; the
+              raw configuration is in Settings → General → Advanced. Some
+              connections need Node.js or uv on the server — Mav tells you
+              which, and how to install them.
             </p>
             <pre><code>// online service
 { "type": "remote", "url": "https://…/mcp", "enabled": true }
@@ -398,23 +652,52 @@ mav-dashboard (web app + API) ──▶ mav-server (opencode engine, 127.0.0.1:4
         ▼                                  │
 Postgres (Docker, 127.0.0.1) ◀── mav-worker (routines, keep an eye on, push)</code></pre>
             <table>
-              <tr><td><code>mav-dashboard</code></td><td>the web app and its API (HTTP + HTTPS)</td></tr>
-              <tr><td><code>mav-server</code></td><td>the opencode agent engine, local only</td></tr>
-              <tr><td><code>mav-worker</code></td><td>runs routines and checks, sends notifications</td></tr>
+              <tr>
+                <td><code>mav-dashboard</code></td>
+                <td>the web app and its API (HTTP + HTTPS)</td>
+              </tr>
+              <tr>
+                <td><code>mav-server</code></td>
+                <td>the opencode agent engine, local only</td>
+              </tr>
+              <tr>
+                <td><code>mav-worker</code></td>
+                <td>runs routines and checks, sends notifications</td>
+              </tr>
             </table>
             <p>
-              Chats are engine sessions; memory, alerts and notification history
-              live in Postgres; routines in <code>~/bot/jobs.json</code>.
+              Chats are engine sessions; memory, alerts, notification history,
+              incoming events, drafts and background actions live in Postgres;
+              routines in <code>~/bot/jobs.json</code>. Everything the worker
+              needs degrades gracefully: without Postgres, events, drafts and
+              actions fall back to JSON files in <code>~/bot/</code>.
             </p>
           </section>
 
           <section id="config">
             <h2>Configuration files</h2>
             <table>
-              <tr><td><code>/etc/mav-dashboard.env</code></td><td>web app: address, ports, HTTPS, database, default helper</td></tr>
-              <tr><td><code>/etc/mav.env</code></td><td>worker: model, quiet hours, watch interval, database</td></tr>
-              <tr><td><code>/etc/mav-server.env</code></td><td>engine: API keys (written by Settings → Model)</td></tr>
-              <tr><td><code>~/.config/opencode/</code></td><td>engine config, custom instructions, helpers</td></tr>
+              <tr>
+                <td><code>/etc/mav-dashboard.env</code></td>
+                <td>
+                  web app: address, ports, HTTPS, database, default helper
+                </td>
+              </tr>
+              <tr>
+                <td><code>/etc/mav.env</code></td>
+                <td>
+                  worker: model, quiet hours (<code>NOTIFY_QUIET</code>), watch
+                  interval, digest hour (<code>DIGEST_HOUR</code>), database
+                </td>
+              </tr>
+              <tr>
+                <td><code>/etc/mav-server.env</code></td>
+                <td>engine: API keys (written by Settings → Model)</td>
+              </tr>
+              <tr>
+                <td><code>~/.config/opencode/</code></td>
+                <td>engine config, custom instructions, helpers</td>
+              </tr>
             </table>
             <p>Edit, then <code>mav restart</code>.</p>
           </section>
@@ -426,17 +709,105 @@ Postgres (Docker, 127.0.0.1) ◀── mav-worker (routines, keep an eye on, pus
               authentication — keep Mav private). Highlights:
             </p>
             <table>
-              <tr><td><code>GET /api/stream?prompt=&amp;session=&amp;agent=</code></td><td>answer as Server-Sent Events: <code>start</code>, <code>delta</code>, <code>done</code>, <code>error</code></td></tr>
-              <tr><td><code>GET /api/sessions</code> · <code>/api/session?id=</code></td><td>chats, and one chat's messages</td></tr>
-              <tr><td><code>GET /api/jobs</code> · <code>POST /api/job/save|delete|toggle|run</code></td><td>routines</td></tr>
-              <tr><td><code>GET /api/watch</code> · <code>POST /api/watch/add|remove</code></td><td>keep an eye on (<code>web</code>, <code>price</code>, <code>news</code>)</td></tr>
-              <tr><td><code>GET /api/memory</code> · <code>POST /api/memory/fact/add|fact/delete|exchange/delete|forget</code></td><td>memory</td></tr>
-              <tr><td><code>GET /api/notifications</code></td><td>the <em>For you</em> inbox</td></tr>
-              <tr><td><code>GET|POST /api/config/provider</code> · <code>POST /api/config/provider/test</code></td><td>model provider</td></tr>
+              <tr>
+                <td>
+                  <code>GET /api/stream?prompt=&amp;session=&amp;agent=</code>
+                </td>
+                <td>
+                  answer as Server-Sent Events: <code>start</code>,
+                  <code>delta</code>, <code>done</code>, <code>error</code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/sessions</code> · <code>/api/session?id=</code>
+                </td>
+                <td>chats, and one chat's messages</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/jobs</code> ·
+                  <code>POST /api/job/save|delete|toggle|run|snooze</code>
+                </td>
+                <td>routines (schedules, events, conditions)</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/job-templates</code> ·
+                  <code>POST /api/job/template</code> ·
+                  <code>POST /api/routine/detect</code>
+                </td>
+                <td>
+                  ready-made routines, and turning a sentence into a draft
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET|POST /api/proactivity</code>
+                </td>
+                <td>the quiet / normal / chatty level and what's pending</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/drafts</code> ·
+                  <code>POST /api/drafts/add|status|delete|notify</code>
+                </td>
+                <td>drafts Mav prepared for you</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/actions</code> ·
+                  <code>POST /api/actions/start</code>
+                </td>
+                <td>background actions</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>POST /api/hooks/event</code> ·
+                  <code>GET /api/events</code>
+                </td>
+                <td>incoming events that wake routines up</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/watch</code> ·
+                  <code>POST /api/watch/add|remove</code>
+                </td>
+                <td>
+                  keep an eye on (<code>web</code>, <code>price</code>,
+                  <code>news</code>)
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET /api/memory</code> ·
+                  <code
+                    >POST
+                    /api/memory/fact/add|fact/delete|exchange/delete|forget</code
+                  >
+                </td>
+                <td>memory</td>
+              </tr>
+              <tr>
+                <td><code>GET /api/notifications</code></td>
+                <td>the <em>For you</em> inbox</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>GET|POST /api/config/provider</code> ·
+                  <code>POST /api/config/provider/test</code>
+                </td>
+                <td>model provider</td>
+              </tr>
             </table>
             <p>
               The full list is in
-              <a href="https://github.com/SoaOaoS/mav/blob/main/dashboard/README.md" target="_blank" rel="noopener">dashboard/README.md</a>.
+              <a
+                href="https://github.com/SoaOaoS/mav/blob/main/dashboard/README.md"
+                target="_blank"
+                rel="noopener"
+                >dashboard/README.md</a
+              >.
             </p>
           </section>
 
@@ -450,9 +821,7 @@ journalctl -u mav-server -n 50</code></pre>
               Model (<em>Check &amp; list models</em> tells you what is wrong).
             </p>
             <h3><code>status=203/EXEC</code></h3>
-            <p>
-              The engine binary is missing. Install it and restart:
-            </p>
+            <p>The engine binary is missing. Install it and restart:</p>
             <pre><code>curl -fsSL https://opencode.ai/install | bash
 sudo systemctl restart mav-server</code></pre>
             <p>
@@ -463,23 +832,22 @@ sudo systemctl restart mav-server</code></pre>
             <p>
               Version 1.0.0 stopped silently right after the advanced settings
               on Arch-based systems. Fixed in 1.0.1 — simply run the one-line
-              installer again. Since 1.0.1, any unexpected error shows the
-              line that failed; send it with the end of
+              installer again. Since 1.0.1, any unexpected error shows the line
+              that failed; send it with the end of
               <code>/var/log/mav-install.log</code> when reporting a problem.
             </p>
             <h3>Check everything at once</h3>
             <pre><code>mav doctor</code></pre>
             <p>
-              It checks the services, the assistant, the model, the web app,
-              the database, disk space, file permissions, the HTTPS
-              certificate and available updates, and says what to do for each
-              problem.
+              It checks the services, the assistant, the model, the web app, the
+              database, disk space, file permissions, the HTTPS certificate and
+              available updates, and says what to do for each problem.
             </p>
             <h3>A connection broke the assistant</h3>
             <p>
               Settings validates connections before saving, but a server that
-              fails at start can still block the engine. Turn it off in
-              Settings → Connections, then <em>Apply</em>.
+              fails at start can still block the engine. Turn it off in Settings
+              → Connections, then <em>Apply</em>.
             </p>
             <h3>Routines or alerts don't arrive</h3>
             <pre><code>journalctl -u mav-worker -n 50</code></pre>
