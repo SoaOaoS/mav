@@ -2481,6 +2481,21 @@ async function openTemplatePicker() {
   $("#modalBody").addEventListener("click", async (e) => {
     const b = e.target.closest("[data-tpl]");
     if (!b) return;
+    const tpl = templates.find((t) => t.id === b.dataset.tpl);
+    if (tpl && tpl.requires === "mail" && !MAIL.configured) {
+      // The routine needs Mail, and Mail is not set up yet.
+      if (
+        !(await confirmDialog(
+          "Mail is not set up",
+          "This routine reads your inbox. Connect your mailbox first? Mav will open Settings → Connections → Mail.",
+          "Set up Mail",
+        ))
+      )
+        return;
+      modal.close();
+      go("settings", "connections");
+      return;
+    }
     try {
       const r = await api.post("job/template", { id: b.dataset.tpl });
       if (!r.job) return toast("Unknown template.", { error: true });
@@ -2697,8 +2712,10 @@ function draftToJob(d) {
     enabled: true,
     description: d.description || "",
   };
-  if (d.mode === "hours") job.every_minutes = Math.max(1, d.hours) * 60;
-  else if (d.mode === "monthly") {
+  if (d.mode === "hours") {
+    const mult = d.unit === "minutes" ? 1 : 60;
+    job.every_minutes = Math.max(5, Math.round(d.hours * mult));
+  } else if (d.mode === "monthly") {
     job.time = d.time;
     if (d.last_day_of_month) job.last_day_of_month = true;
     if (d.days_of_month && d.days_of_month.length)
@@ -2770,7 +2787,13 @@ function editRoutine(src, existing = false) {
       ...src,
       mode,
       hours:
-        mode === "hours" ? Math.max(1, Math.round(src.every_minutes / 60)) : 4,
+        mode === "hours"
+          ? src.every_minutes % 60 === 0
+            ? src.every_minutes / 60
+            : src.every_minutes
+          : 4,
+      unit:
+        mode === "hours" && src.every_minutes % 60 !== 0 ? "minutes" : "hours",
       days: src.days && src.days.length ? src.days : [...ALL_DAYS],
       time: src.time || "08:00",
       days_of_month: src.days_of_month || [],
@@ -2786,6 +2809,7 @@ function editRoutine(src, existing = false) {
   } else
     d = {
       hours: 4,
+      unit: "hours",
       days: [...ALL_DAYS],
       time: "08:00",
       days_of_month: [],
@@ -2829,7 +2853,11 @@ function editRoutine(src, existing = false) {
           .join("")}</select>
         <input type="text" name="event_contains" value="${esc(d.event_contains || "")}" placeholder="contains… (optional)"></div>
       </div>
-      <div class="field" data-f="hours"><label>Every</label><div class="row"><input type="number" min="1" max="72" name="hours" value="${esc(d.hours)}" style="width:90px"> <span>hours</span></div></div>
+      <div class="field" data-f="hours"><label>Every</label><div class="row"><input type="number" min="1" max="1440" name="hours" value="${esc(d.hours)}" style="width:90px">
+        <select name="unit">
+          <option value="hours" ${d.unit !== "minutes" ? "selected" : ""}>hours</option>
+          <option value="minutes" ${d.unit === "minutes" ? "selected" : ""}>minutes</option>
+        </select></div></div>
     </div>
     <div class="field-grid">
       <div class="field"><label>Helper</label><select name="agent">${state.agents
@@ -2904,6 +2932,7 @@ function editRoutine(src, existing = false) {
       mode,
       time: fd.get("time"),
       hours: Number(fd.get("hours") || 1),
+      unit: fd.get("unit") === "minutes" ? "minutes" : "hours",
       days: [...form.querySelectorAll("[data-day].is-on")].map(
         (b) => b.dataset.day,
       ),

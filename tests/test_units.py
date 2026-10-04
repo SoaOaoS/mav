@@ -618,7 +618,10 @@ class Templates(unittest.TestCase):
         for t in ocroutine_templates.TEMPLATES:
             when = t.get("when") or {}
             self.assertTrue(
-                "last_day_of_month" in when or "days_of_month" in when or "time" in when,
+                "last_day_of_month" in when
+                or "days_of_month" in when
+                or "time" in when
+                or "every_minutes" in when,
                 t["id"],
             )
 

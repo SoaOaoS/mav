@@ -110,6 +110,37 @@ TEMPLATES: list[dict] = [
             "et un plan réaliste pour les 3 choses les plus importantes."
         ),
     },
+    {
+        "id": "mail-watch",
+        "label": "Veille mail",
+        "description": "Repère les mails qui méritent une réponse et prépare une réponse dans le fil.",
+        "icon": "✉️",
+        "agent": "assistant",
+        # Runs every 30 minutes. Needs Mail set up in Settings → Connections.
+        "when": {"every_minutes": 30},
+        "requires": "mail",
+        "prompt": (
+            "Veille de la boîte mail. Exécute d'abord : "
+            "python3 /home/opencode/.config/opencode/mail.py inbox 15\n\n"
+            "Regarde uniquement les mails ARRIVÉS DANS LES 30 DERNIÈRES MINUTES "
+            "(d'après le champ Date ; ignore tout ce qui est plus ancien).\n\n"
+            "IGNORE sans exception : publicités, promotions, newsletters, "
+            "notifications automatiques (réseaux sociaux, apps, banques, "
+            "livraisons, code, CI), reçus, confirmations, et tout expéditeur "
+            "no-reply / donotreply / noreply / notification / mailing.\n\n"
+            "S'il ne reste AUCUN mail personnel qui attend une action ou une "
+            "réponse de ma part, réponds exactement : RAS\n\n"
+            "Sinon, pour chaque mail qui compte (2 au maximum), appelle l'outil "
+            "mail_reply_draft avec uid = l'UID du mail (le nombre entre crochets) "
+            "et body = ta réponse prête à envoyer, dans ma langue, ton naturel et "
+            "concis. L'outil pose le destinataire, l'objet « Re: … » et le lien de "
+            "fil (In-Reply-To).\n\n"
+            "Puis réponds en 2 lignes maximum : expéditeur + sujet, et pourquoi "
+            "ça compte. Ne mets pas le brouillon dans ta réponse (il est dans "
+            "Drafts). Si mail_reply_draft n'est pas disponible, utilise save_draft.\n\n"
+            "Ne réponds à rien et n'envoie rien toi-même."
+        ),
+    },
 ]
 
 
@@ -129,6 +160,7 @@ def as_jobs() -> list[dict]:
             "when": t.get("when", {}),
             "prompt": t["prompt"],
             "conditional": bool(t.get("skip_if")),
+            "requires": t.get("requires", ""),
         }
         for t in TEMPLATES
     ]
