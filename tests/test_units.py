@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 
 import mav_provider  # noqa: E402
+import ocdebates  # noqa: E402
 import ocjobs  # noqa: E402
 import ocmemory  # noqa: E402
 import ocwatch  # noqa: E402

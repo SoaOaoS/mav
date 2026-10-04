@@ -2904,3 +2904,240 @@ button.memory-updated:hover {
 #spanel-connections .mcp-cards .empty {
   padding: 0;
 }
+
+/* ---------- Debates ---------- */
+.debates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 0.4rem;
+}
+.deb-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.deb-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.deb-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.deb-card-head strong {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+.deb-meta {
+  flex: none;
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+.deb-q {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.deb-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+.deb-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ac);
+  border: 2px solid var(--bg-elev);
+  margin-left: -6px;
+}
+.deb-avatar:first-child {
+  margin-left: 0;
+}
+.deb-open {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.deb-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-height: min(64vh, 620px);
+  overflow-y: auto;
+  padding: 0.1rem 0.2rem;
+}
+.deb-question {
+  background: var(--bg-sunk);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.9rem;
+}
+.deb-tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.deb-question p {
+  margin: 0.25rem 0 0;
+  font-weight: 500;
+}
+.deb-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.deb-who {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.deb-who .deb-avatar {
+  margin-left: 0;
+  border-color: transparent;
+}
+.deb-who time {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 0.74rem;
+}
+.deb-body {
+  margin-left: 1.9rem;
+  border-left: 3px solid var(--ac);
+  border-radius: var(--radius-sm);
+  padding: 0.15rem 0.2rem 0.15rem 0.1rem;
+  background: transparent;
+}
+
+/* ---------- Message queue (typed while Mav is answering) ---------- */
+.queue-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 720px;
+  margin: 0.5rem auto 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+}
+.queue-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+.queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 260px;
+  padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.queue-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queue-x {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.queue-x:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.queue-x i[data-i] {
+  width: 13px;
+  height: 13px;
+}
+.queue-send {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+}
+.queue-send:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.queue-send i[data-i] {
+  width: 13px;
+  height: 13px;
+}
+
+/* ---------- Live tool/MCP activity under a streaming answer ---------- */
+.msg-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+.msg-tools:empty {
+  display: none;
+}
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+}
+.tool-chip i[data-i] {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.tool-chip.is-run {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.tool-chip.is-run i[data-i] {
+  animation: blink 1s infinite;
+}

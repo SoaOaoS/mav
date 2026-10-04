@@ -1474,6 +1474,31 @@ def get_notification(nid: int) -> dict:
     return {"notification": rows[0] if rows else None}
 
 
+# --------------------------------------------------------------- debates
+# Multi-agent debate threads are written by the opencode debate tools; the web
+# app shows them live. Reading is best-effort: an absent file just means no
+# debate has been opened yet.
+def get_debates() -> dict:
+    try:
+        from ocdebates import list_threads  # noqa: PLC0415
+
+        return {"debates": list_threads()}
+    except Exception:  # noqa: BLE001
+        return {"debates": []}
+
+
+def get_debate(thread_id: str) -> dict:
+    if not thread_id:
+        return {"error": "missing id"}
+    try:
+        from ocdebates import get_thread  # noqa: PLC0415
+
+        thread = get_thread(thread_id)
+    except Exception:  # noqa: BLE001
+        thread = None
+    return {"debate": thread}
+
+
 VALID_WATCH_KINDS = ["web", "price", "news"]
 
 
@@ -1920,6 +1945,19 @@ def save_upload(name: str, data_b64: str, mime: str = "") -> dict:
     }
 
 
+# Sessions the user asked to stop (interrupt-and-reprocess): stream_answer
+# aborts the engine as soon as it notices. A session id stays here only while
+# its stream is winding down; the flag is consumed on the next answer.
+INTERRUPTED: set[str] = set()
+
+
+def request_interrupt(sid: str) -> bool:
+    if not sid:
+        return False
+    INTERRUPTED.add(sid)
+    return True
+
+
 # --------------------------------------------------------------- media
 # PERSISTENT media folder (survives reboots, unlike /tmp) + JSON index.
 # Used to: (1) archive received attachments, (2) keep generated images,
@@ -2141,6 +2179,19 @@ def abort_session(sid: str) -> None:
         pass
 
 
+def interrupt_session(sid: str) -> dict:
+    """Stop the current answer and let a queued message take over.
+
+    Marks the session so the running stream aborts the engine itself (and does
+    not remember the partial answer), then aborts immediately for responsiveness.
+    """
+    if not sid:
+        return {"ok": False, "error": "missing id"}
+    request_interrupt(sid)
+    abort_session(sid)
+    return {"ok": True}
+
+
 _agents_cache: dict = {"at": 0.0, "names": set()}
 
 
@@ -2181,6 +2232,9 @@ def stream_answer(
     du message, pas sur un signal de flux qui peut se perdre.
     """
     sid = sid if raw_session else ensure_session(sid, agent)
+    # Consume any stale interrupt mark so it cannot kill this new answer.
+    if not raw_session:
+        INTERRUPTED.discard(sid)
     body: dict = {"parts": _parts(prompt, files or [])}
     meta = {} if raw_session else session_meta(sid)
     # Explicit choice > the conversation's agent > the configured default.
@@ -2248,8 +2302,21 @@ def stream_answer(
     accepted = False
     finished_text = None
     engine_error = None
+    tools_state: dict = {}
+    interrupted = False
 
     while time.time() < deadline and time.time() - last_progress < idle_limit:
+        # Stop requested from another request (interrupt-and-reprocess): abort
+        # the engine, keep whatever text we already have.
+        if sid in INTERRUPTED:
+            INTERRUPTED.discard(sid)
+            interrupted = True
+            try:
+                http_json(f"{OPENCODE_URL}/session/{sid}/abort", method="POST", timeout=8)
+            except Exception:  # noqa: BLE001
+                pass
+            break
+
         time.sleep(0.4)
         try:
             entries = http_json(f"{OPENCODE_URL}/session/{sid}/message", timeout=12) or []
@@ -2285,6 +2352,17 @@ def stream_answer(
             last_sig = sig
             last_progress = time.time()
 
+        # Surface tool/MCP activity so the web app can show it live.
+        for e in new_assistant:
+            for part in (e.get("parts") or []):
+                if part.get("type") != "tool":
+                    continue
+                key = part.get("callID") or part.get("id")
+                status = (part.get("state") or {}).get("status") or "running"
+                if key and tools_state.get(key) != status:
+                    tools_state[key] = status
+                    yield sse("tool", {"name": part.get("tool") or "tool", "status": status})
+
         if text != last_text:
             last_text = text
             delta = text[len(last_sent):] if text.startswith(last_sent) else text
@@ -2309,6 +2387,11 @@ def stream_answer(
         if engine_error and finish is not None and not last_has_text:
             break
 
+    # Interrupted on purpose: whatever text was shown stays, but this is not a
+    # finished exchange, so it is not remembered as the answer.
+    if interrupted:
+        yield sse("done", {"session": sid, "text": last_text, "agent": ag, "interrupted": True})
+        return
     if not accepted and not finished_text:
         yield sse("error", {"message": "The request could not be started.", "session": sid})
         return
@@ -2548,6 +2631,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_notifications())
             if path == "/api/notification":
                 return self._send(200, get_notification(int(p.get("id", 0) or 0)))
+            if path == "/api/debates":
+                return self._send(200, get_debates())
+            if path == "/api/debate":
+                return self._send(200, get_debate(p.get("id", "")))
             if path == "/api/agents":
                 return self._send(200, get_agents())
             if path == "/api/connections":
@@ -2697,6 +2784,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/session/abort":
                 abort_session(payload.get("id", ""))
                 return self._send(200, {"ok": True})
+            if path == "/api/session/interrupt":
+                return self._send(200, interrupt_session(payload.get("id", "")))
             if path == "/api/session/summary":
                 sid = payload.get("id", "")
                 s = ask("Summarize this conversation in a few key points.", "summary", sid, raw_session=True)
