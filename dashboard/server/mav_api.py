@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""mav_api — backend du dashboard Mav.
+"""mav_api — backend of the Mav dashboard.
 
-Small HTTP server (stdlib) that exposes the agent's real state read-only
-(jobs, Postgres memory, watch, agents, health, metrics) plus a chat that
-goes through a dashboard-dedicated opencode session, with SSE streaming.
+Small HTTP server (stdlib) that exposes the agent's state (jobs, Postgres
+memory, watch, agents, health, metrics), lets you configure the model
+provider, agents and MCP servers, and runs the chat through dashboard-owned
+opencode sessions with SSE streaming.
 
 No authentication: meant for a private host, reachable over VPN.
 """
@@ -16,6 +17,7 @@ import mimetypes
 import os
 import re
 import shutil
+import sys
 import threading
 import time
 import urllib.error
@@ -44,14 +46,46 @@ OPENCODE_URL = os.environ.get("OPENCODE_URL", "http://127.0.0.1:4096").rstrip("/
 PG_DSN = os.environ.get(
     "PG_DSN", "host=127.0.0.1 port=5432 user=mav password=mav_secret dbname=mav"
 )
-DEFAULT_AGENT = os.environ.get("MAV_DASH_AGENT", "").strip()
+# The helper used when none is picked: the everyday "assistant" (orchestrator).
+DEFAULT_AGENT = os.environ.get("MAV_DASH_AGENT", "").strip() or "assistant"
 DEFAULT_MODEL = os.environ.get("OPENCODE_MODEL", "").strip()
-# Chat id used to attach new watch items to the Telegram bot.
-# 0 by default: the installer sets the real value via MAV_CHAT_ID.
+# Owner id: memory, facts and watch items are attached to it (kept from the
+# chat id of older installs, so existing memory stays attached).
 DEFAULT_CHAT_ID = int(os.environ.get("MAV_CHAT_ID", "0") or 0)
+SESSIONS_META = BOT_DIR / "dash_sessions.json"
+ENV_SERVER = Path(os.environ.get("MAV_ENV_SERVER", "/etc/mav-server.env"))
+ENV_FILES = [
+    Path(os.environ.get("MAV_ENV_BOT", "/etc/mav.env")),
+    Path(os.environ.get("MAV_ENV_DASH", "/etc/mav-dashboard.env")),
+]
+WORKER_UNIT = os.environ.get("MAV_WORKER_UNIT", "mav-worker").strip()
+
+# Shared modules live in the worker's folder (memory, RAG): make them importable
+# both from an install (BOT_DIR) and from a checkout (../../bot).
+for _p in (BOT_DIR, Path(__file__).resolve().parents[2] / "bot"):
+    if (_p / "ocmemory.py").is_file() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+try:
+    from ocmemory import Memory  # noqa: E402
+
+    MEMORY = Memory(BOT_DIR / "memory.json", dsn=PG_DSN)
+except Exception:  # noqa: BLE001
+    MEMORY = None
+try:
+    from ocrag import RAG  # noqa: E402
+
+    _RAG = None
+except Exception:  # noqa: BLE001
+    RAG = None
+    _RAG = None
+MEMORY_ENABLED = os.environ.get("MEMORY", "1") == "1"
+MEMORY_TOP = int(os.environ.get("MEMORY_TOP", "3") or 3)
+
+import mav_provider  # noqa: E402
 
 # Agents offered in the dashboard selector.
-PRIMARY_AGENTS = ["general", "dev", "finance", "ops", "research", "reviewer", "writer"]
+# Everyday helpers shipped with Mav, in the order they are offered.
+PRIMARY_AGENTS = ["assistant", "researcher", "writer", "planner", "money"]
 
 # ------------------------------------------------------------------- helpers
 
@@ -113,7 +147,7 @@ def write_json(path: Path, data) -> None:
     tmp.replace(path)
     # This file may be shared with the bot (running under another account).
     # The dashboard often runs as root: give ownership back so both can write.
-    if path.name == "push_subs.json":
+    if path.name in ("push_subs.json", "dash_sessions.json", "jobs.json"):
         _chown_user(path)
 
 
@@ -171,7 +205,7 @@ def cpu_pct() -> int | None:
     return round((1 - di / dt) * 100)
 
 
-# --------------------------------------------------------------- proxmox
+# --------------------------------------------------------------- engine config
 
 
 def _opencode_config_path() -> Path:
@@ -279,7 +313,7 @@ def engine_status() -> dict:
         "version": health.get("version"),
         "agents": n_agents,
         "mcp": n_mcp,
-        "model": DEFAULT_MODEL,
+        "model": DEFAULT_MODEL or provider_current().get("ref") or "",
         "url": OPENCODE_URL,
         "checked": int(time.time()),
     }
@@ -535,7 +569,67 @@ def restart_engine() -> dict:
     code, out = _run(["systemctl", "restart", "--no-block", unit], timeout=15)
     if code != 0:
         return {"ok": False, "error": out.strip(), "unit": unit}
+    # The worker follows the engine's event stream and reads the model from
+    # its env: restart it too so it picks up the new configuration.
+    _run(["systemctl", "restart", "--no-block", WORKER_UNIT], timeout=15)
+    _agents_cache["at"] = 0.0
     return {"ok": True, "restarting": True, "unit": unit}
+
+
+# --------------------------------------------------------------- provider
+# Model provider, configured from Settings → Model. The logic is shared with
+# install.sh (mav_provider.py), so both write exactly the same config.
+
+
+def provider_current() -> dict:
+    try:
+        return mav_provider.current(_config_dir(), ENV_SERVER)
+    except Exception as exc:  # noqa: BLE001
+        return {"configured": bool(DEFAULT_MODEL), "ref": DEFAULT_MODEL, "error": str(exc)}
+
+
+def provider_snapshot() -> dict:
+    cur = provider_current()
+    presets = [
+        {"id": k, **{x: v[x] for x in ("label", "hint", "native", "base", "key", "model")}}
+        for k, v in mav_provider.PRESETS.items()
+    ]
+    return {"current": cur, "presets": presets, "model": DEFAULT_MODEL}
+
+
+def _stored_key(pid: str) -> str:
+    return mav_provider.read_env(ENV_SERVER).get(mav_provider.env_name_for(pid), "")
+
+
+def provider_test(payload: dict) -> dict:
+    pid = (payload.get("provider") or "").strip()
+    key = payload.get("api_key") or ""
+    if not key:
+        key = _stored_key(pid)  # test with the saved key when left blank
+    return mav_provider.list_models(pid, payload.get("base_url") or "", key)
+
+
+def provider_save(payload: dict) -> dict:
+    global DEFAULT_MODEL
+    pid = (payload.get("provider") or "").strip().lower()
+    if pid == "custom":
+        pid = (payload.get("custom_id") or "").strip().lower()
+    key = payload.get("api_key")
+    key = key if isinstance(key, str) and key.strip() else None  # blank = keep
+    res = mav_provider.apply(
+        _config_dir(), ENV_SERVER, pid, payload.get("model") or "",
+        base_url=(payload.get("base_url") or "").strip(),
+        api_key=key.strip() if key else None,
+        env_files=ENV_FILES,
+        name=(payload.get("name") or "").strip(),
+    )
+    if not res.get("ok"):
+        return res
+    DEFAULT_MODEL = res["ref"]
+    _chown_user(_opencode_config_path())
+    if payload.get("restart", True):
+        res["restart"] = restart_engine()
+    return res
 
 
 def config_snapshot() -> dict:
@@ -669,86 +763,6 @@ Rules:
 
 
 
-def _proxmox_conf() -> dict:
-    """Read Proxmox credentials from the opencode config, without exposing them."""
-    try:
-        cfg = json.loads(_opencode_config_path().read_text())
-        env = cfg.get("mcp", {}).get("proxmox", {}).get("environment", {})
-        return {
-            "host": env.get("PROXMOX_HOST", ""),
-            "user": env.get("PROXMOX_USER", "root@pam"),
-            "token_name": env.get("PROXMOX_TOKEN_NAME", "mcp"),
-            "token": env.get("PROXMOX_TOKEN_VALUE", ""),
-        }
-    except Exception:
-        return {}
-
-
-def proxmox_query(path: str) -> dict:
-    conf = _proxmox_conf()
-    if not conf.get("token"):
-        return {}
-    url = f"https://{conf['host']}:8006/api2/json{path}"
-    req = urllib.request.Request(url)
-    req.add_header(
-        "Authorization",
-        f"PVEAPIToken={conf['user']}!{conf['token_name']}={conf['token']}",
-    )
-    import ssl
-
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    with urllib.request.urlopen(req, timeout=6, context=ctx) as r:
-        return json.loads(r.read().decode()).get("data", {})
-
-
-def get_proxmox() -> dict:
-    try:
-        nodes = proxmox_query("/nodes")
-        vms = proxmox_query("/cluster/resources?type=vm")
-    except Exception:
-        return {"available": False, "nodes": [], "vms": []}
-
-    out_nodes = []
-    for n in nodes or []:
-        out_nodes.append(
-            {
-                "name": n.get("node"),
-                "status": n.get("status"),
-                "cpu": round((n.get("cpu") or 0) * 100),
-                "mem_used": n.get("mem"),
-                "mem_total": n.get("maxmem"),
-                "mem_pct": round((n.get("mem") or 0) / (n.get("maxmem") or 1) * 100),
-                "disk_used": n.get("disk"),
-                "disk_total": n.get("maxdisk"),
-                "uptime": n.get("uptime"),
-            }
-        )
-    running = [v for v in (vms or []) if v.get("status") == "running"]
-    out_vms = [
-        {
-            "vmid": v.get("vmid"),
-            "name": v.get("name"),
-            "type": v.get("type"),
-            "node": v.get("node"),
-            "status": v.get("status"),
-            "cpu": round((v.get("cpu") or 0) * 100),
-            "mem": v.get("mem"),
-            "maxmem": v.get("maxmem"),
-            "uptime": v.get("uptime"),
-        }
-        for v in (vms or [])
-    ]
-    return {
-        "available": True,
-        "nodes": out_nodes,
-        "vms": out_vms,
-        "running": len(running),
-        "total": len(out_vms),
-    }
-
-
 # ------------------------------------------------------------------- data
 
 
@@ -771,8 +785,12 @@ def get_status() -> dict:
         pass
 
     jobs = read_json(JOBS_FILE, [])
+    prov = provider_current()
     return {
         "mode": "live",
+        "model": DEFAULT_MODEL or prov.get("ref") or "",
+        "provider_configured": bool(prov.get("configured")),
+        "memory_backend": "postgres" if pg else "file",
         "agent_online": bool(health and health.get("healthy")),
         "version": (health or {}).get("version"),
         "cpu": cpu_pct() or m.get("load", 0),
@@ -794,25 +812,29 @@ def get_connections() -> list[dict]:
     try:
         h = http_json(f"{OPENCODE_URL}/global/health", timeout=4)
         ok = bool(h and h.get("healthy"))
-        conns.append({"name": "Moteur opencode", "state": "ok" if ok else "off", "label": "en ligne" if ok else "hors ligne"})
+        conns.append({"name": "Agent engine", "state": "ok" if ok else "off", "label": "online" if ok else "offline"})
     except Exception:
-        conns.append({"name": "Moteur opencode", "state": "off", "label": "hors ligne"})
+        conns.append({"name": "Agent engine", "state": "off", "label": "offline"})
     try:
         pg_query("select 1")
-        conns.append({"name": "Memory store", "state": "ok", "label": "connected"})
+        conns.append({"name": "Memory (Postgres)", "state": "ok", "label": "connected"})
     except Exception:
-        conns.append({"name": "Memory store", "state": "off", "label": "offline"})
-    docker_ok = Path("/var/run/docker.sock").exists()
-    conns.append({"name": "Docker", "state": "ok" if docker_ok else "warn", "label": "present" if docker_ok else "unknown"})
-    conns.append({"name": "Telegram", "state": "ok", "label": "pont actif"})
-    px = get_proxmox()
-    conns.append({"name": "Proxmox", "state": "ok" if px.get("available") else "warn", "label": "connected" if px.get("available") else "unavailable"})
+        conns.append({"name": "Memory (Postgres)", "state": "off", "label": "offline"})
+    worker = _unit_active(WORKER_UNIT)
+    conns.append({"name": "Worker", "state": "ok" if worker else "warn", "label": "running" if worker else "stopped"})
     return conns
 
 
 def get_jobs() -> dict:
     jobs = read_json(JOBS_FILE, [])
     state = read_json(JOBS_STATE, {})
+    # routine name -> its chat, when it ran at least once
+    head = PREFIX + ROUTINE_PREFIX
+    chats = {
+        str(s_.get("title", ""))[len(head):]: s_["id"]
+        for s_ in _list_raw_sessions()
+        if str(s_.get("title", "")).startswith(head)
+    }
     out = []
     for j in jobs:
         out.append(
@@ -823,11 +845,137 @@ def get_jobs() -> dict:
                 "every_minutes": j.get("every_minutes"),
                 "days": j.get("days", []),
                 "agent": j.get("agent", ""),
+                "prompt": j.get("prompt", ""),
                 "enabled": j.get("enabled", True),
                 "last_run": state.get(j.get("name")),
+                "running": j.get("name") in _running_jobs,
+                "session": chats.get(j.get("name")),
             }
         )
     return {"jobs": out}
+
+
+JOB_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}$")
+JOB_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def save_job(payload: dict) -> dict:
+    """Create or update a job (`original` = name before a rename)."""
+    name = str(payload.get("name") or "").strip()
+    if not JOB_NAME_RE.match(name):
+        return {"ok": False, "error": "Give the automation a name (letters, digits, - _ .)."}
+    prompt = str(payload.get("prompt") or "").strip()
+    if not prompt:
+        return {"ok": False, "error": "Write what Mav should do."}
+    every = payload.get("every_minutes")
+    try:
+        every = int(every) if every not in (None, "", 0, "0") else 0
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "The interval must be a number of minutes."}
+    time_ = str(payload.get("time") or "").strip()
+    if not every and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", time_):
+        return {"ok": False, "error": "Pick a time (HH:MM) or an interval."}
+    days = [d for d in (payload.get("days") or []) if d in JOB_DAYS] or JOB_DAYS
+    job = {
+        "name": name,
+        "description": str(payload.get("description") or "").strip()[:200],
+        "prompt": prompt,
+        "agent": str(payload.get("agent") or "").strip(),
+        "days": days,
+        "enabled": bool(payload.get("enabled", True)),
+    }
+    if every:
+        job["every_minutes"] = max(5, every)
+    else:
+        job["time"] = time_
+    jobs = read_json(JOBS_FILE, [])
+    if not isinstance(jobs, list):
+        jobs = []
+    original = str(payload.get("original") or "").strip()
+    if name != original and any(j.get("name") == name for j in jobs):
+        return {"ok": False, "error": f"An automation named \"{name}\" already exists."}
+    replaced = False
+    for i, j in enumerate(jobs):
+        if j.get("name") == (original or name):
+            # Keep unknown keys (retries, chat_id…) from hand-edited files.
+            keep = {k: v for k, v in j.items() if k not in ("time", "every_minutes")}
+            jobs[i] = {**keep, **job}
+            replaced = True
+            break
+    if not replaced:
+        jobs.append(job)
+    write_json(JOBS_FILE, jobs)
+    _chown_user(JOBS_FILE)
+    return {"ok": True, "job": job}
+
+
+def delete_job(name: str) -> bool:
+    jobs = read_json(JOBS_FILE, [])
+    keep = [j for j in jobs if j.get("name") != name]
+    if len(keep) == len(jobs):
+        return False
+    write_json(JOBS_FILE, keep)
+    return True
+
+
+_running_jobs: set = set()
+
+# Each routine posts into its own dashboard chat, which the user can open and
+# continue. The worker (scheduled runs) finds it by the same title.
+ROUTINE_PREFIX = "Routine · "
+
+
+def routine_session(name: str, agent: str = "") -> str:
+    title = PREFIX + ROUTINE_PREFIX + name
+    for s_ in _list_raw_sessions():
+        if s_.get("title") == title:
+            return s_["id"]
+    sid = create_session(ROUTINE_PREFIX + name, agent)["id"]
+    set_session_meta(sid, title_locked=True, titled=True, routine=name)
+    return sid
+
+
+def record_notification(topic: str, title: str, body: str, link: str = "") -> int | None:
+    try:
+        rows = pg_query(
+            "insert into notifications (ts, chat_id, topic, title, body, channels, delivered, link) "
+            "values (%s, %s, %s, %s, %s, %s, %s, %s) returning id",
+            (int(time.time()), DEFAULT_CHAT_ID, topic, title[:200], body[:2000], ["push"], True, link or None),
+        )
+        return rows[0]["id"] if rows else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def run_job_now(name: str) -> dict:
+    """Run a routine now, in the background, exactly like a scheduled run:
+    in the routine's chat, with memory, then a push + an inbox entry."""
+    job = next((j for j in read_json(JOBS_FILE, []) if j.get("name") == name), None)
+    if not job:
+        return {"ok": False, "error": "Unknown routine."}
+    if name in _running_jobs:
+        return {"ok": False, "error": "Already running."}
+    agent = job.get("agent", "") or DEFAULT_AGENT
+    sid = routine_session(name, agent)
+
+    def work():
+        _running_jobs.add(name)
+        try:
+            text = ask(job.get("prompt", ""), agent, sid, raw_session=True, with_memory=True)
+            summary = " ".join(re.sub(r"[*_`#>|]+", "", text or "").split())
+            if len(summary) > 220:
+                summary = summary[:217] + "…"
+            if summary and not text.startswith("Error:"):
+                link = f"./#chat/{sid}"
+                record_notification("routine", f"🔁 {name}", summary, link)
+                send_push(f"🔁 {name}", summary, link)
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            _running_jobs.discard(name)
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"ok": True, "session": sid}
 
 
 def set_job_enabled(name: str, enabled: bool) -> bool:
@@ -842,67 +990,25 @@ def set_job_enabled(name: str, enabled: bool) -> bool:
     return found
 
 
-JOB_PREFIX = "job-"
-
-
 def get_job_results(limit: int = 8) -> dict:
-    """Latest results produced by scheduled jobs.
-
-    Le bot lance chaque job dans une session « job-<nom> » (distincte du
-    dashboard and Telegram). We read the most recent assistant answer
-    de ces sessions pour l'afficher sur l'accueil.
-    """
-    try:
-        sessions = http_json(f"{OPENCODE_URL}/session", timeout=8) or []
-    except Exception:
-        return {"results": []}
-
-    jobs = {j.get("name"): j for j in read_json(JOBS_FILE, [])}
-    job_sessions = []
-    for s in sessions:
-        title = str(s.get("title", ""))
-        if not title.startswith(JOB_PREFIX):
-            continue
-        t = s.get("time", {})
-        job_sessions.append({
-            "id": s["id"],
-            "name": title[len(JOB_PREFIX):],
-            "updated": t.get("updated") or t.get("created") or 0,
-        })
-    job_sessions.sort(key=lambda x: x.get("updated") or 0, reverse=True)
-
+    """Latest report of each routine (the last answer in its chat)."""
+    head = PREFIX + ROUTINE_PREFIX
+    chats = []
+    for s_ in _list_raw_sessions():
+        title = str(s_.get("title", ""))
+        if title.startswith(head):
+            t = s_.get("time", {})
+            chats.append({"id": s_["id"], "name": title[len(head):], "updated": t.get("updated") or t.get("created") or 0})
+    chats.sort(key=lambda x: x["updated"], reverse=True)
     out = []
-    seen = set()
-    for js in job_sessions:
-        name = js["name"]
-        if name in seen:
-            continue
-        seen.add(name)
-        text = ""
-        try:
-            for m in reversed(session_messages(js["id"])):
-                if m["role"] == "mav" and m.get("text"):
-                    text = m["text"]
-                    break
-        except Exception:
-            pass
-        if not text:
-            continue
-        meta = jobs.get(name, {})
-        out.append({
-            "name": name,
-            "description": meta.get("description", ""),
-            "time": meta.get("time", ""),
-            "updated": js["updated"],
-            "text": text[:4000],
-            "session": js["id"],
-        })
-        if len(out) >= limit:
-            break
+    for c in chats[:limit]:
+        text = next((m["text"] for m in reversed(session_messages(c["id"])) if m["role"] == "mav"), "")
+        if text:
+            out.append({"name": c["name"], "updated": c["updated"], "text": text[:4000], "session": c["id"]})
     return {"results": out}
 
 
-def get_memory(limit: int = 20) -> dict:
+def get_memory(limit: int = 40) -> dict:
     def q(sql, params=()):
         try:
             return pg_query(sql, params)
@@ -910,10 +1016,42 @@ def get_memory(limit: int = 20) -> dict:
             return []
 
     return {
-        "conversations": q("select question, answer, ts from conversations order by ts desc limit %s", (limit,)),
-        "facts": q("select fact, source, ts from facts order by ts desc limit 20"),
+        "conversations": q(
+            "select id, question, left(answer, 600) as answer, ts, source, agent "
+            "from conversations order by ts desc limit %s",
+            (limit,),
+        ),
+        "facts": q("select id, fact, source, ts from facts order by ts desc limit 100"),
         "preferences": q("select key, value, ts from preferences order by ts desc limit 20"),
+        "backend": MEMORY.backend if MEMORY else "none",
+        "enabled": MEMORY_ENABLED,
     }
+
+
+def memory_action(action: str, payload: dict) -> dict:
+    if action == "fact/add":
+        fact = str(payload.get("fact") or "").strip()
+        if not fact:
+            return {"ok": False, "error": "Empty fact."}
+        if MEMORY:
+            return {"ok": MEMORY.add_fact(DEFAULT_CHAT_ID, fact, source="dashboard")}
+        pg_exec(
+            "insert into facts (chat_id, fact, source, ts) values (%s, %s, %s, %s)",
+            (DEFAULT_CHAT_ID, fact[:500], "dashboard", int(time.time())),
+        )
+        return {"ok": True}
+    if action == "fact/delete":
+        pg_exec("delete from facts where id = %s", (int(payload.get("id") or 0),))
+        return {"ok": True}
+    if action == "exchange/delete":
+        pg_exec("delete from conversations where id = %s", (int(payload.get("id") or 0),))
+        return {"ok": True}
+    if action == "forget":
+        pg_exec("delete from conversations")
+        if payload.get("facts"):
+            pg_exec("delete from facts")
+        return {"ok": True}
+    return {"ok": False, "error": "unknown action"}
 
 
 def get_watch() -> dict:
@@ -930,8 +1068,9 @@ def get_notifications(limit: int = 30) -> dict:
     """Historique des notifications proactives (veille + jobs)."""
     try:
         rows = pg_query(
-            "select ts, topic, title, body, channels, delivered "
-            "from notifications order by ts desc limit %s",
+            "select id, ts, topic, title, body, channels, delivered, link "
+            "from notifications where topic is distinct from 'push_ack' "
+            "order by ts desc limit %s",
             (limit,),
         )
     except Exception:
@@ -943,7 +1082,7 @@ def get_notification(nid: int) -> dict:
     """One notification by id (to open its detail from the push)."""
     try:
         rows = pg_query(
-            "select id, ts, topic, title, body, delivered from notifications where id = %s",
+            "select id, ts, topic, title, body, delivered, link from notifications where id = %s",
             (nid,),
         )
     except Exception:
@@ -951,7 +1090,7 @@ def get_notification(nid: int) -> dict:
     return {"notification": rows[0] if rows else None}
 
 
-VALID_WATCH_KINDS = ["web", "mail", "github", "moodle", "proxmox", "health", "stock"]
+VALID_WATCH_KINDS = ["web", "price", "news"]
 
 
 def watch_add(kind: str, target: str) -> bool:
@@ -970,25 +1109,30 @@ def watch_remove(item_id: int) -> bool:
 
 
 def get_agents() -> dict:
+    """Agents offered in the chat picker, with their description."""
     # Internal agents we do not offer in the selector.
     hidden = {"compaction", "title", "summary", "plan", "build"}
     try:
         agents = http_json(f"{OPENCODE_URL}/agent", timeout=6) or []
-        names = sorted(
-            a["name"]
-            for a in agents
-            if isinstance(a, dict)
-            and a.get("name")
-            and a["name"] not in hidden
-            and not a.get("hidden")
-            # On propose primaires ET subagents : ils fonctionnent comme agent
-            # de session pour le chat.
-            and a.get("mode") in ("primary", "subagent", "all", None)
-        )
+        details = {}
+        for a in agents:
+            if not isinstance(a, dict) or not a.get("name"):
+                continue
+            if a["name"] in hidden or a.get("hidden"):
+                continue
+            # Primary AND subagents: both work as the session agent for chat.
+            if a.get("mode") not in ("primary", "subagent", "all", None):
+                continue
+            details[a["name"]] = {
+                "description": (a.get("description") or "").strip()[:200],
+                "mode": a.get("mode") or "all",
+            }
+        names = sorted(details)
         ordered = [n for n in PRIMARY_AGENTS if n in names] + [n for n in names if n not in PRIMARY_AGENTS]
-        return {"agents": ordered or PRIMARY_AGENTS}
+        default = DEFAULT_AGENT if DEFAULT_AGENT in details else (ordered[0] if ordered else "")
+        return {"agents": ordered or PRIMARY_AGENTS, "details": details, "default": default}
     except Exception:
-        return {"agents": PRIMARY_AGENTS}
+        return {"agents": PRIMARY_AGENTS, "details": {}, "default": DEFAULT_AGENT}
 
 
 # ------------------------------------------------------------------- search
@@ -1026,136 +1170,43 @@ def global_search(query: str) -> dict:
     return {"documents": docs, "conversations": convs, "facts": facts}
 
 
-# ------------------------------------------------------------------- markets
-
-# Default indices/symbols offered in the dashboard.
-MARKET_SYMBOLS = [
-    "SPY", "QQQ", "DIA", "IWM", "GLD", "SLV", "USO", "TLT", "VIX",
-    "NVDA", "AAPL", "MSFT", "TSLA", "BTC-USD", "ETH-USD",
-    "^GSPC", "^IXIC", "^DJI", "^FCHI", "^GDAXI",
-]
-
-_YF_HOSTS = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]
-_YF_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-)
-
-
-def _yf(path: str) -> dict:
-    last = None
-    for host in _YF_HOSTS:
-        url = f"https://{host}{path}"
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "User-Agent": _YF_UA,
-                    "Accept": "application/json,text/plain,*/*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=12) as r:
-                return json.loads(r.read().decode("utf-8", "replace"))
-        except Exception as exc:  # noqa: BLE001
-            last = exc
-            continue
-    raise last or RuntimeError("yahoo indisponible")
-
-
-def get_quote(symbol: str) -> dict:
-    """Dernier prix et variation d'un symbole (Yahoo Finance)."""
-    sym = symbol.strip().upper()
-    data = _yf(f"/v8/finance/chart/{urllib.parse.quote(sym)}?range=5d&interval=1d")
-    res = (data.get("chart", {}).get("result") or [None])[0]
-    if not res:
-        return {"symbol": sym, "error": "introuvable"}
-    meta = res.get("meta", {})
-    price = meta.get("regularMarketPrice")
-    prev = meta.get("chartPreviousClose") or meta.get("previousClose")
-    change = None
-    pct = None
-    if price is not None and prev:
-        change = round(price - prev, 4)
-        pct = round((price - prev) / prev * 100, 2)
-    return {
-        "symbol": sym,
-        "name": meta.get("shortName") or meta.get("symbol") or sym,
-        "currency": meta.get("currency"),
-        "price": price,
-        "prev": prev,
-        "change": change,
-        "pct": pct,
-    }
-
-
-def get_quotes(symbols: list[str]) -> dict:
-    out = []
-    for s in symbols[:24]:
-        try:
-            q = get_quote(s)
-        except Exception:
-            q = {"symbol": s, "error": "indisponible"}
-        out.append(q)
-    return {"quotes": out}
-
-
-def get_chart(symbol: str, range_: str = "1mo", interval: str = "1d") -> dict:
-    """OHLC series + volume for a chart (Yahoo Finance)."""
-    sym = symbol.strip().upper()
-    allowed_ranges = {"1d": ("5m", "1d"), "5d": ("30m", "5d"), "1mo": ("1d", "1mo"),
-                      "3mo": ("1d", "3mo"), "6mo": ("1d", "6mo"), "1y": ("1d", "1y"),
-                      "2y": ("1wk", "2y"), "5y": ("1wk", "5y")}
-    if range_ in allowed_ranges:
-        interval = allowed_ranges[range_][0]
-    path = (
-        f"/v8/finance/chart/{urllib.parse.quote(sym)}"
-        f"?range={urllib.parse.quote(range_)}&interval={urllib.parse.quote(interval)}"
-    )
-    data = _yf(path)
-    res = (data.get("chart", {}).get("result") or [None])[0]
-    if not res:
-        return {"symbol": sym, "error": "introuvable"}
-    meta = res.get("meta", {})
-    ts = res.get("timestamp") or []
-    quote = (res.get("indicators", {}).get("quote") or [{}])[0]
-    opens = quote.get("open") or []
-    highs = quote.get("high") or []
-    lows = quote.get("low") or []
-    closes = quote.get("close") or []
-    vols = quote.get("volume") or []
-
-    candles = []
-    for i, t in enumerate(ts):
-        c = closes[i] if i < len(closes) else None
-        o = opens[i] if i < len(opens) else None
-        h = highs[i] if i < len(highs) else None
-        lo = lows[i] if i < len(lows) else None
-        if c is None or o is None or h is None or lo is None:
-            continue
-        row = {"time": int(t), "open": round(o, 4), "high": round(h, 4),
-               "low": round(lo, 4), "close": round(c, 4)}
-        if i < len(vols) and vols[i] is not None:
-            row["volume"] = int(vols[i])
-        candles.append(row)
-
-    price = meta.get("regularMarketPrice")
-    prev = meta.get("chartPreviousClose") or meta.get("previousClose")
-    pct = round((price - prev) / prev * 100, 2) if (price and prev) else None
-    return {
-        "symbol": sym,
-        "name": meta.get("shortName") or sym,
-        "currency": meta.get("currency"),
-        "price": price,
-        "pct": pct,
-        "candles": candles,
-    }
-
-
 # ------------------------------------------------------------------- chat
 
 PREFIX = "dash: "
-DEFAULT_TITLE = "Nouvelle discussion"
+DEFAULT_TITLE = "New conversation"
+LEGACY_TITLES = {"", DEFAULT_TITLE, "Nouvelle discussion"}
+
+# Per-conversation metadata the engine does not keep: the agent the user is
+# talking to, and whether the title was generated already.
+_meta_lock = threading.Lock()
+
+
+def session_meta(sid: str) -> dict:
+    return (read_json(SESSIONS_META, {}) or {}).get(sid, {})
+
+
+def set_session_meta(sid: str, **fields) -> None:
+    if not sid:
+        return
+    with _meta_lock:
+        meta = read_json(SESSIONS_META, {})
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.setdefault(sid, {}).update(fields)
+        try:
+            write_json(SESSIONS_META, meta)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def drop_session_meta(sid: str) -> None:
+    with _meta_lock:
+        meta = read_json(SESSIONS_META, {})
+        if isinstance(meta, dict) and meta.pop(sid, None) is not None:
+            try:
+                write_json(SESSIONS_META, meta)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _list_raw_sessions() -> list[dict]:
@@ -1176,6 +1227,8 @@ def _migrate_legacy() -> None:
 
 def list_sessions() -> list[dict]:
     _migrate_legacy()
+    meta = read_json(SESSIONS_META, {}) or {}
+    jobs = read_json(JOBS_FILE, []) or []
     out = []
     for s in _list_raw_sessions():
         title = str(s.get("title", ""))
@@ -1186,23 +1239,83 @@ def list_sessions() -> list[dict]:
         if title[len(PREFIX):].startswith("job:"):
             continue
         t = s.get("time", {})
+        m = meta.get(s["id"], {})
+        routine = title[len(PREFIX):].startswith(ROUTINE_PREFIX)
+        agent = m.get("agent", "")
+        if routine and not agent:
+            name = title[len(PREFIX) + len(ROUTINE_PREFIX):]
+            agent = next((j.get("agent", "") for j in jobs if j.get("name") == name), "")
         out.append({
             "id": s["id"],
             "title": title[len(PREFIX):] or DEFAULT_TITLE,
             "created": t.get("created"),
             "updated": t.get("updated") or t.get("created"),
+            "agent": agent,
+            "pinned": bool(m.get("pinned")),
+            "routine": routine,
         })
-    out.sort(key=lambda x: x.get("updated") or 0, reverse=True)
+    out.sort(key=lambda x: (x["pinned"], x.get("updated") or 0), reverse=True)
     return out
 
 
 def create_session(title: str = "", agent: str = "") -> dict:
     name = (title or DEFAULT_TITLE).strip()[:80] or DEFAULT_TITLE
-    body = {"title": PREFIX + name}
-    if agent and agent in PRIMARY_AGENTS:
-        body["agent"] = agent
-    res = http_json(f"{OPENCODE_URL}/session", method="POST", body=body)
-    return {"id": res["id"], "title": name}
+    res = http_json(f"{OPENCODE_URL}/session", method="POST", body={"title": PREFIX + name})
+    agent = (agent or "").strip()
+    if agent:
+        set_session_meta(res["id"], agent=agent)
+    return {"id": res["id"], "title": name, "agent": agent}
+
+
+# ------------------------------------------------------------- auto titles
+# After the first exchange, a short title is generated in the background from
+# the question and the answer. A keyword title is shown meanwhile, and stays if
+# the model is unavailable.
+
+def quick_title(prompt: str) -> str:
+    words = re.sub(r"\s+", " ", prompt.strip()).split(" ")
+    title = " ".join(words[:7])
+    if len(title) > 48:
+        title = title[:47].rstrip() + "…"
+    elif len(words) > 7:
+        title += "…"
+    return (title[:1].upper() + title[1:]) if title else DEFAULT_TITLE
+
+
+def _clean_title(raw: str) -> str:
+    line = next((l for l in (raw or "").strip().splitlines() if l.strip()), "")
+    line = re.sub(r"^(title|titre)\s*[:：-]\s*", "", line.strip(), flags=re.I)
+    line = line.strip(" \"'`*#.").strip()
+    words = line.split()
+    if not words or len(words) > 8:
+        return ""
+    return " ".join(words)[:48]
+
+
+def generate_title(sid: str, prompt: str, answer: str) -> None:
+    """Ask the model for a 2–5 word title in a throwaway session."""
+    tmp = None
+    try:
+        tmp = http_json(f"{OPENCODE_URL}/session", method="POST", body={"title": "mav-title"}, timeout=10)["id"]
+        instruction = (
+            "Write a title of 2 to 5 words for the conversation below, in the "
+            "language of the user's message. Reply with the title only: no "
+            "quotes, no punctuation at the end, no explanation.\n\n"
+            f"User: {prompt.strip()[:800]}\n\nAssistant: {answer.strip()[:800]}"
+        )
+        body = {"parts": [{"type": "text", "text": instruction}], **_model_body()}
+        if "title" in valid_agents():
+            body["agent"] = "title"
+        res = http_json(f"{OPENCODE_URL}/session/{tmp}/message", method="POST", body=body, timeout=90)
+        title = _clean_title(_part_text((res or {}).get("parts") or []))
+        if title and session_meta(sid).get("title_locked") is not True:
+            rename_session(sid, title)
+            set_session_meta(sid, titled=True)
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        if tmp:
+            delete_session(tmp)
 
 
 def rename_session(sid: str, title: str) -> bool:
@@ -1223,6 +1336,7 @@ def delete_session(sid: str) -> bool:
         return False
     try:
         http_json(f"{OPENCODE_URL}/session/{sid}", method="DELETE")
+        drop_session_meta(sid)
         return True
     except Exception:
         return False
@@ -1258,11 +1372,15 @@ def session_messages(sid: str) -> list[dict]:
         text = _part_text(e.get("parts") or [])
         if not text:
             continue
-        msgs.append({
+        msg = {
             "role": "me" if role == "user" else "mav",
             "text": text,
             "ts": (info.get("time") or {}).get("created"),
-        })
+        }
+        if role == "assistant":
+            # The agent that actually answered (field name varies by version).
+            msg["agent"] = info.get("agent") or info.get("mode") or ""
+        msgs.append(msg)
     return msgs
 
 
@@ -1270,7 +1388,7 @@ def export_session_markdown(sid: str) -> str:
     title = session_title(sid)[len(PREFIX):] or DEFAULT_TITLE
     lines = [f"# {title}", ""]
     for m in session_messages(sid):
-        who = "Vous" if m["role"] == "me" else "Mav"
+        who = "You" if m["role"] == "me" else (f"Mav · {m['agent']}" if m.get("agent") else "Mav")
         lines.append(f"**{who}**" + (f" · {_ts(m['ts'])}" if m.get("ts") else ""))
         lines.append("")
         lines.append(m["text"])
@@ -1302,6 +1420,37 @@ def _parts(prompt: str, files: list) -> list:
             "filename": f.get("filename") or "fichier",
         })
     return parts
+
+
+def memory_context(prompt: str) -> str:
+    """Facts + relevant past exchanges + indexed documents, for a new chat."""
+    global _RAG
+    blocks = []
+    if MEMORY and MEMORY_ENABLED:
+        try:
+            b = MEMORY.context_block(DEFAULT_CHAT_ID, prompt, MEMORY_TOP)
+            if b:
+                blocks.append(b)
+        except Exception:  # noqa: BLE001
+            pass
+    if RAG is not None:
+        try:
+            if _RAG is None:
+                _RAG = RAG()
+            b = _RAG.context_block(DEFAULT_CHAT_ID, prompt, MEMORY_TOP)
+            if b:
+                blocks.append(b)
+        except Exception:  # noqa: BLE001
+            pass
+    return "\n\n".join(blocks)
+
+
+def remember_exchange(prompt: str, answer: str, sid: str, agent: str) -> None:
+    if MEMORY and MEMORY_ENABLED and answer:
+        try:
+            MEMORY.add(DEFAULT_CHAT_ID, prompt, answer, sid, source="dashboard", agent=agent)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def save_upload(name: str, data_b64: str, mime: str = "") -> dict:
@@ -1485,7 +1634,7 @@ def serve_asset(path: str):
     return data, mime
 
 
-# Le moteur refuse application/octet-stream : on devine un type utile depuis
+# The engine refuses application/octet-stream: guess a useful type from
 # the extension, for cases where the browser announces nothing (local files).
 _EXT_MIME = {
     ".txt": "text/plain",
@@ -1568,7 +1717,14 @@ def valid_agents() -> set:
     return names or _agents_cache["names"]
 
 
-def stream_answer(prompt: str, sid: str, agent: str = "", files: list | None = None):
+def stream_answer(
+    prompt: str,
+    sid: str,
+    agent: str = "",
+    files: list | None = None,
+    raw_session: bool = False,
+    with_memory: bool = False,
+):
     """SSE answer, collected server-side: reliable and reasoning-free.
 
     We let the engine run the request, then poll the session messages until
@@ -1577,9 +1733,13 @@ def stream_answer(prompt: str, sid: str, agent: str = "", files: list | None = N
     `finish` field
     du message, pas sur un signal de flux qui peut se perdre.
     """
-    sid = ensure_session(sid, agent)
+    sid = sid if raw_session else ensure_session(sid, agent)
     body: dict = {"parts": _parts(prompt, files or [])}
-    ag = agent or DEFAULT_AGENT
+    meta = {} if raw_session else session_meta(sid)
+    # Explicit choice > the conversation's agent > the configured default.
+    ag = agent or meta.get("agent") or DEFAULT_AGENT
+    if not raw_session and agent and agent != meta.get("agent"):
+        set_session_meta(sid, agent=agent)
 
     def sse(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -1587,23 +1747,26 @@ def stream_answer(prompt: str, sid: str, agent: str = "", files: list | None = N
     if ag:
         known = valid_agents()
         if known and ag not in known:
-            yield sse("error", {"message": f"Agent inconnu : {ag}", "session": sid})
-            return
+            if agent and agent != DEFAULT_AGENT:
+                yield sse("error", {"message": f"Unknown helper: {ag}. Restart the assistant if you just created it.", "session": sid})
+                return
+            ag = ""  # the default helper is not installed: let the engine pick
+    if ag:
         body["agent"] = ag
     body.update(_model_body())
 
-    # Auto-title: the first time we write into a conversation still
-    # named by default, its title becomes the start of the message.
-    try:
-        if prompt.strip():
+    # Instant keyword title while the real one is generated after the answer.
+    needs_title = False
+    if not raw_session and prompt.strip():
+        try:
             current = session_title(sid)[len(PREFIX):]
-            if current in ("", DEFAULT_TITLE):
-                auto = " ".join(prompt.strip().split())[:48]
-                if len(prompt.strip()) > 48:
-                    auto += "…"
-                rename_session(sid, auto)
-    except Exception:
-        pass
+            if current in LEGACY_TITLES:
+                rename_session(sid, quick_title(prompt))
+                needs_title = True
+            elif not meta.get("titled") and not meta.get("title_locked"):
+                needs_title = True
+        except Exception:
+            pass
 
     # Start marker: any message older than our prompt is ignored.
     try:
@@ -1612,13 +1775,22 @@ def stream_answer(prompt: str, sid: str, agent: str = "", files: list | None = N
         before = []
     before_ids = {(e.get("info") or {}).get("id") for e in before}
 
+    # Memory: injected at the start of a conversation only (afterwards the
+    # conversation itself is the context). Synthetic, so it is not displayed.
+    recalled = 0
+    if (not raw_session and not before) or with_memory:
+        ctx = memory_context(prompt)
+        if ctx:
+            recalled = ctx.count("] Q:") + ctx.count("\n- ")
+            body["parts"].insert(0, {"type": "text", "text": ctx, "synthetic": True})
+
     try:
         http_json(f"{OPENCODE_URL}/session/{sid}/prompt_async", method="POST", body=body)
     except Exception as exc:  # noqa: BLE001
-        yield sse("error", {"message": f"Impossible de lancer : {exc}", "session": sid})
+        yield sse("error", {"message": f"Could not start: {exc}", "session": sid})
         return
 
-    yield sse("start", {"session": sid})
+    yield sse("start", {"session": sid, "agent": ag, "recalled": recalled})
 
     deadline = time.time() + 900      # garde-fou global (15 min)
     idle_limit = 240                  # no real progress (4 min)
@@ -1676,7 +1848,7 @@ def stream_answer(prompt: str, sid: str, agent: str = "", files: list | None = N
         if linfo.get("error"):
             err = linfo.get("error") or {}
             engine_error = (
-                (err.get("data") or {}).get("message") or err.get("name") or "erreur du moteur"
+                (err.get("data") or {}).get("message") or err.get("name") or "engine error"
             )
 
         last_has_text = bool(_part_text(last.get("parts") or []))
@@ -1697,13 +1869,30 @@ def stream_answer(prompt: str, sid: str, agent: str = "", files: list | None = N
         yield sse("error", {"message": str(engine_error), "session": sid})
         return
 
-    yield sse("done", {"session": sid, "text": finished_text or last_text})
+    final = finished_text or last_text
+    yield sse("done", {"session": sid, "text": final, "agent": ag})
+
+    if not raw_session and final:
+        threading.Thread(
+            target=remember_exchange, args=(prompt, final, sid, ag), daemon=True
+        ).start()
+        if needs_title:
+            threading.Thread(
+                target=generate_title, args=(sid, prompt, final), daemon=True
+            ).start()
 
 
-def ask(prompt: str, agent: str = "", sid: str = "", files: list | None = None) -> str:
-    """Version bloquante (utile pour les scripts / fallback)."""
+def ask(
+    prompt: str,
+    agent: str = "",
+    sid: str = "",
+    files: list | None = None,
+    raw_session: bool = False,
+    with_memory: bool = False,
+) -> str:
+    """Blocking version (routines, summaries, fallback)."""
     last = ""
-    for chunk in stream_answer(prompt, sid, agent, files):
+    for chunk in stream_answer(prompt, sid, agent, files, raw_session=raw_session, with_memory=with_memory):
         if not chunk.startswith("event: delta"):
             if chunk.startswith("event: done"):
                 try:
@@ -1712,9 +1901,9 @@ def ask(prompt: str, agent: str = "", sid: str = "", files: list | None = None) 
                     return last
             if chunk.startswith("event: error"):
                 try:
-                    return f"Erreur : {json.loads(chunk.split('data: ', 1)[1]).get('message')}"
+                    return f"Error: {json.loads(chunk.split('data: ', 1)[1]).get('message')}"
                 except Exception:
-                    return "Erreur du moteur."
+                    return "Engine error."
             continue
         try:
             last += json.loads(chunk.split("data: ", 1)[1]).get("delta", "")
@@ -1824,7 +2013,7 @@ def send_push(title: str, body: str, url: str = "./") -> int:
     return sent
 
 
-# Watch and notification pushing are now handled by the Telegram bot
+# Watch and notification pushing are handled by the worker
 # (`~/bot/ocnotify.py` + `ocwatch.py`), with dedup and quiet hours.
 # The dashboard only provides VAPID keys, stores subscriptions and
 # exposes the history (`/api/notifications`).
@@ -1915,8 +2104,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_agents())
             if path == "/api/connections":
                 return self._send(200, {"connections": get_connections()})
-            if path == "/api/proxmox":
-                return self._send(200, get_proxmox())
             if path == "/api/health":
                 return self._send(200, {"ok": True, "ts": int(time.time())})
             if path == "/api/config":
@@ -1927,6 +2114,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, read_mcp())
             if path == "/api/config/engine":
                 return self._send(200, engine_status())
+            if path == "/api/config/provider":
+                return self._send(200, provider_snapshot())
             if path == "/api/config/agent-files":
                 return self._send(200, list_agent_files())
             if path == "/api/config/agent-file":
@@ -1936,8 +2125,13 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/session":
                 sid = p.get("id", "")
                 if not sid:
-                    return self._send(400, {"error": "id manquant"})
-                return self._send(200, {"id": sid, "title": session_title(sid)[len(PREFIX):], "messages": session_messages(sid)})
+                    return self._send(400, {"error": "missing id"})
+                return self._send(200, {
+                    "id": sid,
+                    "title": session_title(sid)[len(PREFIX):],
+                    "agent": session_meta(sid).get("agent", ""),
+                    "messages": session_messages(sid),
+                })
             if path == "/api/session/export":
                 sid = p.get("id", "")
                 md = export_session_markdown(sid)
@@ -1953,12 +2147,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, global_search(p.get("q", "")))
             if path == "/api/push/key":
                 return self._send(200, {"key": push_public_key()})
-            if path == "/api/chart":
-                return self._send(200, get_chart(p.get("symbol", "SPY"), p.get("range", "1mo")))
             if path == "/api/asset":
                 res = serve_asset(p.get("path", ""))
                 if not res:
-                    return self._send(404, "asset introuvable", "text/plain")
+                    return self._send(404, "asset not found", "text/plain")
                 data, mime = res
                 return self._send(200, data, mime)
             if path == "/api/media":
@@ -1971,25 +2163,22 @@ class Handler(BaseHTTPRequestHandler):
                 mid = p.get("id", "")
                 hit = next((i for i in _media_load() if i.get("id") == mid), None)
                 if not hit:
-                    return self._send(404, "media introuvable", "text/plain")
+                    return self._send(404, "media not found", "text/plain")
                 res = serve_asset(hit["path"])
                 if not res:
-                    return self._send(404, "media introuvable", "text/plain")
+                    return self._send(404, "media not found", "text/plain")
                 data, mime = res
                 return self._send(200, data, mime)
             if path == "/api/media/by-name":
                 name = p.get("name", "")
                 hits = find_media(name)
                 if not hits:
-                    return self._send(404, "media introuvable", "text/plain")
+                    return self._send(404, "media not found", "text/plain")
                 res = serve_asset(hits[0]["path"])
                 if not res:
-                    return self._send(404, "media introuvable", "text/plain")
+                    return self._send(404, "media not found", "text/plain")
                 data, mime = res
                 return self._send(200, data, mime)
-            if path == "/api/quotes":
-                syms = [s for s in (p.get("symbols") or "").split(",") if s.strip()]
-                return self._send(200, get_quotes(syms or MARKET_SYMBOLS))
             if path == "/api/stream":
                 return self._stream(p)
             return self._static(path)
@@ -1999,7 +2188,7 @@ class Handler(BaseHTTPRequestHandler):
     def _stream(self, p: dict):
         prompt = p.get("prompt", "").strip()
         if not prompt:
-            return self._send(400, {"error": "prompt manquant"})
+            return self._send(400, {"error": "missing prompt"})
         files = []
         if p.get("files"):
             try:
@@ -2031,13 +2220,21 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/ask":
                 prompt = (payload.get("prompt") or "").strip()
                 if not prompt:
-                    return self._send(400, {"error": "prompt manquant"})
+                    return self._send(400, {"error": "missing prompt"})
                 return self._send(200, {"answer": ask(prompt, payload.get("agent", ""), payload.get("session", ""), payload.get("files"))})
             if path == "/api/session/new":
                 return self._send(200, create_session(payload.get("title", ""), payload.get("agent", "")))
             if path == "/api/session/rename":
                 ok = rename_session(payload.get("id", ""), payload.get("title", ""))
+                if ok:  # a title chosen by the user is never auto-replaced
+                    set_session_meta(payload.get("id", ""), title_locked=True, titled=True)
                 return self._send(200 if ok else 400, {"ok": ok})
+            if path == "/api/session/agent":
+                set_session_meta(payload.get("id", ""), agent=(payload.get("agent") or "").strip())
+                return self._send(200, {"ok": True})
+            if path == "/api/session/pin":
+                set_session_meta(payload.get("id", ""), pinned=bool(payload.get("pinned")))
+                return self._send(200, {"ok": True})
             if path == "/api/session/delete":
                 ok = delete_session(payload.get("id", ""))
                 return self._send(200 if ok else 400, {"ok": ok})
@@ -2046,18 +2243,28 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/session/summary":
                 sid = payload.get("id", "")
-                s = ask("Summarize this conversation in a few key points.", "summary", sid)
+                s = ask("Summarize this conversation in a few key points.", "summary", sid, raw_session=True)
                 return self._send(200, {"summary": s})
             if path == "/api/job/toggle":
                 ok = set_job_enabled(payload.get("name", ""), bool(payload.get("enabled")))
                 return self._send(200 if ok else 404, {"ok": ok})
             if path == "/api/job/run":
-                name = payload.get("name", "")
-                job = next((j for j in read_json(JOBS_FILE, []) if j.get("name") == name), None)
-                if not job:
-                    return self._send(404, {"error": "job inconnu"})
-                sess = create_session(f"job: {name}", job.get("agent", "research"))
-                return self._send(200, {"session": sess["id"], "title": sess["title"]})
+                res = run_job_now(payload.get("name", ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/job/save":
+                res = save_job(payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/job/delete":
+                ok = delete_job(payload.get("name", ""))
+                return self._send(200 if ok else 404, {"ok": ok})
+            if path.startswith("/api/memory/"):
+                res = memory_action(path[len("/api/memory/"):], payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/config/provider":
+                res = provider_save(payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/config/provider/test":
+                return self._send(200, provider_test(payload))
             if path == "/api/watch/add":
                 ok = watch_add(payload.get("kind", ""), payload.get("target", ""))
                 return self._send(200 if ok else 400, {"ok": ok})
@@ -2079,7 +2286,7 @@ class Handler(BaseHTTPRequestHandler):
                 ok = push_unsubscribe(payload.get("endpoint", ""))
                 return self._send(200, {"ok": ok})
             if path == "/api/push/test":
-                n = send_push("Mav", "Ceci est une notification de test.")
+                n = send_push("Mav", "This is a test notification.")
                 return self._send(200, {"sent": n})
             if path == "/api/push/ack":
                 # Service worker acknowledgement: proves the push actually
@@ -2099,7 +2306,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/config/agents":
                 text = payload.get("text")
                 if not isinstance(text, str):
-                    return self._send(400, {"error": "text requis"})
+                    return self._send(400, {"error": "text required"})
                 res = write_agents(text)
                 return self._send(200 if res.get("ok") else 500, res)
             if path == "/api/config/mcp":
@@ -2148,8 +2355,23 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, target.read_bytes(), ctype)
 
 
+def ensure_schema() -> None:
+    """Columns added after the first release (idempotent, silent without PG)."""
+    try:
+        pg_exec(
+            "CREATE TABLE IF NOT EXISTS notifications (id bigserial PRIMARY KEY, ts bigint NOT NULL, "
+            "chat_id bigint, topic text, title text, body text, dedup_key text, channels text[], "
+            "delivered boolean DEFAULT true)"
+        )
+        pg_exec("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link text")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main():
     import ssl
+
+    ensure_schema()
 
     srv = ThreadedHTTPServer((BIND, PORT), Handler)
     print(f"mav-api listening on http://{BIND}:{PORT} (static: {STATIC_DIR})", flush=True)
@@ -2163,7 +2385,7 @@ def main():
             threading.Thread(target=tsrv.serve_forever, daemon=True).start()
             print(f"mav-api listening on https://{BIND}:{TLS_PORT}", flush=True)
         except Exception as exc:  # noqa: BLE001
-            print(f"TLS indisponible: {exc}", flush=True)
+            print(f"TLS unavailable: {exc}", flush=True)
 
     srv.serve_forever()
 

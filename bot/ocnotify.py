@@ -1,10 +1,10 @@
 """Proactive notifications for Mav — Web Push + history/dedup.
 
-Goal: let the bot (watch, jobs) *reach out* to the user, not only reply.
+Goal: let the worker (watch, jobs) *reach out* to the user, not only reply.
 One logic, two uses:
 
-  - watch  (ocwatch) : alert when a state changes;
-  - jobs   (run_job) : short summary when a report is ready.
+  - watch  (ocwatch): alert when a state changes;
+  - jobs   (run_job): short summary when a report is ready.
 
 VAPID keys and subscriptions are the same as the dashboard's
 (~/bot/vapid_private.pem, ~/bot/push_subs.json): a subscription taken in the
@@ -40,7 +40,7 @@ PG_DSN = os.environ.get(
 # Default anti-duplicate window (seconds): 6 h.
 DEDUP_WINDOW = int(os.environ.get("NOTIFY_DEDUP_WINDOW", "21600"))
 
-# Heures calmes : pas de notification entre QUIET_START et QUIET_END (locales).
+# Quiet hours: no notification between QUIET_START and QUIET_END (local time).
 # Format "23-7". Use "0-0" to disable.
 _q = os.environ.get("NOTIFY_QUIET", "23-7")
 try:
@@ -109,6 +109,7 @@ def ensure_schema() -> None:
         cur.execute(
             "CREATE INDEX IF NOT EXISTS notifications_ts_idx ON notifications (ts DESC)"
         )
+        cur.execute("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link text")
         cur.execute(
             "CREATE INDEX IF NOT EXISTS notifications_dedup_idx "
             "ON notifications (dedup_key, ts DESC)"
@@ -140,10 +141,6 @@ def push_enabled(chat_id: int | None) -> bool:
     return _pref(chat_id, "notify.push", "on") != "off"
 
 
-def telegram_enabled(chat_id: int | None) -> bool:
-    return _pref(chat_id, "notify.telegram", "on") != "off"
-
-
 def set_preference(chat_id: int, key: str, value: str) -> None:
     pg = _pg_get()
     if pg is None:
@@ -159,14 +156,14 @@ def set_preference(chat_id: int, key: str, value: str) -> None:
         log.warning("notify preference: %s", exc)
 
 
-# --------------------------------------------------------------- heures calmes
+# --------------------------------------------------------------- quiet hours
 def in_quiet_hours(now: time.struct_time | None = None) -> bool:
     if QUIET_START == QUIET_END:
         return False
     h = (now or time.localtime()).tm_hour
     if QUIET_START < QUIET_END:
         return QUIET_START <= h < QUIET_END
-    # plage qui traverse minuit (ex. 23 -> 7)
+    # range spanning midnight (e.g. 23 -> 7)
     return h >= QUIET_START or h < QUIET_END
 
 
@@ -186,17 +183,17 @@ def _seen_recently(dedup_key: str, window: int) -> bool:
         return False
 
 
-def _record(chat_id, topic, title, body, dedup_key, channels, delivered) -> int | None:
-    """Enregistre une notification dans l'historique. Retourne son id."""
+def _record(chat_id, topic, title, body, dedup_key, channels, delivered, link=None) -> int | None:
+    """Record a notification in the history (the dashboard inbox). Returns its id."""
     pg = _pg_get()
     if pg is None:
         return None
     try:
         cur = pg.cursor()
         cur.execute(
-            "INSERT INTO notifications (ts, chat_id, topic, title, body, dedup_key, channels, delivered) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-            (int(time.time()), chat_id, topic, title, body, dedup_key, channels, delivered),
+            "INSERT INTO notifications (ts, chat_id, topic, title, body, dedup_key, channels, delivered, link) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (int(time.time()), chat_id, topic, title, body, dedup_key, channels, delivered, link),
         )
         row = cur.fetchone()
         return row[0] if row else None
@@ -285,14 +282,14 @@ def send_push(title: str, body: str, url: str = "./") -> int:
                 log.warning("push failed (code %s): %s", code, str(exc)[:200])
                 alive.append(s)
         except Exception as exc:  # noqa: BLE001
-            log.warning("push erreur inattendue : %s", str(exc)[:200])
+            log.warning("unexpected push error: %s", str(exc)[:200])
             alive.append(s)
     if len(alive) != len(subs):
         _write_subs(alive)
     return sent
 
 
-# --------------------------------------------------------------- API publique
+# --------------------------------------------------------------- public API
 def notify(
     title: str,
     body: str,
@@ -306,9 +303,12 @@ def notify(
     """Notify via Web Push, honouring preferences, quiet hours and
     deduplication. Returns what was decided (for logs/tests).
 
-    The Telegram channel is still handled by the caller: here we only add
-    the push and record the history.
+    Every notification is also recorded in the history shown by the
+    dashboard (its inbox), even when the push itself is skipped. `url` is
+    where tapping it leads (e.g. a routine's chat); by default the dashboard
+    opens a chat about the notification.
     """
+    link = url if url and url != "./" else None
     result = {"push": 0, "skipped": None, "id": None}
 
     if dedup_key and _seen_recently(dedup_key, DEDUP_WINDOW) and not force:
@@ -317,19 +317,19 @@ def notify(
 
     if not force and in_quiet_hours():
         result["skipped"] = "quiet"
-        result["id"] = _record(chat_id, topic, title, body, dedup_key, [], delivered=False)
+        result["id"] = _record(chat_id, topic, title, body, dedup_key, [], False, link)
         return result
 
     if not push_enabled(chat_id):
         result["skipped"] = "pref"
+        result["id"] = _record(chat_id, topic, title, body, dedup_key, [], False, link)
         return result
 
-    # On enregistre d'abord pour obtenir l'id, puis on l'inclut dans le lien :
-    # tapping the notification opens the detail in the dashboard.
-    nid = _record(chat_id, topic, title, body, dedup_key, [], delivered=False)
+    # Record first to get the id, then put it in the link: tapping the
+    # notification opens it in the dashboard.
+    nid = _record(chat_id, topic, title, body, dedup_key, [], False, link)
     result["id"] = nid
-    link = f"./?notif={nid}" if nid else url
-    n = send_push(title, body, link)
+    n = send_push(title, body, link or (f"./?notif={nid}" if nid else url))
     result["push"] = n
     _update_record(nid, ["push"] if n else [], bool(n))
     return result

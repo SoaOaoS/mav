@@ -1,21 +1,20 @@
 """Scheduled runs.
 
-Fichier jobs.json :
+jobs.json file (editable from the dashboard, Automations page):
 
 [
   {
     "name": "brief",
     "time": "08:00",
     "days": ["mon","tue","wed","thu","fri"],
-    "chat_id": 123456789,
     "agent": "research",
     "prompt": "Summarize the open PRs on my repos and the failing CI.",
     "enabled": true
   }
 ]
 
-Volontairement pas de cron complet : une heure et des jours suffisent pour un
-brief quotidien, et le format reste lisible sans documentation.
+Deliberately not full cron: a time (or an interval) and days are enough for a
+daily brief, and the format stays readable without documentation.
 """
 
 from __future__ import annotations
@@ -39,28 +38,36 @@ def load_jobs(path: Path) -> list[dict]:
     except FileNotFoundError:
         return []
     except Exception as exc:  # noqa: BLE001
-        log.error("jobs.json illisible: %s", exc)
+        log.error("jobs.json unreadable: %s", exc)
         return []
     if not isinstance(data, list):
-        log.error("jobs.json doit contenir une liste")
+        log.error("jobs.json must contain a list")
         return []
     return [j for j in data if validate(j)]
 
 
+def interval(job: dict) -> int:
+    """Repeat interval in minutes (0 = runs at a fixed time instead)."""
+    try:
+        return max(0, int(job.get("every_minutes") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def validate(job: dict) -> bool:
     name = job.get("name", "?")
-    if not TIME_RE.match(str(job.get("time", ""))):
-        log.error("job %s : champ 'time' invalide (attendu HH:MM)", name)
+    if not job.get("name"):
+        log.error("job without a name")
         return False
-    if not isinstance(job.get("chat_id"), int):
-        log.error("job %s : 'chat_id' manquant ou non entier", name)
+    if not interval(job) and not TIME_RE.match(str(job.get("time", ""))):
+        log.error("job %s: invalid 'time' (expected HH:MM)", name)
         return False
     if not job.get("prompt"):
-        log.error("job %s : 'prompt' vide", name)
+        log.error("job %s: empty 'prompt'", name)
         return False
-    bad = [d for d in job.get("days", DAYS) if d not in DAYS]
+    bad = [d for d in (job.get("days") or DAYS) if d not in DAYS]
     if bad:
-        log.error("job %s : jours inconnus %s", name, bad)
+        log.error("job %s: unknown days %s", name, bad)
         return False
     return True
 
@@ -68,8 +75,17 @@ def validate(job: dict) -> bool:
 def due(job: dict, now: datetime, last_run: str | None) -> bool:
     if not job.get("enabled", True):
         return False
-    if DAYS[now.weekday()] not in job.get("days", DAYS):
+    if DAYS[now.weekday()] not in (job.get("days") or DAYS):
         return False
+    every = interval(job)
+    if every:
+        if not last_run:
+            return True
+        try:
+            last = datetime.strptime(last_run, "%Y-%m-%d %H:%M")
+        except ValueError:
+            return True
+        return (now - last).total_seconds() >= every * 60 - 30
     if now.strftime("%H:%M") != job["time"]:
         return False
     return last_run != now.strftime("%Y-%m-%d %H:%M")
@@ -126,7 +142,7 @@ class Scheduler:
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001
-                log.exception("erreur dans la boucle du planificateur")
+                log.exception("scheduler loop error")
             # Realign on the start of the next minute
             await asyncio.sleep(60 - datetime.now().second % 60)
 
