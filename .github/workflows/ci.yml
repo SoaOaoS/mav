@@ -33,4 +33,5 @@ jobs:
         run: |
           bash tests/test_next_version.sh
           bash tests/test_cli.sh
+          bash tests/test_install.sh
           python3 -m unittest discover -s tests -v
