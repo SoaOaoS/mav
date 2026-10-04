@@ -25,6 +25,22 @@ check "unattended (--yes)" "is ready" bash install.sh --yes --dry-run
 check "Arch: uses pacman" "pacman_install python git curl openssl" \
   env MAV_PKG=pacman bash install.sh --yes --dry-run
 check "Fedora: uses dnf" "dnf install -y -q python3" env MAV_PKG=dnf bash install.sh --yes --dry-run
+# An install interrupted after Postgres started gives its credentials back.
+cat >"$T/compose.yml" <<'YML'
+services:
+  postgres:
+    environment:
+      POSTGRES_USER: mav
+      POSTGRES_PASSWORD: Abc123xyz
+      POSTGRES_DB: mav
+    ports:
+      - "127.0.0.1:5433:5432"
+YML
+check "credentials reused from an existing compose file" "mav:Abc123xyz:mav:5433" bash -c "
+  declare -A A; COMPOSE_FILE='$T/compose.yml'
+  $(sed -n '/^load_compose_credentials() {/,/^}/p' install.sh)
+  load_compose_credentials
+  echo \"\${A[PG_USER]}:\${A[PG_PASSWORD]}:\${A[PG_DB]}:\${A[PG_PORT]}\""
 # An unexpected error is reported, never silent.
 check "errors are reported" "Unexpected error (line" bash -c "
   set -Eeuo pipefail

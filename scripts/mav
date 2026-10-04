@@ -208,7 +208,7 @@ cmd_doctor() {
 
   if ! command -v docker >/dev/null 2>&1; then
     bad "docker is not installed (needed for the memory database)"; problems=$((problems + 1))
-  elif docker exec "$MAV_PG_CONTAINER" pg_isready >/dev/null 2>&1; then
+  elif docker exec "$MAV_PG_CONTAINER" pg_isready -q -h 127.0.0.1 >/dev/null 2>&1; then
     ok "memory database is ready"
   else
     bad "memory database is not ready"; info "→ docker start $MAV_PG_CONTAINER   or: mav update --local"; problems=$((problems + 1))
