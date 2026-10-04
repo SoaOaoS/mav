@@ -1767,7 +1767,12 @@ def send_draft(draft_id: int) -> dict:
         import mav_mail  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"Mail module unavailable: {str(exc)[:120]}"}
-    res = mav_mail.send(to, d.get("email_subject") or d.get("title") or "", d.get("body") or "")
+    res = mav_mail.send(
+        to,
+        d.get("email_subject") or d.get("title") or "",
+        d.get("body") or "",
+        in_reply_to=str(d.get("message_id") or ""),
+    )
     if res.get("ok"):
         DRAFTS.set_status(draft_id, "sent")
     return res
@@ -3589,6 +3594,8 @@ def ensure_schema() -> None:
         # Email drafts: recipient and subject, added with the Mail feature.
         pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_to text")
         pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_subject text")
+        # The original Message-ID, so the reply threads in the mailbox.
+        pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS message_id text")
     except Exception:  # noqa: BLE001
         pass
 

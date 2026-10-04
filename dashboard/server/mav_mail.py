@@ -162,10 +162,17 @@ def send(
     subject: str,
     body: str,
     *,
+    in_reply_to: str = "",
+    references: list[str] | None = None,
     path: Path | None = None,
     timeout: int = 20,
 ) -> dict:
-    """Send a plain-text reply through the configured SMTP server."""
+    """Send a plain-text reply through the configured SMTP server.
+
+    When ``in_reply_to`` (the original Message-ID) is given, the message is sent
+    as a threaded reply: ``In-Reply-To`` + ``References`` are set so clients
+    (Gmail included) keep it in the same conversation.
+    """
     cfg = load(path)
     user = (cfg.get("MAIL_USER") or "").strip()
     password = cfg.get("MAIL_PASS") or ""
@@ -179,10 +186,18 @@ def send(
     msg["From"] = user
     msg["To"] = to
     msg["Subject"] = (subject or "").strip() or "(no subject)"
+    if in_reply_to:
+        # Keep the header exactly as received, angle brackets included.
+        mid = in_reply_to.strip()
+        msg["In-Reply-To"] = mid
+        refs = list(references or [])
+        if mid not in refs:
+            refs.append(mid)
+        msg["References"] = " ".join(refs)
     try:
         with smtplib.SMTP_SSL(smtp, 465, timeout=timeout) as s:
             s.login(user, password)
             s.send_message(msg)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)[:300]}
-    return {"ok": True, "to": to}
+    return {"ok": True, "to": to, "threaded": bool(in_reply_to)}

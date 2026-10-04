@@ -90,20 +90,22 @@ class Drafts:
         source: str = "",
         to: str = "",
         subject: str = "",
+        message_id: str = "",
     ) -> int | None:
         kind = kind if kind in KINDS else "other"
         title = (title or "Brouillon")[:200]
         body = (body or "")[:20000]
         to = (to or "")[:320]
         subject = (subject or "")[:320]
+        message_id = (message_id or "")[:998]
         self._ensure()
         if self._pg is not None:
             try:
                 cur = self._pg.cursor()
                 cur.execute(
-                    "INSERT INTO drafts (ts, chat_id, kind, title, body, status, source, email_to, email_subject) "
-                    "VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, %s) RETURNING id",
-                    (int(time.time()), chat_id, kind, title, body, source[:200], to, subject),
+                    "INSERT INTO drafts (ts, chat_id, kind, title, body, status, source, email_to, email_subject, message_id) "
+                    "VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s) RETURNING id",
+                    (int(time.time()), chat_id, kind, title, body, source[:200], to, subject, message_id),
                 )
                 row = cur.fetchone()
                 return row[0] if row else None
@@ -115,11 +117,11 @@ class Drafts:
         did = (items[-1]["id"] + 1) if items else 1
         items.append({"id": did, "ts": int(time.time()), "chat_id": chat_id, "kind": kind,
                       "title": title, "body": body, "status": "pending", "source": source[:200],
-                      "email_to": to, "email_subject": subject})
+                      "email_to": to, "email_subject": subject, "message_id": message_id})
         self._write_file(items)
         return did
 
-    _COLS = "id, ts, kind, title, body, status, source, email_to, email_subject"
+    _COLS = "id, ts, kind, title, body, status, source, email_to, email_subject, message_id"
 
     @staticmethod
     def _row(r) -> dict:
@@ -127,6 +129,7 @@ class Drafts:
             "id": r[0], "ts": r[1], "kind": r[2], "title": r[3], "body": r[4],
             "status": r[5], "source": r[6],
             "email_to": r[7] if len(r) > 7 else "", "email_subject": r[8] if len(r) > 8 else "",
+            "message_id": r[9] if len(r) > 9 else "",
         }
 
     def list(self, status: str = "pending", limit: int = 40) -> list[dict]:
@@ -150,7 +153,9 @@ class Drafts:
         items = [d for d in self._read_file() if status in ("all", "") or d.get("status") == status]
         return list(reversed(items))[:limit]
 
-    def update(self, draft_id: int, *, title=None, body=None, to=None, subject=None) -> bool:
+    def update(
+        self, draft_id: int, *, title=None, body=None, to=None, subject=None, message_id=None
+    ) -> bool:
         """Edit a draft in place (used by the 'Edit' button in the dashboard)."""
         self._ensure()
         fields, values = [], []
@@ -162,6 +167,8 @@ class Drafts:
             fields.append("email_to = %s"); values.append(str(to)[:320])
         if subject is not None:
             fields.append("email_subject = %s"); values.append(str(subject)[:320])
+        if message_id is not None:
+            fields.append("message_id = %s"); values.append(str(message_id)[:998])
         if not fields:
             return False
         if self._pg is not None:
@@ -183,6 +190,8 @@ class Drafts:
                     d["email_to"] = str(to)[:320]
                 if subject is not None:
                     d["email_subject"] = str(subject)[:320]
+                if message_id is not None:
+                    d["message_id"] = str(message_id)[:998]
         self._write_file(items)
         return True
 

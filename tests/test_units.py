@@ -23,6 +23,7 @@ import ocdebates  # noqa: E402
 import ocdrafts  # noqa: E402
 import ocevents  # noqa: E402
 import ocjobs  # noqa: E402
+import ocmail  # noqa: E402
 import ocmemory  # noqa: E402
 import ocpriority  # noqa: E402
 import ocroutine_nl  # noqa: E402
@@ -499,6 +500,60 @@ class DraftsAndActions(unittest.TestCase):
         conf = self.tmp / "empty.conf"
         r = mav_mail.send("a@b.fr", "Hi", "Body", path=conf)
         self.assertFalse(r["ok"])
+
+    def test_mail_reply_sets_thread_headers(self):
+        import smtplib
+        import mav_mail
+        import email as _email
+
+        conf = self.tmp / "reply.conf"
+        mav_mail.save("imap.x.tld", "smtp.x.tld", "me@x.tld", "pw", conf)
+        captured = {}
+
+        class FakeSMTP:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def login(self, *a):
+                pass
+
+            def send_message(self, msg):
+                captured["msg"] = msg
+
+        orig = smtplib.SMTP_SSL
+        smtplib.SMTP_SSL = FakeSMTP
+        try:
+            r = mav_mail.send(
+                "a@b.fr", "Re: devis", "Bonjour",
+                in_reply_to="<orig@mail.gmail.com>", path=conf,
+            )
+        finally:
+            smtplib.SMTP_SSL = orig
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["threaded"])
+        parsed = _email.message_from_string(captured["msg"].as_string())
+        self.assertEqual(parsed["In-Reply-To"], "<orig@mail.gmail.com>")
+        self.assertIn("<orig@mail.gmail.com>", parsed["References"])
+
+    def test_reply_subject(self):
+        import ocmail
+
+        self.assertEqual(ocmail.reply_subject("Facture"), "Re: Facture")
+        self.assertEqual(ocmail.reply_subject("Re: Facture"), "Re: Facture")
+        self.assertEqual(ocmail.reply_subject("RE: x"), "RE: x")
+
+    def test_mail_addr_extraction(self):
+        import ocmail
+
+        self.assertEqual(ocmail._addr("Ethan <soa@x.fr>"), "soa@x.fr")
+        self.assertEqual(ocmail._addr("plain@x.fr"), "plain@x.fr")
+        self.assertEqual(ocmail._addr(""), "")
 
     def test_actions_lifecycle(self):
         a = ocactions.Actions(self.tmp / "actions.json")
