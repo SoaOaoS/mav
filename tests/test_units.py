@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s tests -v
 """
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 
 import mav_provider  # noqa: E402
 import ocjobs  # noqa: E402
+import ocmemory  # noqa: E402
 import ocwatch  # noqa: E402
 
 
@@ -118,6 +120,60 @@ class Provider(unittest.TestCase):
     def test_rejects_bad_input(self):
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "Bad Id!", "m")["ok"])
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "openai", "")["ok"])
+
+
+class MemoryRecall(unittest.TestCase):
+    def test_and_query_needs_several_terms(self):
+        self.assertEqual(ocmemory.ts_query_and("postgres"), "")
+        q = ocmemory.ts_query_and("postgres migration config")
+        self.assertIn("&", q)
+        self.assertNotIn("|", q)
+
+    def test_or_query_is_broad(self):
+        self.assertIn("|", ocmemory.ts_query("postgres migration config"))
+
+    def test_queries_are_alnum_only(self):
+        for fn in (ocmemory.ts_query, ocmemory.ts_query_and):
+            for term in re.split(r"[&|]", fn("l'ete 2026 : test/etrange")):
+                term = term.strip()
+                if term:
+                    self.assertRegex(term, r"^[a-z0-9]+:\*$")
+
+    def test_dedupe_keeps_newest_and_drops_contained(self):
+        facts = [
+            "User lives in Lyon, France",  # newest
+            "User lives in Lyon",
+            "User is vegetarian",
+            "User likes hiking in the Alps",
+        ]
+        out = ocmemory._dedupe_facts(facts)
+        self.assertEqual(
+            out,
+            ["User lives in Lyon, France", "User is vegetarian", "User likes hiking in the Alps"],
+        )
+
+    def test_context_block_respects_budget(self):
+        class Fake(ocmemory.Memory):
+            def facts(self, chat_id, limit=20):
+                return [{"fact": f"Fact number {i} " + "x" * 60, "ts": i} for i in range(40)]
+
+            def search(self, chat_id, query, top=3):
+                return [{"q": "q " + "y" * 200, "a": "a " + "z" * 400, "ts": 0}] * 20
+
+        block = Fake(Path("/nonexistent"), max_entries=5).context_block(0, "anything", top=20)
+        self.assertIn("<memory>", block)
+        self.assertIn("</memory>", block)
+        self.assertLessEqual(len(block), ocmemory.MEMORY_BUDGET + 200)
+
+    def test_context_block_empty_when_nothing(self):
+        class Empty(ocmemory.Memory):
+            def facts(self, chat_id, limit=20):
+                return []
+
+            def search(self, chat_id, query, top=3):
+                return []
+
+        self.assertEqual(Empty(Path("/nonexistent")).context_block(0, "q"), "")
 
 
 class Catalog(unittest.TestCase):
