@@ -14,12 +14,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 
-import mav_api  # noqa: E402
+# Bot modules first: mav_api inserts the *installed* BOT_DIR on sys.path, so
+# importing it first could shadow these with a different copy on the machine.
 import mav_provider  # noqa: E402
 import ocdebates  # noqa: E402
 import ocjobs  # noqa: E402
 import ocmemory  # noqa: E402
 import ocwatch  # noqa: E402
+import mav_api  # noqa: E402
 
 
 class PriceParsing(unittest.TestCase):
@@ -194,6 +196,27 @@ class Catalog(unittest.TestCase):
             for v in json.dumps({k: it.get(k) for k in ("command", "url", "headers", "environment")}).split("{{")[1:]:
                 used.add(v.split("}}")[0])
             self.assertEqual(used, keys, it["id"])
+
+
+class PlainSummary(unittest.TestCase):
+    def test_drops_directives_and_images(self):
+        answer = (
+            "## Marchés\nCAC 40 [[chart:^FCHI:1mo]] en baisse.\n"
+            "[[file:rapport.md]]\n![graphe](/tmp/x.png)\nFin."
+        )
+        out = ocjobs.plain_summary(answer, limit=0)
+        self.assertNotIn("[[", out)
+        self.assertNotIn("](", out)
+        self.assertIn("CAC 40", out)
+        self.assertIn("Fin.", out)
+
+    def test_truncates(self):
+        out = ocjobs.plain_summary("a" * 500, limit=220)
+        self.assertLessEqual(len(out), 220)
+        self.assertTrue(out.endswith("…"))
+
+    def test_empty(self):
+        self.assertEqual(ocjobs.plain_summary("", limit=220), "")
 
 
 class ChartData(unittest.TestCase):
