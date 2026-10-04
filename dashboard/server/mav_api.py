@@ -1842,6 +1842,22 @@ def mail_save(payload: dict) -> dict:
     return {"ok": True}
 
 
+def mail_reply_draft(payload: dict) -> dict:
+    """File a threaded reply for a message UID — server-side, so it uses the
+    dashboard's Postgres (the single writer) and the shared mail config."""
+    uid = str(payload.get("uid") or "").strip()
+    body = str(payload.get("body") or "").strip()
+    if not uid or not body:
+        return {"ok": False, "error": "uid and body required."}
+    try:
+        from ocmail import make_reply_draft  # noqa: PLC0415
+
+        return make_reply_draft(uid, body, subject=str(payload.get("subject") or ""),
+                                chat_id=DEFAULT_CHAT_ID)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:250]}
+
+
 def mail_forget() -> dict:
     try:
         import mav_mail  # noqa: PLC0415
@@ -3455,6 +3471,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, mail_test(payload))
             if path == "/api/mail/forget":
                 return self._send(200, mail_forget())
+            if path == "/api/mail/reply-draft":
+                res = mail_reply_draft(payload)
+                return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/hooks/event":
                 res = hook_event(
                     payload.get("kind", "custom"),

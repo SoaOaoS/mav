@@ -21,7 +21,7 @@ from pathlib import Path
 
 from ocdrafts import Drafts
 
-__all__ = ["load_config", "fetch_meta", "reply_subject", "make_reply_draft", "CONFIG"]
+__all__ = ["load_config", "fetch_meta", "recent", "reply_subject", "make_reply_draft", "CONFIG"]
 
 CONFIG = Path(os.environ.get("MAV_MAIL_CONF", "/home/opencode/.config/opencode/mail.conf"))
 
@@ -78,6 +78,57 @@ def fetch_meta(uid: str, cfg: dict | None = None) -> dict | None:
             "message_id": (msg["Message-ID"] or "").strip(),
             "date": msg["Date"] or "",
         }
+    finally:
+        try:
+            m.logout()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def recent(minutes: int = 30, limit: int = 20, cfg: dict | None = None) -> list[dict]:
+    """Messages that arrived in the last `minutes`, newest first, with UIDs.
+
+    Gives the assistant a precise, already-filtered list (so it replies to the
+    right message), instead of a long inbox it has to reason over.
+    """
+    import time as _time
+    from email.utils import parsedate_to_datetime
+
+    cfg = cfg or load_config()
+    if not all(cfg.get(k) for k in ("MAIL_IMAP_SERVER", "MAIL_USER", "MAIL_PASS")):
+        return []
+    m = imaplib.IMAP4_SSL(cfg["MAIL_IMAP_SERVER"], timeout=15)
+    try:
+        m.login(cfg["MAIL_USER"], cfg["MAIL_PASS"])
+        m.select("inbox")
+        # Real IMAP UIDs (not sequence numbers) so the assistant can reply to
+        # exactly the message it listed.
+        typ, data = m.uid("search", None, "ALL")
+        if typ != "OK" or not data or not data[0]:
+            return []
+        uids = data[0].split()[-limit:]
+        cutoff = _time.time() - max(1, minutes) * 60
+        out = []
+        for uid in reversed(uids):
+            typ, md = m.uid("fetch", uid, "(BODY.PEEK[HEADER])")
+            if typ != "OK" or not md or not isinstance(md[0], tuple):
+                continue
+            msg = email.message_from_bytes(md[0][1])
+            when = 0.0
+            try:
+                when = parsedate_to_datetime(msg["Date"]).timestamp()
+            except Exception:  # noqa: BLE001
+                pass
+            if when and when < cutoff:
+                continue
+            out.append({
+                "uid": uid.decode(),
+                "from": _decode(msg["From"]),
+                "address": _addr(_decode(msg["Reply-To"])) or _addr(_decode(msg["From"])),
+                "subject": _decode(msg["Subject"]),
+                "date": msg["Date"] or "",
+            })
+        return out
     finally:
         try:
             m.logout()
