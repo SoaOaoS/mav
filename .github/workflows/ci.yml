@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Shell scripts (shellcheck)
+        run: |
+          shellcheck -S warning install.sh get.sh run-opencode.sh scripts/mav \
+            scripts/next-version.sh dashboard/tools/make_certs.sh tests/*.sh
+
+      - name: Python (compile)
+        run: python3 -m py_compile bot/*.py dashboard/server/*.py dashboard/tools/*.py
+
+      - name: JavaScript (syntax)
+        run: |
+          node --check dashboard/assets/js/app.js
+          node --check dashboard/sw.js
+
+      - name: JSON
+        run: python3 -m json.tool dashboard/mcp-catalog.json > /dev/null
+
+      - name: Tests
+        run: |
+          bash tests/test_next_version.sh
+          bash tests/test_cli.sh
+          python3 -m unittest discover -s tests -v
