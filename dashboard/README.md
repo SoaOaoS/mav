@@ -27,20 +27,20 @@ Opened without the server (e.g. from GitHub Pages), the app falls back to a
 
 - **Chat** (the main screen). A new chat shows a greeting, a centred message
   box, four everyday suggestions and **For you**: the latest routine reports
-  and alerts, each with *Tell me more*. Chats are titled automatically after
+  and alerts, each with _Tell me more_. Chats are titled automatically after
   the first answer, grouped by day in the sidebar, and can be renamed (click
   the title), pinned, summarised, exported or deleted.
 - **Who you talk to** is shown on the message box, in the header and on every
   answer, and remembered per chat. Switching mid-chat adds a divider.
 - **Routines**: create from a form (what, when — every day / some days /
   every few hours —, which helper), from `/routine`, or by accepting the
-  *Make this a routine?* card that appears when you write things like "every
+  _Make this a routine?_ card that appears when you write things like "every
   morning…". Each routine has its own chat. Second tab: **Keep an eye on**
   (a page, a price — optionally below a target —, or a news topic).
 - **Memory**: facts about you (add / delete) and remembered past chats.
 - **Settings**: Model (provider, key check, model list), Custom instructions,
   Helpers, Connections (MCP), General (notifications, read-aloud, theme) and
-  *Advanced* (assistant status and restart, file locations, raw JSON).
+  _Advanced_ (assistant status and restart, file locations, raw JSON).
 
 Shortcuts: `⌘K` search & commands, `Alt+N` new chat, `/` focus the message
 box, `Esc` stop. Commands: `/new`, `/helper`, `/remember`, `/routine`,
@@ -54,37 +54,55 @@ talks to the opencode engine, and reads/writes Postgres.
 - Chats are opencode sessions titled `dash: …`; their helper, pin and title
   lock live in `BOT_DIR/dash_sessions.json`.
 - Routine chats are titled `dash: Routine · <name>` — the worker posts
-  scheduled runs there, the dashboard posts *Run now* runs there.
+  scheduled runs there, the dashboard posts _Run now_ runs there.
 - Memory (facts + exchanges) is injected as a hidden part when a chat starts,
   and each answer is stored (`bot/ocmemory.py`, shared with the worker).
 - The model provider is written by `server/mav_provider.py`, the same module
   the installer uses.
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| GET | `/api/status` | assistant health, model, counters |
-| GET | `/api/stream?prompt=&session=&agent=` | **SSE** answer (`start`, `delta`, `done`, `error`) |
-| GET | `/api/sessions`, `/api/session?id=` | chats, one chat's messages |
-| POST | `/api/session/new` · `rename` · `delete` · `abort` · `summary` · `agent` · `pin` | chat actions |
-| GET | `/api/session/export?id=` | Markdown export |
-| GET | `/api/agents` | helpers with descriptions, and the default |
-| GET/POST | `/api/jobs`, `/api/job/save` · `delete` · `toggle` · `run` | routines |
-| GET | `/api/job-results` | latest report of each routine |
-| GET/POST | `/api/watch`, `/api/watch/add` · `remove` | keep an eye on (`web`, `price`, `news`) |
-| GET/POST | `/api/memory`, `/api/memory/fact/add` · `fact/delete` · `exchange/delete` · `forget` | memory |
-| GET | `/api/search?q=` | memory + documents |
-| GET | `/api/notifications`, `/api/notification?id=` | the inbox |
-| GET/POST | `/api/config/provider`, `/api/config/provider/test` | model provider |
-| GET/POST | `/api/config/agents` | custom instructions (AGENTS.md) |
-| GET/POST | `/api/config/agent-files`, `/api/config/agent-file`, `…/delete` | helper files |
-| GET/POST | `/api/config/mcp` | connections (secrets masked) |
-| GET | `/api/config/mcp/catalog` | ready-made connections (`mcp-catalog.json`) + whether Node.js / uv are installed |
-| POST | `/api/config/mcp/install` | add a catalog connection (`{id, values}`) |
-| GET | `/api/version` | installed / latest version, `update_available`, release notes |
-| POST | `/api/update`, GET `/api/update/status` | run `mav update` in its own systemd unit, follow it |
-| GET/POST | `/api/config/engine`, `/api/config/restart` | assistant status (incl. `pending` changes) / restart |
-| POST | `/api/upload` | attachment |
-| GET/POST | `/api/push/key` · `subscribe` · `unsubscribe` · `test` · `ack` | Web Push |
+| Method   | Route                                                                                | Purpose                                                                          |
+| -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| GET      | `/api/status`                                                                        | assistant health, model, counters                                                |
+| GET      | `/api/stream?prompt=&session=&agent=`                                                | **SSE** answer (`start`, `delta`, `done`, `error`)                               |
+| GET      | `/api/sessions`, `/api/session?id=`                                                  | chats, one chat's messages                                                       |
+| POST     | `/api/session/new` · `rename` · `delete` · `abort` · `summary` · `agent` · `pin`     | chat actions                                                                     |
+| GET      | `/api/session/export?id=`                                                            | Markdown export                                                                  |
+| GET      | `/api/agents`                                                                        | helpers with descriptions, and the default                                       |
+| GET/POST | `/api/jobs`, `/api/job/save` · `delete` · `toggle` · `run`                           | routines                                                                         |
+| GET      | `/api/job-results`                                                                   | latest report of each routine                                                    |
+| GET/POST | `/api/watch`, `/api/watch/add` · `remove`                                            | keep an eye on (`web`, `price`, `news`)                                          |
+| GET/POST | `/api/memory`, `/api/memory/fact/add` · `fact/delete` · `exchange/delete` · `forget` | memory                                                                           |
+| GET      | `/api/search?q=`                                                                     | memory + documents                                                               |
+| GET      | `/api/notifications`, `/api/notification?id=`                                        | the inbox                                                                        |
+| GET/POST | `/api/config/provider`, `/api/config/provider/test`                                  | model provider                                                                   |
+| GET/POST | `/api/config/agents`                                                                 | custom instructions (AGENTS.md)                                                  |
+| GET/POST | `/api/config/agent-files`, `/api/config/agent-file`, `…/delete`                      | helper files                                                                     |
+| GET/POST | `/api/config/mcp`                                                                    | connections (secrets masked)                                                     |
+| GET      | `/api/config/mcp/catalog`                                                            | ready-made connections (`mcp-catalog.json`) + whether Node.js / uv are installed |
+| POST     | `/api/config/mcp/install`                                                            | add a catalog connection (`{id, values}`)                                        |
+| GET      | `/api/version`                                                                       | installed / latest version, `update_available`, release notes                    |
+| POST     | `/api/update`, GET `/api/update/status`                                              | run `mav update` in its own systemd unit, follow it                              |
+| GET/POST | `/api/config/engine`, `/api/config/restart`                                          | assistant status (incl. `pending` changes) / restart                             |
+| POST     | `/api/upload`                                                                        | attachment                                                                       |
+| GET      | `/api/chart?symbol=&range=`                                                          | Yahoo Finance series for inline `[[chart:SYM:PERIOD]]`                           |
+| GET      | `/api/download?path=`                                                                | download a document/code/archive (see below)                                     |
+| GET/POST | `/api/push/key` · `subscribe` · `unsubscribe` · `test` · `ack`                       | Web Push                                                                         |
+
+### Charts and downloadable files in answers
+
+An answer can embed two directives, each on its own line:
+
+- `[[chart:SYMBOL:PERIOD]]` — an interactive sparkline card (Yahoo Finance,
+  via the `/api/chart` proxy). `PERIOD` is `1d`, `5d`, `1mo`, `3mo`, `6mo`,
+  `1y`, `2y` or `5y`. Example: `[[chart:^GDAXI:1mo]]`.
+- `[[file:PATH]]` — a download card pointing at `/api/download`. `PATH` can
+  be absolute (within an allowed root) or a bare filename, resolved in the
+  media archive, the attachments folder and `tools/` output folders.
+
+`/api/download` only serves documents, code and archives from the same roots
+as `/api/asset` (images stay images-only there), so no arbitrary file is ever
+exposed. Every answer also has a **Download** action in its toolbar that saves
+the message as a local `.md` file.
 
 > ⚠️ **No authentication**: keep it on your home network or behind a VPN.
 

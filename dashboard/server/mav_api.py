@@ -2119,6 +2119,170 @@ def serve_asset(path: str):
     return data, mime
 
 
+# ------------------------------------------------------------------- charts
+# Small Yahoo Finance proxy so the dashboard can draw sparkline charts without
+# a browser CORS problem and without exposing an API key. A one-entry cache
+# keeps a redraw (or a re-render on scroll) from hammering the upstream.
+
+_YAHOO_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+)
+_CHART_TTL = 120.0
+_chart_cache: dict = {}
+
+
+def _yahoo_closes(symbol: str, rng: str):
+    """Return (closes, meta) for a symbol/range from Yahoo, or raise."""
+    url = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/"
+        + urllib.parse.quote(symbol)
+        + "?interval=1d&range=" + urllib.parse.quote(rng)
+    )
+    req = urllib.request.Request(
+        url, headers={"User-Agent": _YAHOO_UA, "Accept": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        payload = json.load(r)
+    res = (payload.get("chart") or {}).get("result") or []
+    if not res:
+        raise ValueError("no data")
+    meta = res[0].get("meta") or {}
+    quotes = ((res[0].get("indicators") or {}).get("quote") or [{}])[0]
+    closes = [
+        float(c)
+        for c in (quotes.get("close") or [])
+        if isinstance(c, (int, float))
+    ]
+    if not closes:
+        raise ValueError("no close")
+    return closes, meta
+
+
+def chart_data(symbol: str, rng: str = "1mo") -> dict:
+    """Chart payload for the dashboard: name, price, variation and a series."""
+    symbol = (symbol or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9.^=_:-]{1,24}", symbol):
+        raise ValueError("bad symbol")
+    valid = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"}
+    if rng not in valid:
+        rng = "1mo"
+    ck = (symbol, rng)
+    now = time.time()
+    hit = _chart_cache.get(ck)
+    if hit and now - hit[0] < _CHART_TTL:
+        return hit[1]
+    closes, meta = _yahoo_closes(symbol, rng)
+    first, last = closes[0], closes[-1]
+    prev = closes[-2] if len(closes) > 1 else first
+    pct = (last - first) / first * 100 if first else 0.0
+    day = (last - prev) / prev * 100 if prev else 0.0
+    out = {
+        "symbol": symbol,
+        "name": meta.get("shortName") or meta.get("symbol") or symbol,
+        "currency": meta.get("currency") or "",
+        "price": last,
+        "prev": prev,
+        "change_pct": day,
+        "range_pct": pct,
+        "series": closes,
+    }
+    _chart_cache[ck] = (now, out)
+    return out
+
+
+# Downloadable documents, code and archives. Only these extensions are
+# served, and only from the same roots as the image asset route.
+DOWNLOAD_EXT = {
+    ".md": "text/markdown; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+    ".csv": "text/csv; charset=utf-8",
+    ".json": "application/json",
+    ".html": "text/html; charset=utf-8",
+    ".xml": "application/xml",
+    ".yaml": "text/yaml; charset=utf-8",
+    ".yml": "text/yaml; charset=utf-8",
+    ".py": "text/x-python; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".ts": "text/typescript; charset=utf-8",
+    ".sh": "text/x-shellscript; charset=utf-8",
+    ".sql": "application/sql",
+    ".log": "text/plain; charset=utf-8",
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".zip": "application/zip",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+}
+
+
+def resolve_download(name: str) -> "Path | None":
+    """Resolve a downloadable file, tolerating a bare filename.
+
+    An absolute path is used as-is (within an allowed root); a bare name is
+    searched in the media archive, the attachments folder and the allowed
+    roots so `[[file:rapport.md]]` works right after a file was produced.
+    """
+    name = urllib.parse.unquote(str(name or "")).strip()
+    if not name:
+        return None
+    if name.startswith("file://"):
+        name = name[len("file://"):]
+    roots = _asset_roots()
+
+    def allowed(p: Path) -> bool:
+        if p.suffix.lower() not in DOWNLOAD_EXT or not p.is_file():
+            return False
+        try:
+            rp = str(p.resolve())
+        except Exception:
+            return False
+        return any(rp.startswith(str(Path(r).resolve())) for r in roots)
+
+    p = Path(name)
+    if p.is_absolute():
+        try:
+            return p.resolve() if allowed(p) else None
+        except Exception:
+            return None
+    # Bare filename: look in the usual output folders first, then anywhere.
+    search_dirs = [MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
+    for d in search_dirs:
+        cand = d / name
+        if allowed(cand):
+            return cand.resolve()
+    for r in roots:
+        cand = Path(r) / name
+        if allowed(cand):
+            return cand.resolve()
+    try:
+        for r in roots:
+            for found in Path(r).rglob(name):
+                if allowed(found):
+                    return found.resolve()
+    except Exception:
+        pass
+    return None
+
+
+def download_response(path_str: str):
+    """Return (bytes, mime, filename) for a downloadable file, or None."""
+    p = resolve_download(path_str)
+    if p is None:
+        return None
+    try:
+        data = p.read_bytes()
+    except Exception:
+        return None
+    mime = DOWNLOAD_EXT.get(p.suffix.lower()) or mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+    return data, mime, p.name
+
+
 # The engine refuses application/octet-stream: guess a useful type from
 # the extension, for cases where the browser announces nothing (local files).
 _EXT_MIME = {
@@ -2696,6 +2860,27 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, "asset not found", "text/plain")
                 data, mime = res
                 return self._send(200, data, mime)
+            if path == "/api/chart":
+                try:
+                    return self._send(200, chart_data(p.get("symbol", ""), p.get("range", "1mo")))
+                except Exception:
+                    return self._send(404, {"error": "chart unavailable"})
+            if path == "/api/download":
+                res = download_response(p.get("path", ""))
+                if not res:
+                    return self._send(404, "file not found", "text/plain")
+                data, mime, fname = res
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header(
+                    "Content-Disposition",
+                    'attachment; filename="' + fname.replace('"', "") + '"',
+                )
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if path == "/api/media":
                 sync_media_dir()
                 return self._send(200, list_media())

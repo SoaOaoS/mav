@@ -30,7 +30,8 @@
   --code-bg: #f1efe9;
   --shadow-sm: 0 1px 2px rgba(28, 27, 25, 0.05);
   --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 8px 24px rgba(28, 27, 25, 0.06);
-  --shadow-lg: 0 2px 6px rgba(28, 27, 25, 0.06), 0 24px 60px rgba(28, 27, 25, 0.16);
+  --shadow-lg:
+    0 2px 6px rgba(28, 27, 25, 0.06), 0 24px 60px rgba(28, 27, 25, 0.16);
 
   --radius-lg: 20px;
   --radius: 14px;
@@ -265,7 +266,11 @@ i[data-i] svg {
   height: 28px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.9), transparent 42%),
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.9),
+      transparent 42%
+    ),
     linear-gradient(145deg, #2f6f5e, #7cc4ac);
   box-shadow: 0 0 0 0 rgba(47, 111, 94, 0.35);
   animation: breathe 4s ease-in-out infinite;
@@ -933,7 +938,11 @@ h3.sub {
   font-weight: 700;
   color: #fff;
   background:
-    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.45), transparent 50%),
+    radial-gradient(
+      circle at 30% 25%,
+      rgba(255, 255, 255, 0.45),
+      transparent 50%
+    ),
     var(--agent);
   text-transform: uppercase;
 }
@@ -1052,7 +1061,11 @@ h3.sub {
   transition: all var(--dur-fast) var(--ease);
 }
 .agent-card-btn:hover {
-  border-color: color-mix(in srgb, var(--agent, var(--accent)) 60%, var(--line));
+  border-color: color-mix(
+    in srgb,
+    var(--agent, var(--accent)) 60%,
+    var(--line)
+  );
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
@@ -1479,6 +1492,131 @@ h6.md-h {
   cursor: zoom-in;
   display: block;
   margin: 0.4em 0;
+}
+
+/* Inline chart card ([[chart:SYM:PERIOD]]) */
+.md-chart {
+  margin: 0.6em 0 0.9em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+.md-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem 0.35rem;
+}
+.md-chart-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.md-chart-quote {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.md-chart-price {
+  color: var(--ink);
+  font-weight: 600;
+}
+.md-chart-chg.up {
+  color: var(--ok);
+}
+.md-chart-chg.down {
+  color: var(--danger);
+}
+.md-chart-plot {
+  height: 148px;
+  padding: 0 0.35rem;
+}
+.md-chart-load {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--ink-3);
+  font-size: 0.85rem;
+}
+.md-chart-svg {
+  width: 100%;
+  height: 148px;
+  display: block;
+}
+.md-chart-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.6rem 0.35rem 0.85rem;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  font-family: var(--mono);
+}
+.chart-refresh {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs);
+  color: var(--ink-3);
+}
+.chart-refresh:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.chart-refresh i[data-i] {
+  width: 14px;
+  height: 14px;
+}
+
+/* Download card ([[file:PATH]]) */
+.md-file {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.5em 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  text-decoration: none;
+  color: inherit;
+}
+.md-file:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.md-file-ico {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.md-file-ico i[data-i] {
+  width: 18px;
+  height: 18px;
+}
+.md-file-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.md-file-main strong {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.md-file-main span {
+  font-size: 0.74rem;
+  color: var(--ink-3);
 }
 .lightbox {
   position: fixed;
@@ -2920,7 +3058,9 @@ button.memory-updated:hover {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.9rem 1rem;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 .deb-card:hover {
   border-color: var(--accent);
