@@ -4751,13 +4751,26 @@ async function refreshStatus() {
   } catch (_) {}
 }
 
+function hideSplash() {
+  const el = document.getElementById("splash");
+  if (el) el.classList.add("is-done");
+  document.body.classList.remove("is-loading");
+}
+
 async function boot() {
   hydrateIcons();
+  // The splash only stays for the real first load; a safety net dismisses it
+  // after 2 s no matter what, so the app is never stuck behind it.
+  setTimeout(hideSplash, 2000);
   let status = null;
   try {
     status = await api.get("status");
   } catch (_) {}
-  if (!status) return enterDemo();
+  if (!status) {
+    enterDemo();
+    hideSplash();
+    return;
+  }
   LIVE = true;
   document.body.dataset.mode = "live";
   renderStatus(status);
@@ -4775,6 +4788,7 @@ async function boot() {
     history.replaceState(null, "", location.pathname + location.hash);
     openNotifById(notif);
   }
+  hideSplash();
 }
 
 function enterDemo() {

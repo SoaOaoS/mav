@@ -16,6 +16,13 @@
         if (t === "light" || t === "dark")
           document.documentElement.dataset.theme = t;
       } catch (_) {}
+      // Safety net: never leave the app behind the splash, even if app.js
+      // fails to load. Cleared far before a user would notice.
+      setTimeout(function () {
+        var s = document.getElementById("splash");
+        if (s) s.classList.add("is-done");
+        document.body.classList.remove("is-loading");
+      }, 2500);
     </script>
 
     <!-- PWA -->
@@ -55,8 +62,30 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="assets/css/style.css" />
+    <!-- If JS is disabled, app.js cannot dismiss the splash: hide it upfront. -->
+    <noscript
+      ><style>
+        .splash {
+          display: none;
+        }
+        body.is-loading .app,
+        body.is-loading .topbar {
+          opacity: 1;
+        }
+      </style></noscript
+    >
   </head>
-  <body>
+  <body class="is-loading">
+    <!-- ============ SPLASH ============ -->
+    <div class="splash" id="splash" aria-hidden="true">
+      <div class="splash-inner">
+        <span class="splash-orb"></span>
+        <span class="splash-name">Mav</span>
+        <span class="splash-tag">works while you don't</span>
+        <span class="splash-bar"><i></i></span>
+      </div>
+    </div>
+
     <!-- ============ MOBILE TOP BAR ============ -->
     <header class="topbar">
       <button class="icon-btn" id="menuBtn" aria-label="Open menu">
