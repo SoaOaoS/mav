@@ -493,7 +493,8 @@ sudo systemctl restart mav-server</code></pre>
 curl -k https://&lt;your-mav&gt;/api/status</code></pre>
             <h3>Start over cleanly</h3>
             <pre><code>mav uninstall
-docker volume rm mav_pgdata      # also erases the memory</code></pre>
+docker volume ls | grep pgdata    # usually mav_mav_pgdata
+docker volume rm mav_mav_pgdata  # also erases the memory</code></pre>
           </section>
 
           <p

@@ -329,6 +329,18 @@ load_existing_config() {
   A[EXISTING]=1
 }
 
+# An install interrupted after Postgres was created has a compose file but no
+# env files yet: reuse its credentials, the volume was initialised with them.
+load_compose_credentials() {
+  [[ -r "$COMPOSE_FILE" ]] || return 0
+  local v
+  v="$(sed -n 's/^ *POSTGRES_USER: *//p' "$COMPOSE_FILE" | head -1)"; [[ -n "$v" ]] && : "${A[PG_USER]:=$v}"
+  v="$(sed -n 's/^ *POSTGRES_PASSWORD: *//p' "$COMPOSE_FILE" | head -1)"; [[ -n "$v" ]] && : "${A[PG_PASSWORD]:=$v}"
+  v="$(sed -n 's/^ *POSTGRES_DB: *//p' "$COMPOSE_FILE" | head -1)"; [[ -n "$v" ]] && : "${A[PG_DB]:=$v}"
+  v="$(sed -n 's/^ *- *"127\.0\.0\.1:\([0-9]*\):5432".*/\1/p' "$COMPOSE_FILE" | head -1)"; [[ -n "$v" ]] && : "${A[PG_PORT]:=$v}"
+  return 0
+}
+
 defaults() {
   local u="${SUDO_USER:-$(logname 2>/dev/null || echo mav)}"
   [[ "$u" == "root" ]] && u="mav"
@@ -572,14 +584,50 @@ pg_up() {
       -p "127.0.0.1:${A[PG_PORT]}:5432" -v "${PG_VOLUME}:/var/lib/postgresql/data" postgres:16-alpine
   fi
 }
+# Wait for Postgres, then make the database match the configuration.
+#
+# On a brand-new volume the image first runs a temporary, socket-only server
+# to initialise the data directory: `pg_isready` on the socket already says
+# yes while the database does not exist yet (v1.0.1 failed there). Only the
+# final server listens on TCP, so readiness is checked over TCP.
+pg_ready() {
+  docker exec "$PG_CONTAINER" pg_isready -q -h 127.0.0.1 -U "${A[PG_USER]}" >/dev/null 2>&1
+}
+pg_local() {  # psql inside the container, over the local socket (trusted)
+  docker exec -i "$PG_CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U "${A[PG_USER]}" "$@"
+}
 pg_wait_and_schema() {
   local i
-  for i in $(seq 1 60); do
-    docker exec "$PG_CONTAINER" pg_isready -U "${A[PG_USER]}" -d "${A[PG_DB]}" >/dev/null 2>&1 && break
+  for i in $(seq 1 120); do
+    pg_ready && break
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$PG_CONTAINER" 2>/dev/null)" != "true" && $i -gt 10 ]]; then
+      docker logs --tail 30 "$PG_CONTAINER" 2>&1 || true
+      echo "The Postgres container stopped (logs above)." >&2
+      return 1
+    fi
     sleep 1
   done
-  docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U "${A[PG_USER]}" -d "${A[PG_DB]}" \
-    <"$SCRIPT_DIR/scripts/schema.sql"
+  if ! pg_ready; then
+    docker logs --tail 30 "$PG_CONTAINER" 2>&1 || true
+    echo "Postgres did not become ready within 2 minutes (logs above)." >&2
+    return 1
+  fi
+  # The database exists (a volume initialised with another name, or an
+  # interrupted first start)…
+  pg_local -d postgres -v db="${A[PG_DB]}" <<'SQL'
+SELECT format('CREATE DATABASE %I', :'db')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db')\gexec
+SQL
+  # …the password is the configured one (the volume keeps the password it was
+  # first created with, whatever the compose file says later)…
+  pg_local -d postgres -v role="${A[PG_USER]}" -v pw="${A[PG_PASSWORD]}" <<'SQL'
+ALTER ROLE :"role" WITH PASSWORD :'pw';
+SQL
+  # …the schema is up to date…
+  pg_local -d "${A[PG_DB]}" <"$SCRIPT_DIR/scripts/schema.sql"
+  # …and the services will be able to log in, exactly as they will.
+  docker exec -e PGPASSWORD="${A[PG_PASSWORD]}" "$PG_CONTAINER" \
+    psql -X -h 127.0.0.1 -U "${A[PG_USER]}" -d "${A[PG_DB]}" -tAc 'SELECT 1' >/dev/null
 }
 
 make_vapid() {
@@ -615,8 +663,10 @@ uninstall() {
   fi
   run systemctl daemon-reload
   ok "Services, configuration and container removed."
-  info "Your data is kept: the install folders and the Postgres volume ($PG_VOLUME)."
-  info "To erase everything:  docker volume rm $PG_VOLUME"
+  local vol
+  vol="$(docker volume ls -q 2>/dev/null | grep -E "^(mav_)?${PG_VOLUME}\$" | head -1 || true)"
+  info "Your data is kept: the install folders and the Postgres volume (${vol:-$PG_VOLUME})."
+  info "To erase everything:  docker volume rm ${vol:-$PG_VOLUME}"
   exit 0
 }
 
@@ -668,6 +718,7 @@ if detect_existing_install; then
 elif [[ $DO_UPDATE -eq 1 ]]; then
   die "No existing install found. Run without --update to install Mav."
 fi
+load_compose_credentials
 defaults
 
 # ------------------------------------------------------------------ questions
