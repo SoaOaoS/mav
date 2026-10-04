@@ -2370,6 +2370,7 @@ $("#agentsEditor").addEventListener("keydown", (e) => {
 
 /* ---- Connections (MCP servers) ---- */
 let MCP = {};
+let MCP_STATUS = {};
 async function loadMcp() {
   if (!LIVE) {
     MCP = {};
@@ -2380,6 +2381,9 @@ async function loadMcp() {
   } catch (_) {
     setStatus("mcpStatus", "couldn't load", "err");
   }
+  try {
+    MCP_STATUS = (await api.get("config/mcp/status")).status || {};
+  } catch (_) {}
   renderMcp();
 }
 let CATALOG = { items: [], runtimes: {} };
@@ -2473,11 +2477,26 @@ function renderMcp() {
           const s = MCP[n] || {};
           const remote = s.type === "remote" || (!s.type && s.url);
           const on = s.enabled !== false;
+          const status = (MCP_STATUS[n] || {}).status || "";
+          const badge =
+            status === "connected"
+              ? `<span class="oauth-badge is-ok">${I("check")} connected</span>`
+              : status === "needs_auth" || status === "needs_client_registration"
+                ? `<span class="oauth-badge is-auth">${I("key")} sign-in needed</span>`
+                : status === "failed" || status === "error"
+                  ? `<span class="oauth-badge is-err">${I("x")} failed</span>`
+                  : "";
+          const connectBtn =
+            remote && on
+              ? status === "connected"
+                ? `<button class="btn btn-ghost btn-sm" data-mcp-oauth="${esc(n)}">${I("key")} Reconnect</button>`
+                : `<button class="btn btn-primary btn-sm" data-mcp-oauth="${esc(n)}">${I("key")} Connect</button>`
+              : "";
           return `<div class="acard ${on ? "" : "is-off"}">
             <div class="acard-head"><span class="cm-icon sm">${I(remote ? "globe" : "plug")}</span><strong>${esc(n)}</strong>
               <button class="switch" role="switch" aria-checked="${on}" data-mcp-toggle="${esc(n)}" title="${on ? "Turn off" : "Turn on"}"></button></div>
-            <p>${remote ? `Online service · ${esc(String(s.url || "").replace(/^https?:\/\//, "").slice(0, 60))}` : "Runs on your server"}</p>
-            <div class="acard-foot"><button class="btn btn-ghost btn-sm" data-mcp-edit="${esc(n)}">${I("edit")} Edit</button>
+            <p>${remote ? `Online service · ${esc(String(s.url || "").replace(/^https?:\/\//, "").slice(0, 60))}` : "Runs on your server"} ${badge}</p>
+            <div class="acard-foot">${connectBtn}<button class="btn btn-ghost btn-sm" data-mcp-edit="${esc(n)}">${I("edit")} Edit</button>
             <button class="btn btn-ghost btn-sm danger" data-mcp-del="${esc(n)}">${I("trash")} Remove</button></div></div>`;
         })
         .join("")
@@ -2504,7 +2523,10 @@ $("#mcpCards").addEventListener("click", async (e) => {
   const t = e.target.closest("[data-mcp-toggle]");
   const d = e.target.closest("[data-mcp-del]");
   const ed = e.target.closest("[data-mcp-edit]");
-  if (t) {
+  const oa = e.target.closest("[data-mcp-oauth]");
+  if (oa) {
+    connectMcpOauth(oa.dataset.mcpOauth);
+  } else if (t) {
     const n = t.dataset.mcpToggle;
     saveMcp({ ...MCP, [n]: { ...MCP[n], enabled: MCP[n].enabled === false } });
   } else if (d) {
@@ -2516,6 +2538,82 @@ $("#mcpCards").addEventListener("click", async (e) => {
   } else if (ed) editMcp(ed.dataset.mcpEdit);
 });
 $("#mcpAdd").addEventListener("click", () => editMcp(null));
+
+/* OAuth sign-in for remote MCP servers, without leaving the dashboard. */
+async function connectMcpOauth(name) {
+  if (!needLive()) return;
+  if (
+    !(await confirmDialog(
+      `Connect \u201c${name}\u201d?`,
+      "We'll open the service's sign-in page in a new tab. After you approve, paste the code it shows you back here.",
+      "Open sign-in page",
+      false,
+    ))
+  )
+    return;
+  let start;
+  try {
+    start = await api.post("config/mcp/oauth/start", { name });
+  } catch (e) {
+    return toast(e.message, { error: true });
+  }
+  if (start.authorizationUrl)
+    window.open(start.authorizationUrl, "_blank", "noopener");
+  const form = document.createElement("form");
+  form.className = "form";
+  form.innerHTML = `
+    <p>Approve access in the tab that just opened, then copy the <strong>code</strong> it shows and paste it below.</p>
+    <div class="field"><label>Authorization code</label>
+      <input name="code" autocomplete="off" placeholder="paste the code or the full URL">
+      <small>If the page only shows a URL, paste the whole URL \u2014 we'll extract the code.</small></div>`;
+  form.addEventListener("submit", (e) => e.preventDefault());
+  const code = await new Promise((resolve) => {
+    let done = false;
+    modal.open({
+      title: `Sign in to \u201c${name}\u201d`,
+      body: form,
+      actions: [
+        {
+          label: "Open page again",
+          run: () => {
+            if (start.authorizationUrl)
+              window.open(start.authorizationUrl, "_blank", "noopener");
+            return false;
+          },
+        },
+        {
+          label: "Cancel",
+          run: () => {
+            done = true;
+            resolve("");
+          },
+        },
+        {
+          label: "Connect",
+          kind: "btn-primary",
+          run: () => {
+            done = true;
+            resolve(String(new FormData(form).get("code") || "").trim());
+          },
+        },
+      ],
+      onClose: () => {
+        if (!done) resolve("");
+      },
+    });
+  });
+  if (!code) return;
+  setStatus("mcpStatus", "connecting\u2026");
+  try {
+    await api.post("config/mcp/oauth/callback", { name, code });
+    changed(`\u201c${name}\u201d connected.`);
+    setStatus("mcpStatus", "connected", "ok");
+    loadMcp();
+  } catch (e) {
+    setStatus("mcpStatus", "connect failed", "err");
+    toast(String(e.message).slice(0, 300), { error: true });
+  }
+}
 function editMcp(name) {
   const s = name ? MCP[name] : { type: "remote", enabled: true };
   const env = s.environment || s.headers || {};

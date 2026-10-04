@@ -338,6 +338,119 @@ def _engine_mcp_names() -> list[str]:
     return []
 
 
+def mcp_status() -> dict:
+    """Live connection status per MCP server, straight from the engine."""
+    try:
+        data = http_json(f"{OPENCODE_URL}/mcp", timeout=6)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _engine_error(detail: str, code: int) -> str:
+    """Human message out of an opencode error body (JSON or plain)."""
+    try:
+        parsed = json.loads(detail)
+        if isinstance(parsed, dict):
+            msg = parsed.get("message") or parsed.get("error") or parsed.get("data")
+            if isinstance(msg, str) and msg.strip():
+                return msg.strip()
+            if msg is not None:
+                return json.dumps(msg)[:300]
+    except Exception:
+        pass
+    detail = (detail or "").strip()
+    return detail[:300] if detail else f"engine returned {code}"
+
+
+def _extract_oauth_code(raw: str) -> str:
+    """Accept a bare code, a full callback URL, or a query string."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if "code=" in raw:
+        query = urllib.parse.urlparse(raw).query
+        if not query and "?" in raw:
+            query = raw.split("?", 1)[1]
+        if not query:
+            query = raw
+        vals = urllib.parse.parse_qs(query)
+        if vals.get("code"):
+            return vals["code"][0].strip()
+    return raw
+
+
+def mcp_oauth_start(name: str) -> dict:
+    """Begin the OAuth flow for a remote MCP server; returns the sign-in URL."""
+    try:
+        data = http_json(
+            f"{OPENCODE_URL}/mcp/{urllib.parse.quote(name, safe='')}/auth",
+            method="POST",
+            timeout=20,
+        )
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")
+        except Exception:
+            pass
+        return {"ok": False, "error": _engine_error(detail, exc.code)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    if not isinstance(data, dict) or not data.get("authorizationUrl"):
+        return {"ok": False, "error": "the engine did not return a sign-in URL"}
+    return {
+        "ok": True,
+        "authorizationUrl": data["authorizationUrl"],
+        "oauthState": data.get("oauthState", ""),
+    }
+
+
+def mcp_oauth_callback(name: str, code: str) -> dict:
+    """Finish the OAuth flow by handing the engine the authorization code."""
+    code = _extract_oauth_code(code)
+    if not code:
+        return {"ok": False, "error": "paste the code you received"}
+    try:
+        data = http_json(
+            f"{OPENCODE_URL}/mcp/{urllib.parse.quote(name, safe='')}/auth/callback",
+            method="POST",
+            body={"code": code},
+            timeout=30,
+        )
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")
+        except Exception:
+            pass
+        return {"ok": False, "error": _engine_error(detail, exc.code)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "status": data}
+
+
+def mcp_oauth_remove(name: str) -> dict:
+    """Forget the stored OAuth credentials of an MCP server."""
+    try:
+        http_json(
+            f"{OPENCODE_URL}/mcp/{urllib.parse.quote(name, safe='')}/auth",
+            method="DELETE",
+            timeout=15,
+        )
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")
+        except Exception:
+            pass
+        return {"ok": False, "error": _engine_error(detail, exc.code)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True}
+
+
+
 SECRET_HINTS = ("token", "key", "secret", "password", "authorization", "auth")
 
 
@@ -2453,6 +2566,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, provider_snapshot())
             if path == "/api/config/mcp/catalog":
                 return self._send(200, mcp_catalog())
+            if path == "/api/config/mcp/status":
+                return self._send(200, {"status": mcp_status()})
             if path == "/api/version":
                 return self._send(200, version_info(p.get("refresh") == "1"))
             if path == "/api/update/status":
@@ -2608,6 +2723,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, provider_test(payload))
             if path == "/api/config/mcp/install":
                 res = install_from_catalog(payload.get("id", ""), payload.get("values") or {})
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/config/mcp/oauth/start":
+                res = mcp_oauth_start(payload.get("name", ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/config/mcp/oauth/callback":
+                res = mcp_oauth_callback(payload.get("name", ""), payload.get("code", ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/config/mcp/oauth/remove":
+                res = mcp_oauth_remove(payload.get("name", ""))
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/update":
                 res = start_update()

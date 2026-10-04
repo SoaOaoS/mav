@@ -1970,6 +1970,35 @@ h6.md-h {
   display: flex;
   gap: 0.4rem;
   margin-top: auto;
+  flex-wrap: wrap;
+}
+.oauth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.oauth-badge svg {
+  width: 0.85em;
+  height: 0.85em;
+}
+.oauth-badge.is-ok {
+  color: var(--ok, #16a34a);
+  background: color-mix(in srgb, var(--ok, #16a34a) 14%, transparent);
+}
+.oauth-badge.is-auth {
+  color: var(--warn, #d97706);
+  background: color-mix(in srgb, var(--warn, #d97706) 16%, transparent);
+}
+.oauth-badge.is-err {
+  color: var(--err, #dc2626);
+  background: color-mix(in srgb, var(--err, #dc2626) 14%, transparent);
 }
 .code-editor {
   width: 100%;
