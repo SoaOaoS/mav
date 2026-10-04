@@ -1474,6 +1474,31 @@ def get_notification(nid: int) -> dict:
     return {"notification": rows[0] if rows else None}
 
 
+# --------------------------------------------------------------- debates
+# Multi-agent debate threads are written by the opencode debate tools; the web
+# app shows them live. Reading is best-effort: an absent file just means no
+# debate has been opened yet.
+def get_debates() -> dict:
+    try:
+        from ocdebates import list_threads  # noqa: PLC0415
+
+        return {"debates": list_threads()}
+    except Exception:  # noqa: BLE001
+        return {"debates": []}
+
+
+def get_debate(thread_id: str) -> dict:
+    if not thread_id:
+        return {"error": "missing id"}
+    try:
+        from ocdebates import get_thread  # noqa: PLC0415
+
+        thread = get_thread(thread_id)
+    except Exception:  # noqa: BLE001
+        thread = None
+    return {"debate": thread}
+
+
 VALID_WATCH_KINDS = ["web", "price", "news"]
 
 
@@ -2548,6 +2573,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_notifications())
             if path == "/api/notification":
                 return self._send(200, get_notification(int(p.get("id", 0) or 0)))
+            if path == "/api/debates":
+                return self._send(200, get_debates())
+            if path == "/api/debate":
+                return self._send(200, get_debate(p.get("id", "")))
             if path == "/api/agents":
                 return self._send(200, get_agents())
             if path == "/api/connections":
