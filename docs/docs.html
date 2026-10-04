@@ -6,7 +6,7 @@
     <title>Mav — Documentation</title>
     <meta
       name="description"
-      content="Mav documentation: installation, architecture, configuration, agents, MCP, the bot API and the dashboard API."
+      content="Mav documentation: installing your own everyday AI assistant, choosing a model, helpers, memory, routines, alerts, connections and the web app API."
     />
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -58,22 +58,22 @@
             <a href="#install">Installation</a>
             <a href="#update">Updating</a>
             <a href="#requirements">Requirements</a>
-            <div class="nav-group">Concepts</div>
-            <a href="#architecture">Architecture</a>
-            <a href="#services">Services</a>
-            <a href="#providers">Model providers</a>
-            <a href="#agents">Agents</a>
-            <a href="#orchestrator">Orchestrator</a>
-            <a href="#mcp">MCP servers</a>
+            <a href="#phone">On your phone</a>
             <div class="nav-group">Using Mav</div>
-            <a href="#bot">Telegram commands</a>
-            <a href="#dashboard">Dashboard</a>
-            <a href="#push">Notifications</a>
-            <a href="#watch">Watch &amp; jobs</a>
+            <a href="#chat">Chat</a>
+            <a href="#helpers">Helpers</a>
+            <a href="#memory">Memory</a>
+            <a href="#routines">Routines</a>
+            <a href="#watch">Keep an eye on</a>
+            <a href="#notifications">Notifications</a>
+            <div class="nav-group">Settings</div>
+            <a href="#model">Model</a>
+            <a href="#instructions">Custom instructions</a>
+            <a href="#connections">Connections</a>
             <div class="nav-group">Reference</div>
+            <a href="#architecture">How it works</a>
             <a href="#config">Configuration files</a>
-            <a href="#api-dashboard">Dashboard API</a>
-            <a href="#database">Database schema</a>
+            <a href="#api">Web app API</a>
             <a href="#troubleshooting">Troubleshooting</a>
           </div>
         </aside>
@@ -89,579 +89,362 @@
             Documentation
           </h1>
           <p style="color: var(--ink-2); margin-top: 0">
-            Everything you need to install, run and extend Mav.
+            Install your own everyday assistant, and get the most out of it.
           </p>
 
           <section id="install">
             <h2>Installation</h2>
-            <p>On a fresh Debian/Ubuntu machine:</p>
-            <pre><code>curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash</code></pre>
-            <p>Or clone and run the installer directly:</p>
-            <pre><code>git clone https://github.com/SoaOaoS/mav.git
-cd mav
-sudo ./install.sh</code></pre>
             <p>
-              A wizard asks a few things <strong>once</strong> — contact email,
-              Telegram token, model provider, Postgres, dashboard — then does
-              everything else: dependencies, database, TLS certificates, VAPID
-              keys, three systemd services, and a health check.
+              Mav runs on a Debian or Ubuntu machine you control — a home
+              server, a mini PC, a Raspberry Pi 5, a VPS. One command:
             </p>
-            <div class="docs-note">
-              The installer never touches your opencode agent config beyond a
-              minimal provider block. Your MCP servers, custom agents and skills
-              are yours.
-            </div>
-            <h3>Installer modes</h3>
-            <table>
-              <tr>
-                <th>Mode</th>
-                <th>What it does</th>
-              </tr>
-              <tr>
-                <td><code>./install.sh</code></td>
-                <td>Install, or detect an existing install and update it</td>
-              </tr>
-              <tr>
-                <td><code>./install.sh --update</code></td>
-                <td>Update, keeping your config</td>
-              </tr>
-              <tr>
-                <td><code>./install.sh --yes</code></td>
-                <td>All defaults, no questions</td>
-              </tr>
-              <tr>
-                <td><code>./install.sh --dry-run</code></td>
-                <td>Show what would happen, change nothing</td>
-              </tr>
-              <tr>
-                <td><code>./install.sh --uninstall</code></td>
-                <td>Remove services, configs and the container</td>
-              </tr>
-            </table>
+            <pre><code>curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash</code></pre>
+            <p>or, from a clone:</p>
+            <pre><code>git clone https://github.com/SoaOaoS/mav.git &amp;&amp; cd mav &amp;&amp; sudo ./install.sh</code></pre>
+            <p>The setup asks only what it must:</p>
+            <ol>
+              <li>
+                <strong>Your model provider</strong> (arrow keys), your
+                <strong>API key</strong> — checked on the spot — and the
+                <strong>model</strong>, picked from the provider's own list. Or
+                <em>Set it up later</em> from the web app.
+              </li>
+              <li>Optionally, a <strong>contact email</strong> for push notifications.</li>
+            </ol>
+            <p>
+              Everything else gets sensible defaults; answer <em>yes</em> to
+              <em>Advanced settings?</em> to change the system user, the ports
+              or the quiet hours. Each step shows a spinner; the details go to
+              <code>/var/log/mav-install.log</code>. At the end, open the
+              address it prints.
+            </p>
+            <h3>Installer options</h3>
+            <pre><code>sudo ./install.sh --update     # update, keep the settings
+sudo ./install.sh --dry-run    # show what would happen, change nothing
+sudo ./install.sh --uninstall  # remove the services (data is kept)
+sudo ./install.sh --yes        # unattended, see below</code></pre>
+            <p>
+              Unattended: <code>MAV_PROVIDER</code> (<code>anthropic</code>,
+              <code>openai</code>, <code>ollama</code>,
+              <code>ollama-cloud-api</code>, <code>openrouter</code>),
+              <code>MAV_PROVIDER_APIKEY</code>, <code>MAV_OPENCODE_MODEL</code>,
+              optionally <code>MAV_PROVIDER_BASEURL</code> and
+              <code>MAV_VAPID_EMAIL</code>. Without a provider, the model is
+              left to set up in the web app.
+            </p>
           </section>
 
           <section id="update">
             <h2>Updating</h2>
-            <p>
-              Updating never re-asks your settings. The installer remembers your
-              configuration in the generated env files, and installs a
-              <code>mav</code> command:
-            </p>
-            <pre><code>mav update        # update code and services, keep your config
-mav reconfigure   # re-run the wizard to change settings
-mav status        # service status
-mav logs          # follow the bot logs
-mav uninstall</code></pre>
-            <p>
-              Even simpler: just re-run the installer. If an install exists, it
-              asks a single question —
-              <code>[U] update (keep my config)</code> or
-              <code>[R] reconfigure</code> — defaulting to update.
-            </p>
+            <pre><code>mav update        # new version, keep everything
+mav reconfigure   # Update / Change the model / Reconfigure / Uninstall
+mav restart · mav status · mav logs</code></pre>
+            <div class="docs-note">
+              <strong>Coming from the Telegram version?</strong> Telegram
+              support was removed. <code>mav update</code> replaces the
+              <code>mav-bot</code> service with <code>mav-worker</code> and keeps
+              your memory (now in Postgres — the old <code>memory.json</code> is
+              imported automatically), your routines, your model and your
+              settings. Your existing agent files are left untouched; the new
+              everyday helpers are added next to them.
+            </div>
           </section>
 
           <section id="requirements">
             <h2>Requirements</h2>
             <ul>
-              <li>A Debian or Ubuntu machine (tested on Debian 13).</li>
-              <li>Root access (the installer uses <code>sudo</code>).</li>
-              <li>
-                A <strong>model</strong>: Ollama (local), Claude, OpenAI, or any
-                OpenAI-compatible endpoint.
-              </li>
-              <li>
-                A Telegram bot token from
-                <a href="https://t.me/BotFather" target="_blank" rel="noopener"
-                  >@BotFather</a
-                >.
-              </li>
-              <li>Docker is installed automatically if missing.</li>
+              <li>Debian 12+ or Ubuntu 22.04+ (others may work), root access.</li>
+              <li>About 1 GB of RAM for Mav itself — more if you run models locally with Ollama.</li>
+              <li>An API key from a model provider, or an Ollama server.</li>
             </ul>
-          </section>
-
-          <section id="architecture">
-            <h2>Architecture</h2>
-            <p>Mav is three small pieces plus a database.</p>
-            <pre><code>Telegram ─┐
-          ├─▶ mav-bot ──────┐
-Browser ──┴─▶ mav-dashboard ┤
-                            ▼
-                   opencode engine (:4096)
-                            │
-                            ▼
-                  Postgres (Docker)</code></pre>
-            <ul>
-              <li>
-                <strong>opencode</strong> is the agent engine. It runs the
-                model, the agents and the tools. You configure it yourself.
-              </li>
-              <li>
-                <strong>mav-bot</strong> is the Telegram bridge. It also runs
-                the watch loop and the job scheduler.
-              </li>
-              <li>
-                <strong>mav-dashboard</strong> serves the web UI and the HTTP
-                API.
-              </li>
-              <li>
-                <strong>Postgres</strong> stores memory, watch items,
-                notifications and the RAG index.
-              </li>
-            </ul>
-          </section>
-
-          <section id="services">
-            <h2>Services</h2>
-            <table>
-              <tr>
-                <th>Service</th>
-                <th>Role</th>
-              </tr>
-              <tr>
-                <td><code>mav-server</code></td>
-                <td>opencode engine on <code>127.0.0.1:4096</code></td>
-              </tr>
-              <tr>
-                <td><code>mav-bot</code></td>
-                <td>Telegram bridge + watch + jobs</td>
-              </tr>
-              <tr>
-                <td><code>mav-dashboard</code></td>
-                <td>Web interface (HTTP/HTTPS)</td>
-              </tr>
-            </table>
-            <pre><code>systemctl status mav-server mav-bot mav-dashboard
-journalctl -u mav-bot -f
-journalctl -u mav-dashboard -f</code></pre>
-          </section>
-
-          <section id="providers">
-            <h2>Model providers</h2>
-            <p>The wizard lets you pick one:</p>
-            <table>
-              <tr>
-                <th>Provider</th>
-                <th>What you need</th>
-                <th>Example model</th>
-              </tr>
-              <tr>
-                <td><strong>ollama</strong></td>
-                <td>A running Ollama</td>
-                <td><code>llama3.1</code>, <code>qwen2.5-coder</code></td>
-              </tr>
-              <tr>
-                <td><strong>anthropic</strong></td>
-                <td>An <code>ANTHROPIC_API_KEY</code></td>
-                <td><code>claude-sonnet-4-5</code></td>
-              </tr>
-              <tr>
-                <td><strong>openai</strong></td>
-                <td>An <code>OPENAI_API_KEY</code></td>
-                <td><code>gpt-4o</code></td>
-              </tr>
-              <tr>
-                <td><strong>custom</strong></td>
-                <td>An OpenAI-compatible endpoint + key</td>
-                <td>depends</td>
-              </tr>
-            </table>
             <p>
-              The installer writes a minimal
-              <code>~/.config/opencode/opencode.json</code> with your provider
-              and puts the API key in the engine's environment
-              (<code>/etc/mav-server.env</code>).
+              The installer brings the rest: Python, Docker (for Postgres) and
+              the <a href="https://opencode.ai" target="_blank" rel="noopener">opencode</a>
+              agent engine.
             </p>
           </section>
 
-          <section id="agents">
-            <h2>Agents</h2>
+          <section id="phone">
+            <h2>On your phone</h2>
             <p>
-              An agent is a Markdown file with YAML frontmatter and a prompt, in
-              <code>~/.config/opencode/agent/</code>. The installer ships a set
-              of generic templates (dev, research, writer, ops, finance,
-              reviewer, orchestrator) without overwriting anything you already
-              have.
-            </p>
-            <pre><code>---
-description: Short description of what this agent does
-mode: subagent
----
-
-You are &lt;role&gt;. &lt;What you do and how.&gt;
-
-Rules:
-- &lt;rule&gt;</code></pre>
-            <p>
-              You can create, edit and delete agents from the dashboard
-              (Settings → Agents), or by hand. Restart the engine to make them
-              available:
-            </p>
-            <pre><code>mav update     # or: systemctl restart mav-server</code></pre>
-          </section>
-
-          <section id="orchestrator">
-            <h2>Orchestrator</h2>
-            <p>
-              Mav ships with an <strong>orchestrator</strong> agent. Its default
-              behaviour is not to answer everything itself, but to:
+              Mav is a web app you can install like a native one, with push
+              notifications. Browsers only allow that over HTTPS, so Mav serves
+              itself over HTTPS with a private certificate:
             </p>
             <ol>
-              <li>analyse the request and decide the plan;</li>
-              <li>
-                convene the right specialists with opencode's
-                <code>task</code> tool;
-              </li>
-              <li>have them challenge each other when they disagree;</li>
-              <li>synthesise one clear answer, honest about uncertainty.</li>
+              <li>On the phone, open <code>https://&lt;your-mav&gt;/certs/ca.cer</code> and trust the certificate.</li>
+              <li>Open <code>https://&lt;your-mav&gt;/</code>, then <em>Add to Home Screen</em>.</li>
+              <li>Turn on notifications (the bell, or Settings → General).</li>
             </ol>
             <p>
-              Default pairings: code → <code>dev</code> + <code>reviewer</code>;
-              research → <code>research</code> + <code>reviewer</code>; writing
-              → <code>writer</code> + <code>research</code>; finance →
-              <code>finance</code> + <code>research</code>; ops →
-              <code>ops</code> + <code>reviewer</code>. Edit
-              <code>agents/orchestrator.md</code> to change the policy.
+              Mav has no login: keep it on your home network, or reach it
+              through a VPN such as Tailscale or WireGuard.
             </p>
           </section>
 
-          <section id="mcp">
-            <h2>MCP servers</h2>
+          <section id="chat">
+            <h2>Chat</h2>
             <p>
-              MCP (Model Context Protocol) servers give your agent extra tools —
-              GitHub, Notion, a database, your own services. They live under the
-              <code>mcp</code> key of <code>opencode.json</code> and are fully
-              yours: the installer sets none.
+              The chat is the main screen. A new chat shows a greeting, the
+              message box, four everyday suggestions and <em>For you</em> — your
+              latest routine reports and alerts. Chats get a short title on
+              their own after the first answer and are grouped by day; click a
+              title to rename it, or pin, summarise, download or delete a chat
+              from its header. You can attach files, dictate, and have answers
+              read aloud.
             </p>
-            <p>
-              Manage them in the dashboard (Settings → MCP servers), where
-              secrets are masked on read and preserved on write, or edit the
-              config directly:
-            </p>
-            <pre><code>{
-  "mcp": {
-    "my-server": {
-      "type": "remote",
-      "url": "https://example.com/mcp",
-      "enabled": true
-    }
-  }
-}</code></pre>
-            <div class="docs-note">
-              Restart the engine after changing MCP servers. The dashboard has a
-              one-click <strong>Restart engine</strong> button, or use
-              <code>systemctl restart mav-server</code>.
-            </div>
-          </section>
-
-          <section id="bot">
-            <h2>Telegram commands</h2>
+            <h3>Commands</h3>
             <table>
-              <tr>
-                <th>Command</th>
-                <th>Description</th>
-              </tr>
-              <tr>
-                <td><code>/ask &lt;question&gt;</code></td>
-                <td>Ask a question (or just type a message)</td>
-              </tr>
-              <tr>
-                <td><code>/new</code></td>
-                <td>Start a new session</td>
-              </tr>
-              <tr>
-                <td><code>/agent [name]</code></td>
-                <td>Show or switch the agent</td>
-              </tr>
-              <tr>
-                <td><code>/stop</code></td>
-                <td>Abort the running task</td>
-              </tr>
-              <tr>
-                <td><code>/memory</code> / <code>/forget</code></td>
-                <td>Memory status / clear it</td>
-              </tr>
-              <tr>
-                <td><code>/watch</code></td>
-                <td>List, add or remove watch items</td>
-              </tr>
-              <tr>
-                <td><code>/jobs</code> / <code>/run &lt;name&gt;</code></td>
-                <td>List scheduled jobs / run one now</td>
-              </tr>
-              <tr>
-                <td><code>/rag</code></td>
-                <td>Full-text search or index documents</td>
-              </tr>
-              <tr>
-                <td><code>/notify</code></td>
-                <td>Toggle push / Telegram notifications</td>
-              </tr>
+              <tr><td><code>/remember &lt;fact&gt;</code></td><td>Save something about you to memory</td></tr>
+              <tr><td><code>/routine &lt;what, when&gt;</code></td><td>Create a routine (pre-filled from your words)</td></tr>
+              <tr><td><code>/watch &lt;url or topic&gt;</code></td><td>Keep an eye on a page, a price or a topic</td></tr>
+              <tr><td><code>/helper &lt;name&gt;</code></td><td>Switch who you talk to</td></tr>
+              <tr><td><code>/new</code> · <code>/rename</code> · <code>/summary</code> · <code>/export</code> · <code>/help</code></td><td>Chat actions</td></tr>
             </table>
-          </section>
-
-          <section id="dashboard">
-            <h2>Dashboard</h2>
-            <p>The web interface has six views:</p>
-            <ul>
-              <li>
-                <strong>Home</strong> — greeting, quick actions, today's
-                summary;
-              </li>
-              <li>
-                <strong>Conversations</strong> — a ChatGPT-style manager and a
-                streamed chat;
-              </li>
-              <li><strong>Automations</strong> — scheduled jobs, run/pause;</li>
-              <li>
-                <strong>Memories</strong> — everything Mav remembers, with
-                search;
-              </li>
-              <li><strong>Watch</strong> — watched sources, add/remove;</li>
-              <li>
-                <strong>Infra</strong> — your Proxmox nodes and VMs, live;
-              </li>
-              <li>
-                <strong>Settings</strong> — engine status, AGENTS.md, agents and
-                MCP, with a restart button.
-              </li>
-            </ul>
-            <div class="docs-note">
-              No authentication: expose it over a VPN or a private network, not
-              the public internet.
-            </div>
-          </section>
-
-          <section id="push">
-            <h2>Notifications</h2>
             <p>
-              Mav reaches out through <strong>Web Push</strong> and
-              <strong>Telegram</strong>. Subscribe to push from the dashboard
-              (the bell button). Each notification carries a link: tapping it
-              opens the dashboard and asks Mav to explain the alert.
+              Shortcuts: <code>⌘K</code> search and commands,
+              <code>Alt N</code> new chat, <code>/</code> focus the message box,
+              <code>Esc</code> stop an answer.
+            </p>
+          </section>
+
+          <section id="helpers">
+            <h2>Helpers</h2>
+            <p>
+              You talk to the <strong>Assistant</strong> by default. It answers
+              directly, and calls in a specialist when that helps:
+            </p>
+            <table>
+              <tr><td><strong>Researcher</strong></td><td>looks things up on the web, checks facts, compares options — with sources</td></tr>
+              <tr><td><strong>Writer</strong></td><td>emails, messages, posts and letters in the right tone</td></tr>
+              <tr><td><strong>Planner</strong></td><td>days, trips, projects, to-do lists</td></tr>
+              <tr><td><strong>Money</strong></td><td>budgets, purchases, subscriptions, comparing offers</td></tr>
+            </table>
+            <p>
+              You can also talk to one directly: pick it on the message box or
+              in the chat header. Who answers is always shown — on the message
+              box, in the header and on each answer — and each chat remembers
+              its helper. Create your own (a coach, a tutor…) in Settings →
+              Helpers. Each helper is a Markdown file in
+              <code>~/.config/opencode/agent/</code>.
+            </p>
+          </section>
+
+          <section id="memory">
+            <h2>Memory</h2>
+            <p>
+              Mav keeps two kinds of memory, stored in Postgres on your machine:
             </p>
             <ul>
-              <li>Quiet hours (default 23:00–07:00) suppress pushes.</li>
-              <li>Duplicate keys prevent the same alert being sent twice.</li>
               <li>
-                Job notifications are short summaries; the full report stays in
-                the dashboard.
+                <strong>About you</strong> — facts like "vegetarian, lives in
+                Lyon". Always recalled when a chat starts. Add them on the
+                Memory page or with <code>/remember</code>.
+              </li>
+              <li>
+                <strong>From past chats</strong> — every question and answer,
+                recalled when relevant to a new chat (full-text search with a
+                gentle preference for recent ones).
               </li>
             </ul>
+            <p>
+              Answers that used memory say so ("Used 3 things from memory").
+              You can delete any item, or clear chat memory entirely, from the
+              Memory page.
+            </p>
+          </section>
+
+          <section id="routines">
+            <h2>Routines</h2>
+            <p>
+              Things Mav does on its own: <em>"every morning at 7, tell me if I
+              need an umbrella"</em>, <em>"every Sunday, plan 5 dinners and a
+              shopping list"</em>. Three ways to create one:
+            </p>
+            <ul>
+              <li>the form on the Routines page — what to do, when (every day at a time, some days at a time, or every few hours) and which helper;</li>
+              <li><code>/routine</code> in a chat;</li>
+              <li>just say it — when a message sounds recurring, Mav offers <em>Make this a routine?</em> with a <em>Create routine</em> button.</li>
+            </ul>
+            <p>
+              Each routine runs in its own chat (<em>Routine · name</em>), with
+              what Mav remembers about you, so you can open it and follow up.
+              When there is something to report, you get a push notification
+              and an entry in <em>For you</em>; an answer like "nothing to
+              report" stays silent. Failed runs are retried once.
+            </p>
           </section>
 
           <section id="watch">
-            <h2>Watch &amp; jobs</h2>
+            <h2>Keep an eye on</h2>
+            <table>
+              <tr><td><strong>A page</strong></td><td>alerts when the readable text of the page changes</td></tr>
+              <tr><td><strong>A price</strong></td><td>reads the price on a product page; alerts on any change, or only below your target</td></tr>
+              <tr><td><strong>News</strong></td><td>new headlines about a topic (Google News)</td></tr>
+            </table>
             <p>
-              <strong>Watch</strong> polls a source and alerts only on a change
-              of state. Types: <code>web</code> (page changes),
-              <code>mail</code> (unread matches), <code>github</code> (open
-              PRs), <code>proxmox</code> (VMs), <code>health</code> (services),
-              <code>stock</code> (level crossings and abnormal volume).
+              Items are checked about every 15 minutes
+              (<code>WATCH_INTERVAL</code>). The first check only records the
+              current state; after that, you are notified only on a change.
+              News language and country follow <code>NEWS_LANG</code> /
+              <code>NEWS_COUNTRY</code> in <code>/etc/mav.env</code>
+              (default <code>en-US</code> / <code>US</code>).
             </p>
-            <pre><code>/watch add stock AAPL:180:200:240
-/watch add github myorg/myrepo
-/watch add web https://example.com/status</code></pre>
+          </section>
+
+          <section id="notifications">
+            <h2>Notifications</h2>
             <p>
-              <strong>Jobs</strong> run a prompt on a schedule. Define them in
-              <code>jobs.json</code> in the bot directory, with a fixed time or
-              an interval. A job that replies nothing to report is never sent.
+              Web Push, on any device where you turned them on — even when Mav
+              is closed. Tapping a routine report opens its chat; tapping an
+              alert opens a chat that explains it. Quiet hours
+              (<code>NOTIFY_QUIET</code>, default 23–7) hold pushes back; the
+              item still lands in <em>For you</em>. The same alert is never
+              sent twice within 6 hours.
+            </p>
+          </section>
+
+          <section id="model">
+            <h2>Model</h2>
+            <p>
+              Settings → Model: pick a provider, paste a key, press
+              <em>Check &amp; list models</em> to verify it and fill the model
+              list, then <em>Save</em>. Mav restarts for a few seconds and uses
+              the new model.
+            </p>
+            <table>
+              <tr><td><strong>Anthropic</strong></td><td>Claude models · API key</td></tr>
+              <tr><td><strong>OpenAI</strong></td><td>GPT models · API key</td></tr>
+              <tr><td><strong>Ollama</strong></td><td>models on your own machine or network · no key</td></tr>
+              <tr><td><strong>Ollama Cloud</strong></td><td>hosted open models · Ollama API key</td></tr>
+              <tr><td><strong>OpenRouter</strong></td><td>many models behind one key</td></tr>
+              <tr><td><strong>Custom</strong></td><td>any OpenAI-compatible API (LM Studio, vLLM, Groq, Mistral…)</td></tr>
+            </table>
+            <p>
+              Keys are stored in <code>/etc/mav-server.env</code> (readable by
+              root only) and referenced from the engine config — never sent to
+              the browser. The same logic is used by the installer
+              (<code>dashboard/server/mav_provider.py</code>).
+            </p>
+          </section>
+
+          <section id="instructions">
+            <h2>Custom instructions</h2>
+            <p>
+              Settings → Custom instructions: what Mav should know and how it
+              should answer — language, tone, your situation. They apply to
+              every chat and every helper (stored as
+              <code>~/.config/opencode/AGENTS.md</code>).
+            </p>
+          </section>
+
+          <section id="connections">
+            <h2>Connections</h2>
+            <p>
+              Settings → Connections lets Mav use other apps and services —
+              calendar, notes, files, smart home — through the
+              <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">MCP</a>
+              standard. Add an online service by its address, or a program
+              that runs on your server, with its settings (tokens are masked
+              once saved). Then <em>Apply</em>. The raw configuration is in
+              Settings → General → Advanced.
+            </p>
+            <pre><code>// online service
+{ "type": "remote", "url": "https://…/mcp", "enabled": true }
+// program on the server — command is an array, settings go in "environment"
+{ "type": "local", "command": ["npx", "-y", "pkg"], "enabled": true }</code></pre>
+          </section>
+
+          <section id="architecture">
+            <h2>How it works</h2>
+            <pre><code>Browser / phone (PWA)
+        │
+        ▼
+mav-dashboard (web app + API) ──▶ mav-server (opencode engine, 127.0.0.1:4096)
+        │                                  ▲
+        ▼                                  │
+Postgres (Docker, 127.0.0.1) ◀── mav-worker (routines, keep an eye on, push)</code></pre>
+            <table>
+              <tr><td><code>mav-dashboard</code></td><td>the web app and its API (HTTP + HTTPS)</td></tr>
+              <tr><td><code>mav-server</code></td><td>the opencode agent engine, local only</td></tr>
+              <tr><td><code>mav-worker</code></td><td>runs routines and checks, sends notifications</td></tr>
+            </table>
+            <p>
+              Chats are engine sessions; memory, alerts and notification history
+              live in Postgres; routines in <code>~/bot/jobs.json</code>.
             </p>
           </section>
 
           <section id="config">
             <h2>Configuration files</h2>
             <table>
-              <tr>
-                <th>File</th>
-                <th>Purpose</th>
-              </tr>
-              <tr>
-                <td><code>/etc/mav.env</code></td>
-                <td>Bot: token, chat ids, engine, Postgres, watch</td>
-              </tr>
-              <tr>
-                <td><code>/etc/mav-dashboard.env</code></td>
-                <td>Dashboard: bind IP/ports, TLS, database</td>
-              </tr>
-              <tr>
-                <td><code>/etc/mav-server.env</code></td>
-                <td>Engine: your model API key</td>
-              </tr>
-              <tr>
-                <td><code>~/.config/opencode/opencode.json</code></td>
-                <td>Model provider, MCP servers</td>
-              </tr>
-              <tr>
-                <td><code>~/.config/opencode/AGENTS.md</code></td>
-                <td>Global agent instructions</td>
-              </tr>
-              <tr>
-                <td><code>~/.config/opencode/agent/*.md</code></td>
-                <td>Your agents</td>
-              </tr>
+              <tr><td><code>/etc/mav-dashboard.env</code></td><td>web app: address, ports, HTTPS, database, default helper</td></tr>
+              <tr><td><code>/etc/mav.env</code></td><td>worker: model, quiet hours, watch interval, database</td></tr>
+              <tr><td><code>/etc/mav-server.env</code></td><td>engine: API keys (written by Settings → Model)</td></tr>
+              <tr><td><code>~/.config/opencode/</code></td><td>engine config, custom instructions, helpers</td></tr>
             </table>
+            <p>Edit, then <code>mav restart</code>.</p>
           </section>
 
-          <section id="api-dashboard">
-            <h2>Dashboard API</h2>
-            <p>Selected routes served by <code>mav_api.py</code>:</p>
-            <table>
-              <tr>
-                <th>Method</th>
-                <th>Route</th>
-                <th>Purpose</th>
-              </tr>
-              <tr>
-                <td>GET</td>
-                <td><code>/api/status</code></td>
-                <td>Engine health, metrics, counters</td>
-              </tr>
-              <tr>
-                <td>GET</td>
-                <td><code>/api/stream</code></td>
-                <td>SSE: streamed answer</td>
-              </tr>
-              <tr>
-                <td>GET</td>
-                <td>
-                  <code>/api/sessions</code> / <code>/api/session?id=</code>
-                </td>
-                <td>Conversations</td>
-              </tr>
-              <tr>
-                <td>GET</td>
-                <td><code>/api/config</code></td>
-                <td>Agents + MCP + engine snapshot</td>
-              </tr>
-              <tr>
-                <td>GET</td>
-                <td><code>/api/config/agent-files</code></td>
-                <td>List agent files</td>
-              </tr>
-              <tr>
-                <td>POST</td>
-                <td><code>/api/config/agents</code></td>
-                <td>Save AGENTS.md</td>
-              </tr>
-              <tr>
-                <td>POST</td>
-                <td><code>/api/config/agent-file</code></td>
-                <td>Create/update an agent file</td>
-              </tr>
-              <tr>
-                <td>POST</td>
-                <td><code>/api/config/mcp</code></td>
-                <td>Save MCP servers</td>
-              </tr>
-              <tr>
-                <td>POST</td>
-                <td><code>/api/config/restart</code></td>
-                <td>Restart the engine</td>
-              </tr>
-              <tr>
-                <td>POST</td>
-                <td><code>/api/push/subscribe</code></td>
-                <td>Register a push subscription</td>
-              </tr>
-            </table>
-          </section>
-
-          <section id="database">
-            <h2>Database schema</h2>
+          <section id="api">
+            <h2>Web app API</h2>
             <p>
-              Applied automatically from <code>scripts/schema.sql</code>.
-              Idempotent and safe to re-run.
+              The web app talks to a small JSON API on the same address (no
+              authentication — keep Mav private). Highlights:
             </p>
             <table>
-              <tr>
-                <th>Table</th>
-                <th>Holds</th>
-              </tr>
-              <tr>
-                <td><code>conversations</code></td>
-                <td>Finished exchanges (memory)</td>
-              </tr>
-              <tr>
-                <td><code>facts</code></td>
-                <td>Durable facts about you</td>
-              </tr>
-              <tr>
-                <td><code>preferences</code></td>
-                <td>Settings per chat</td>
-              </tr>
-              <tr>
-                <td><code>watch_items</code></td>
-                <td>Watched sources and their state</td>
-              </tr>
-              <tr>
-                <td><code>documents</code></td>
-                <td>RAG index (tsvector)</td>
-              </tr>
-              <tr>
-                <td><code>notifications</code></td>
-                <td>Notification history + dedup</td>
-              </tr>
+              <tr><td><code>GET /api/stream?prompt=&amp;session=&amp;agent=</code></td><td>answer as Server-Sent Events: <code>start</code>, <code>delta</code>, <code>done</code>, <code>error</code></td></tr>
+              <tr><td><code>GET /api/sessions</code> · <code>/api/session?id=</code></td><td>chats, and one chat's messages</td></tr>
+              <tr><td><code>GET /api/jobs</code> · <code>POST /api/job/save|delete|toggle|run</code></td><td>routines</td></tr>
+              <tr><td><code>GET /api/watch</code> · <code>POST /api/watch/add|remove</code></td><td>keep an eye on (<code>web</code>, <code>price</code>, <code>news</code>)</td></tr>
+              <tr><td><code>GET /api/memory</code> · <code>POST /api/memory/fact/add|fact/delete|exchange/delete|forget</code></td><td>memory</td></tr>
+              <tr><td><code>GET /api/notifications</code></td><td>the <em>For you</em> inbox</td></tr>
+              <tr><td><code>GET|POST /api/config/provider</code> · <code>POST /api/config/provider/test</code></td><td>model provider</td></tr>
             </table>
+            <p>
+              The full list is in
+              <a href="https://github.com/SoaOaoS/mav/blob/main/dashboard/README.md" target="_blank" rel="noopener">dashboard/README.md</a>.
+            </p>
           </section>
 
           <section id="troubleshooting">
             <h2>Troubleshooting</h2>
-            <h3>The engine is offline</h3>
-            <pre><code>systemctl status mav-server
+            <h3>"Assistant offline"</h3>
+            <pre><code>mav status
 journalctl -u mav-server -n 50</code></pre>
             <p>
-              Check the model provider: a wrong key or endpoint is the usual
-              cause.
+              Most often the model key or address is wrong: fix it in Settings →
+              Model (<em>Check &amp; list models</em> tells you what is wrong).
             </p>
             <h3><code>status=203/EXEC</code></h3>
             <p>
-              systemd could not execute the command. For the engine, Mav uses a
-              launcher that resolves the opencode binary at runtime — so this
-              only happens if opencode is truly missing. Install it and restart:
+              The engine binary is missing. Install it and restart:
             </p>
             <pre><code>curl -fsSL https://opencode.ai/install | bash
 sudo systemctl restart mav-server</code></pre>
             <p>
-              Installed opencode elsewhere? Point the launcher at it via
-              <code>MAV_OPENCODE_BIN</code> in <code>/etc/mav-server.env</code>.
+              Installed elsewhere? Set <code>MAV_OPENCODE_BIN</code> in
+              <code>/etc/mav-server.env</code>.
             </p>
-            <h3><code>Missing key mcp.&lt;name&gt;.enabled</code></h3>
+            <h3>A connection broke the assistant</h3>
             <p>
-              opencode refused to start because an MCP server entry is invalid.
-              opencode requires either a full definition or just
-              <code>{"enabled": …}</code>:
+              Settings validates connections before saving, but a server that
+              fails at start can still block the engine. Turn it off in
+              Settings → Connections, then <em>Apply</em>.
             </p>
-            <pre><code>// local — command is an ARRAY, env vars go in "environment"
-{ "type": "local", "command": ["npx", "-y", "pkg"], "enabled": true }
-
-// remote
-{ "type": "remote", "url": "https://…/mcp", "enabled": true }</code></pre>
-            <div class="docs-note">
-              The dashboard now validates MCP config before saving: it coerces
-              the common <code>type:"stdio"</code> + <code>command</code> +
-              <code>args</code> + <code>env</code> shape into opencode's format,
-              and rejects anything it cannot fix with an explanation — so a bad
-              edit can no longer break startup.
-            </div>
-            <h3>A reboot shows a failed unit</h3>
+            <h3>Routines or alerts don't arrive</h3>
+            <pre><code>journalctl -u mav-worker -n 50</code></pre>
             <p>
-              Run <code>systemctl --failed</code> and
-              <code>journalctl -b -p err</code> to see what failed. Mav's own
-              units are ordered after the network and are idempotent; the engine
-              launcher retries until opencode is available.
+              Check that notifications are on for this device (Settings →
+              General → <em>Send a test</em>) and that you are not in quiet
+              hours.
             </p>
-            <h3>The bot doesn't reply</h3>
-            <pre><code>journalctl -u mav-bot -n 50</code></pre>
-            <p>
-              An invalid Telegram token or a chat id not in the allowlist are
-              the common ones.
-            </p>
-            <h3>The dashboard doesn't answer</h3>
+            <h3>The web app doesn't load</h3>
             <pre><code>journalctl -u mav-dashboard -n 50
-curl -k https://&lt;your-ip&gt;/api/status</code></pre>
+curl -k https://&lt;your-mav&gt;/api/status</code></pre>
             <h3>Start over cleanly</h3>
             <pre><code>mav uninstall
-docker volume rm mav_pgdata      # also wipes the memory</code></pre>
+docker volume rm mav_pgdata      # also erases the memory</code></pre>
           </section>
 
           <p

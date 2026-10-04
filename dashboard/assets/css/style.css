@@ -2746,3 +2746,11 @@ body[data-mode="mock"] .engine-chip-text::after {
     justify-content: flex-end;
   }
 }
+button.memory-updated {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+button.memory-updated:hover {
+  text-decoration: underline;
+}

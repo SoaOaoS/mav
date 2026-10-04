@@ -1021,7 +1021,7 @@ def get_memory(limit: int = 40) -> dict:
             "from conversations order by ts desc limit %s",
             (limit,),
         ),
-        "facts": q("select id, fact, source, ts from facts order by ts desc limit 100"),
+        "facts": q("select id, fact, source, ts from facts order by ts desc limit 200"),
         "preferences": q("select key, value, ts from preferences order by ts desc limit 20"),
         "backend": MEMORY.backend if MEMORY else "none",
         "enabled": MEMORY_ENABLED,
@@ -1290,6 +1290,69 @@ def _clean_title(raw: str) -> str:
     if not words or len(words) > 8:
         return ""
     return " ".join(words)[:48]
+
+
+def quick_completion(instruction: str, agent: str = "", timeout: float = 90) -> str:
+    """One-shot model call in a throwaway session (titles, fact extraction)."""
+    tmp = None
+    try:
+        tmp = http_json(f"{OPENCODE_URL}/session", method="POST", body={"title": "mav-internal"}, timeout=10)["id"]
+        body = {"parts": [{"type": "text", "text": instruction}], **_model_body()}
+        if agent and agent in valid_agents():
+            body["agent"] = agent
+        res = http_json(f"{OPENCODE_URL}/session/{tmp}/message", method="POST", body=body, timeout=timeout)
+        return _part_text((res or {}).get("parts") or [])
+    except Exception:  # noqa: BLE001
+        return ""
+    finally:
+        if tmp:
+            delete_session(tmp)
+
+
+# ------------------------------------------------------------- learned facts
+# Like ChatGPT's memory: when a message says something about the user, durable
+# facts are extracted in the background and saved (source "learned").
+
+ABOUT_ME_RE = re.compile(
+    r"\b(i|i'm|im|i've|i'd|my|mine|me|we|we're|our|us|je|j'|moi|mon|ma|mes|nous|notre|nos)\b",
+    re.I,
+)
+
+
+def learn_facts(prompt: str) -> int:
+    if not (MEMORY and MEMORY_ENABLED) or not ABOUT_ME_RE.search(prompt) or len(prompt) > 4000:
+        return 0
+    instruction = (
+        "Extract durable personal facts about the user from their message below: "
+        "things worth remembering in future conversations (where they live, job, "
+        "family, health or diet, preferences, recurring constraints, goals). "
+        "Ignore one-off requests and anything about other topics. Write each fact "
+        "as a short third-person sentence starting with 'User', in the language "
+        "of the message, one per line, each line starting with '- '. If there is "
+        "nothing durable, reply exactly NONE.\n\n"
+        f"Message: {prompt.strip()[:2000]}"
+    )
+    raw = quick_completion(instruction, timeout=120)
+    if not raw or raw.strip().upper().startswith("NONE"):
+        return 0
+    known = [f["fact"].lower() for f in MEMORY.facts(DEFAULT_CHAT_ID, limit=200)]
+    added = 0
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line.startswith(("-", "•", "*")):
+            continue
+        fact = line.lstrip("-•* ").strip().rstrip(".")
+        if len(fact) < 6 or len(fact) > 240:
+            continue
+        low = fact.lower()
+        if any(low in k or k in low for k in known):
+            continue
+        if MEMORY.add_fact(DEFAULT_CHAT_ID, fact, source="learned"):
+            known.append(low)
+            added += 1
+        if added >= 3:
+            break
+    return added
 
 
 def generate_title(sid: str, prompt: str, answer: str) -> None:
@@ -1876,6 +1939,7 @@ def stream_answer(
         threading.Thread(
             target=remember_exchange, args=(prompt, final, sid, ag), daemon=True
         ).start()
+        threading.Thread(target=learn_facts, args=(prompt,), daemon=True).start()
         if needs_title:
             threading.Thread(
                 target=generate_title, args=(sid, prompt, final), daemon=True

@@ -44,6 +44,9 @@ def reply_for(body: dict) -> str:
     if prompt.startswith("Write a title of 2 to 5 words"):
         user = prompt.split("User:", 1)[-1].strip().split()
         return " ".join(w.capitalize() for w in user[:3]) or "Short chat"
+    if prompt.startswith("Extract durable personal facts"):
+        msg = prompt.split("Message:", 1)[-1].strip()
+        return f"- User said: {msg[:80]}" if " I " in f" {msg} " else "NONE"
     memory = any("<memory>" in t for t in texts)
     agent = body.get("agent") or "default"
     return (

@@ -281,6 +281,12 @@ class Memory:
         if not fact:
             return False
         try:
+            dup = self._q(
+                "SELECT 1 FROM facts WHERE chat_id = %s AND lower(fact) = lower(%s) LIMIT 1",
+                (chat_id, fact),
+            )
+            if dup:
+                return True
             self._q(
                 "INSERT INTO facts (chat_id, fact, source, ts) VALUES (%s, %s, %s, %s)",
                 (chat_id, fact, source, int(time.time())),
