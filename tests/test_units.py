@@ -861,8 +861,11 @@ class RunRegistry(unittest.TestCase):
             ("start", {"agent": "assistant", "recalled": 0}),
             ("delta", {"delta": "Hello "}),
             ("delta", {"delta": "world"}),
-            ("tool", {"name": "bash", "status": "running"}),
-            ("tool", {"name": "bash", "status": "completed"}),
+            ("tool", {"id": "c1", "name": "bash", "status": "running"}),
+            ("tool", {"id": "c1", "name": "bash", "status": "completed"}),
+            ("tool", {"id": "c2", "name": "task", "status": "running", "detail": "writer"}),
+            ("reset", {"text": "Hello"}),
+            ("delta", {"delta": " world"}),
             ("done", {"text": "Hello world"}),
         ])
         run.start()
@@ -870,8 +873,11 @@ class RunRegistry(unittest.TestCase):
         snap = run.snapshot()
         self.assertEqual(snap["text"], "Hello world")
         self.assertEqual(snap["status"], "done")
-        self.assertEqual(snap["tools"], [{"name": "bash", "status": "completed"}])
-        self.assertEqual(snap["seq"], 6)
+        self.assertEqual(snap["tools"], [
+            {"id": "c1", "name": "bash", "status": "completed", "detail": ""},
+            {"id": "c2", "name": "task", "status": "running", "detail": "writer"},
+        ])
+        self.assertEqual(snap["seq"], 9)
 
     def test_follow_replays_from_cursor(self):
         run = self._make([

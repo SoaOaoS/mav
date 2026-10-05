@@ -11,6 +11,8 @@ Python server behind it.
 
 ```bash
 # 1. a fake agent engine with canned answers
+# ("research …" prompts — or all, with --multi-step — answer in several
+#  steps, word by word, like a turn that calls a helper)
 python3 dashboard/tools/fake_engine.py --port 4096 &
 
 # 2. the web app (Postgres optional: without it, memory is disabled)
@@ -55,6 +57,13 @@ talks to the opencode engine, and reads/writes Postgres.
   lock live in `BOT_DIR/dash_sessions.json`.
 - Routine chats are titled `dash: Routine · <name>` — the worker posts
   scheduled runs there, the dashboard posts _Run now_ runs there.
+- An answer runs server-side, detached from the browser (`/api/runs`); a tab
+  that comes back, or a connection that drops, resumes it from its cursor.
+  The server follows the engine's `/event` stream (polling only as a
+  fallback), and a turn the engine stored as several steps — tools, helpers —
+  is shown as **one** message, exactly as it was streamed.
+- Titles and learned facts are produced after the answer, in one model call,
+  queued until no answer is running — never competing with the next reply.
 - Memory (facts + exchanges) is injected as a hidden part when a chat starts,
   and each answer is stored (`bot/ocmemory.py`, shared with the worker).
 - The model provider is written by `server/mav_provider.py`, the same module
@@ -63,8 +72,8 @@ talks to the opencode engine, and reads/writes Postgres.
 | Method   | Route                                                                                | Purpose                                                                          |
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | GET      | `/api/status`                                                                        | assistant health, model, counters                                                |
-| GET      | `/api/stream?prompt=&session=&agent=`                                                | **SSE** answer (`start`, `delta`, `done`, `error`)                               |
-| GET      | `/api/sessions`, `/api/session?id=`                                                  | chats, one chat's messages                                                       |
+| GET      | `/api/stream?prompt=&session=&agent=`                                                | **SSE** answer (`start`, `delta`, `reset`, `tool`, `done`, `error`); `&from=N` resumes |
+| GET      | `/api/sessions`, `/api/session?id=`                                                  | chats, one chat's messages (one per turn; `running` = answer in progress) |
 | POST     | `/api/session/new` · `rename` · `delete` · `abort` · `summary` · `agent` · `pin`     | chat actions                                                                     |
 | GET      | `/api/session/export?id=`                                                            | Markdown export                                                                  |
 | GET      | `/api/agents`                                                                        | helpers with descriptions, and the default                                       |
