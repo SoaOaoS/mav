@@ -17,10 +17,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
       - name: Python dependencies (worker)
         run: python -m pip install -q -r bot/requirements.txt
 
@@ -36,8 +32,6 @@ jobs:
         run: |
           node --check dashboard/assets/js/app.js
           node --check dashboard/sw.js
-          node --check connect/worker.js
-          node --check docs/pricing.js
 
       - name: JSON
         run: python3 -m json.tool dashboard/mcp-catalog.json > /dev/null
@@ -55,4 +49,3 @@ jobs:
           bash tests/test_install.sh
           bash tests/test_postgres.sh
           python3 -m unittest discover -s tests -v
-          node --test tests/connect_worker.test.mjs

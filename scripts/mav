@@ -389,7 +389,7 @@ cmd_backup() {
   [[ -n "$home" && -d "$home/.config/opencode" ]] && cp -a "$home/.config/opencode" "$tmp/mav/opencode"
   if [[ -n "$bot" && -d "$bot" ]]; then
     mkdir -p "$tmp/mav/bot"
-    cp -a "$bot"/jobs.json "$bot"/jobs_state.json "$bot"/push_subs.json "$bot"/vapid_* "$bot"/dash_sessions.json "$bot"/auth.json "$bot"/licence.json "$bot"/usage.json \
+    cp -a "$bot"/jobs.json "$bot"/jobs_state.json "$bot"/push_subs.json "$bot"/vapid_* "$bot"/dash_sessions.json "$bot"/auth.json "$bot"/usage.json \
       "$tmp/mav/bot/" 2>/dev/null || true
   fi
   cat >"$tmp/mav/README.txt" <<EOF

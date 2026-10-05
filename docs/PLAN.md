@@ -1,15 +1,11 @@
 # Mav — backlog features (users)
 
-> Stratégie produit et business (modèle open core, prix, chemin vers 10 M$ ARR,
-> go-to-market, métriques) : voir [BUSINESS.md](BUSINESS.md).
-
 Ce qui est déjà là : chat style ChatGPT, Helpers, mémoire Postgres (+ extraction
 auto de faits), Routines, « Keep an eye on » (page / prix / actu), « For you »,
 push web, PWA, thème sombre, ⌘K, dictée + lecture vocale, pièces jointes,
 graphiques et téléchargements inline, débats multi-agents, catalogue MCP,
-bouton de mise à jour, backup CLI — et, depuis le cycle « produit » : connexion
-par mot de passe, briefing quotidien, usage/coût/budget avec modèle de fond
-bon marché, offres Free/Pro avec licences vérifiées hors ligne, page de tarifs.
+bouton de mise à jour, backup CLI, connexion par mot de passe, briefing
+quotidien, usage/coût/budget avec modèle de fond bon marché.
 
 Ci-dessous, ce qui reste à construire. Effort : **S** ≈ quelques jours,
 **M** ≈ 1-2 semaines, **L** ≈ chantier.

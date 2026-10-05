@@ -1454,153 +1454,6 @@ a.pill:hover {
   }
 }
 
-/* ================= Pricing ================= */
-.pricing-head {
-  text-align: center;
-  padding-top: 120px;
-  display: grid;
-  justify-items: center;
-  gap: 14px;
-}
-.pricing-head h1 {
-  margin: 0;
-}
-.pricing-head .lede {
-  max-width: 620px;
-}
-.billing {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
-}
-.billing button {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  padding: 6px 14px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.billing button.is-active {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.billing em {
-  font-style: normal;
-  font-size: 0.78em;
-  opacity: 0.85;
-  margin-left: 4px;
-}
-.plans {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 16px 40px;
-}
-.plan {
-  position: relative;
-  border-radius: 22px;
-  padding: 28px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.plan h2 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-.plan-sub {
-  margin: 0;
-  opacity: 0.75;
-}
-.plan.is-featured {
-  outline: 2px solid var(--accent);
-  transform: translateY(-6px);
-}
-.plan-flag {
-  position: absolute;
-  top: -12px;
-  left: 24px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.price {
-  margin: 8px 0 6px;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.price strong {
-  font-size: 2.4rem;
-  letter-spacing: -0.02em;
-}
-.price span {
-  opacity: 0.7;
-  font-size: 0.9rem;
-}
-.plan .btn {
-  justify-content: center;
-  text-align: center;
-}
-.plan ul {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 0;
-  display: grid;
-  gap: 10px;
-}
-.plan li {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.plan li svg {
-  flex: none;
-  margin-top: 3px;
-  color: var(--accent);
-}
-.faq {
-  max-width: 760px;
-  margin: 0 auto;
-  display: grid;
-  gap: 10px;
-  padding: 0 16px 80px;
-}
-.faq details {
-  border-radius: 14px;
-  padding: 14px 18px;
-}
-.faq summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-.faq details p {
-  margin: 10px 0 0;
-  opacity: 0.85;
-}
-@media (max-width: 900px) {
-  .plans {
-    grid-template-columns: 1fr;
-    max-width: 480px;
-  }
-  .plan.is-featured {
-    transform: none;
-  }
-  .pricing-head {
-    padding-top: 96px;
-  }
-}
-
 
 /* ==========================================================================
    Brand v2 — "Midnight & Emerald" (see docs/BRAND.md)
@@ -1647,8 +1500,7 @@ body {
 .brand,
 .hero h1,
 .section-head h2,
-.final-cta h2,
-.pricing-head h1 {
+.final-cta h2 {
   font-family: var(--display);
   font-weight: 400;
 }
@@ -1656,8 +1508,7 @@ body {
   font-size: 1.5rem;
   letter-spacing: -0.01em;
 }
-.hero h1,
-.pricing-head h1 {
+.hero h1 {
   font-size: clamp(2.8rem, 6.4vw, 4.6rem);
   line-height: 1;
   letter-spacing: -0.025em;
@@ -1701,20 +1552,6 @@ body {
   background: var(--cta);
   color: var(--on-cta);
 }
-.billing button.is-active,
-.plan-flag {
-  background: var(--cta);
-  color: var(--on-cta);
-}
-.plan.is-featured {
-  outline: 0;
-  box-shadow:
-    0 0 0 1.5px var(--ink),
-    var(--shadow-lg);
-}
-.plan li svg {
-  color: var(--accent);
-}
 
 /* Glass: crisper, hairline rings. */
 .glass {
@@ -1745,88 +1582,3 @@ body {
   }
 }
 
-.plan .soon {
-  font-style: normal;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  margin-left: 4px;
-  border-radius: 99px;
-  background: var(--signal-soft);
-  color: color-mix(in srgb, var(--signal) 75%, var(--ink));
-  vertical-align: 1px;
-}
-.business {
-  max-width: 1100px;
-  margin: 0 auto 40px;
-  width: calc(100% - 32px);
-  border-radius: 22px;
-  padding: 26px 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-.business h2 {
-  margin: 0 0 6px;
-  font-family: var(--display);
-  font-weight: 400;
-  font-size: 1.9rem;
-}
-.business p {
-  margin: 0;
-  color: var(--ink-2);
-  max-width: 680px;
-}
-.business .btn {
-  flex: none;
-}
-@media (max-width: 900px) {
-  .business {
-    flex-direction: column;
-    align-items: stretch;
-    max-width: 480px;
-  }
-}
-
-/* ================= Thanks (after checkout) ================= */
-.thanks .orb.big {
-  margin-bottom: 6px;
-}
-.steps-thanks {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 16px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-.steps-thanks article {
-  border-radius: 20px;
-  padding: 22px;
-}
-.steps-thanks h2 {
-  margin: 10px 0 6px;
-  font-size: 1.1rem;
-}
-.steps-thanks p {
-  margin: 0;
-  color: var(--ink-2);
-}
-.thanks-foot {
-  text-align: center;
-  color: var(--ink-2);
-  padding: 28px 16px 80px;
-}
-@media (max-width: 860px) {
-  .steps-thanks {
-    grid-template-columns: 1fr;
-    max-width: 520px;
-  }
-}
-.thanks-foot a {
-  color: var(--accent);
-  font-weight: 600;
-}

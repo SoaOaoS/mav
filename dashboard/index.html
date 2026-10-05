@@ -121,7 +121,7 @@
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <div class="orb" aria-hidden="true"></div>
-          <span class="brand-name">Mav</span><span class="plan-badge is-pro brand-pro" id="brandPro" hidden>Connect</span>
+          <span class="brand-name">Mav</span>
           <button
             class="icon-btn"
             id="searchOpen"
@@ -607,7 +607,6 @@
               <button class="tab" data-stab="helpers">Helpers</button>
               <button class="tab" data-stab="connections">Connections</button>
               <button class="tab" data-stab="usage">Usage</button>
-              <button class="tab" data-stab="plan">Plan</button>
               <button class="tab" data-stab="general">General</button>
             </div>
 
@@ -828,46 +827,6 @@
                 </div>
               </div>
               <p class="hint">Costs come from your model provider's prices as reported by the engine; a local model (Ollama) costs nothing here.</p>
-            </div>
-
-            <!-- Plan: Free / Pro, licence key -->
-            <div class="spanel" id="spanel-plan">
-              <div class="plan-hero card">
-                <div>
-                  <span class="plan-badge" id="planBadge">Mav</span>
-                  <h3 id="planTitle">Mav is free, with no limits</h3>
-                  <p id="planLead">Everything runs on your machine. Mav Connect adds services that need the cloud.</p>
-                </div>
-                <a class="btn btn-primary" id="planUpgrade" target="_blank" rel="noopener">Get Mav Connect</a>
-              </div>
-              <div class="card">
-                <div class="card-head"><h2>Mav Connect</h2></div>
-                <ul class="plan-services" id="planServices"></ul>
-              </div>
-              <div class="card" id="backupCard" hidden>
-                <div class="card-head"><h2>Cloud backup</h2></div>
-                <p class="hint" id="backupText">—</p>
-                <div class="row backup-acts">
-                  <button class="btn btn-primary btn-sm" id="backupNow">Back up now</button>
-                  <button class="btn btn-ghost btn-sm" id="backupKey">Recovery key</button>
-                  <button class="btn btn-ghost btn-sm" id="backupRestoreOther">Restore from another machine…</button>
-                </div>
-                <ul class="backup-list" id="backupList"></ul>
-              </div>
-              <div class="card">
-                <div class="setting-row">
-                  <div>
-                    <strong>Licence key</strong>
-                    <span id="licenceText">Paste the key from your purchase email. It is checked on this machine — Mav never calls home.</span>
-                  </div>
-                </div>
-                <div class="row licence-row">
-                  <input type="text" id="licenceKey" class="num-input wide" placeholder="MAV1.…" autocomplete="off" spellcheck="false" />
-                  <button class="btn btn-primary btn-sm" id="licenceSave">Activate</button>
-                  <button class="btn btn-ghost btn-sm" id="licenceRemove" hidden>Remove</button>
-                </div>
-              </div>
-              <p class="hint">Mav is open source and free forever, without limits. Connect pays for the cloud services — and for Mav's development.</p>
             </div>
 
             <div class="spanel" id="spanel-general">

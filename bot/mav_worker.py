@@ -24,7 +24,6 @@ from pathlib import Path
 import httpx
 
 import ocbriefing
-import occonnect
 import ocevents
 import ocusage
 from ocbus import EventBus
@@ -546,32 +545,6 @@ async def digest_loop() -> None:
         await asyncio.sleep(60)
 
 
-# ---------------------------------------------------------------- connect
-
-
-async def connect_backup_loop() -> None:
-    """Mav Connect: one encrypted cloud backup a day, at night when possible.
-
-    Runs only with a licence key and a configured service; the service itself
-    decides whether the licence includes backups (server-side check)."""
-    from ocmemory import PG_DSN  # noqa: PLC0415
-
-    backup = occonnect.Backup(BOT_DIR, PG_DSN)
-    while True:
-        wait = 1800
-        try:
-            night = datetime.now().hour in (2, 3, 4, 5)
-            if backup.due(hours=20 if night else 30):
-                res = await asyncio.to_thread(backup.backup_now)
-                log.info("connect: backup %s (%d bytes)", res.get("id"), res.get("size", 0))
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            log.warning("connect: backup failed: %s", exc)
-            wait = 6 * 3600  # e.g. no valid licence: don't retry every half hour
-        await asyncio.sleep(wait)
-
-
 # ---------------------------------------------------------------- lifecycle
 
 
@@ -607,7 +580,6 @@ async def main() -> None:
     watch_task = asyncio.create_task(watch.run())
     events_task = asyncio.create_task(events_loop())
     digest_task = asyncio.create_task(digest_loop())
-    connect_task = asyncio.create_task(connect_backup_loop())
     # Self-init first, then the pursuit loop: Mav gives itself the watchdogs
     # its interests require before deciding whether to reach out.
     selfinit_task = asyncio.create_task(self_init_loop())
@@ -627,7 +599,6 @@ async def main() -> None:
     watch_task.cancel()
     events_task.cancel()
     digest_task.cancel()
-    connect_task.cancel()
     selfinit_task.cancel()
     pursuit_task.cancel()
     await scheduler.stop()

@@ -32,13 +32,13 @@ The wordmark is "Mav" in Instrument Serif, never all caps.
 | Line | `#E6E5DF` | `#22272D` | hairlines |
 | **Emerald** (brand) | `#0F7A5C` | `#34D39D` | app actions, links, the disc |
 | Emerald soft | `#E4F2EC` | `#0F2A21` | selected states, notices |
-| **Amber** (signal) | `#E8962E` | `#F5B04F` | proactive moments only: briefing, alerts, Pro |
+| **Amber** (signal) | `#E8962E` | `#F5B04F` | proactive moments only: briefing, alerts |
 | Danger | `#C2412D` | `#F0806D` | errors, destructive actions |
 
-Two rules make it feel expensive:
-1. **Amber is rare.** It marks Mav reaching out (the *Brief me* chip, Pro,
+Two rules keep it calm:
+1. **Amber is rare.** It marks Mav reaching out (the *Brief me* chip,
    the orbit). If everything is amber, nothing is.
-2. **Marketing CTAs are ink, app actions are emerald.** The site sells
+2. **Marketing CTAs are ink, app actions are emerald.** The site invites
    calmly; the app acts clearly.
 
 ## Type

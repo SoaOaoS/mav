@@ -62,17 +62,6 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   installs it for you; changes that need a restart show a _Restart assistant_
   bar until you apply them.
 
-## Free, and Mav Connect
-
-Mav is open source (MIT) and **free without limits** on your own machine —
-chat, helpers, memory, the daily briefing, unlimited routines and watches.
-**Mav Connect** ([pricing](https://soaoaos.github.io/mav/pricing.html)) adds
-services that need the cloud: encrypted cloud backup today, secure remote
-access and a native mobile app next, and priority support. Paste your
-licence key in Settings → Plan. Mav then backs itself up every night —
-memory, chats, routines, settings — encrypted on your machine with your
-recovery key before anything leaves it.
-
 ## Install
 
 On a Linux machine with systemd — Debian, Ubuntu, Arch (Omarchy, Manjaro…)
@@ -193,12 +182,11 @@ mav/
 ├── agents/             # the everyday helpers (Assistant, Researcher, …)
 ├── bot/                # mav-worker: routines, watching, memory, notifications
 ├── dashboard/          # the web app (front-end + server/)
-├── connect/            # Mav Connect service (Cloudflare Worker + R2)
 ├── scripts/mav         # the mav command
 ├── scripts/            # database schema, version helper
 ├── tests/              # unit and script tests (run by CI)
 ├── systemd/            # service templates
-└── docs/               # website, docs, roadmap (PLAN.md), business (BUSINESS.md), brand (BRAND.md)
+└── docs/               # website, docs, roadmap (PLAN.md), brand (BRAND.md)
 ```
 
 Hacking on the web app without a model: run
