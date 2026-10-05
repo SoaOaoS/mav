@@ -189,7 +189,6 @@ def detect_observations(text: str) -> list[dict]:
     text = str(text or "")
     if not text.strip():
         return []
-    hay = fold(text)
     out: list[dict] = []
     seen: set[str] = set()
 
