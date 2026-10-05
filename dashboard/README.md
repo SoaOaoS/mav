@@ -68,12 +68,11 @@ talks to the opencode engine, and reads/writes Postgres.
   schedule in the worker, or *Brief me*), `bot/ocbriefing.py` gathers facts,
   the last day's alerts and reports, pending drafts and interests into a
   hidden context; the chat shows only "Brief me on my day.".
-- Plans live in `server/mav_licence.py`: Free limits (5 active routines, 5
-  watch items; the briefing never counts), Pro = unlimited. A licence key
-  (`MAV1.<payload>.<Ed25519 signature>`) is verified offline against the
-  built-in public key and stored in `BOT_DIR/licence.json`. Over a limit,
-  creating or re-enabling answers HTTP 402 `{upgrade: true}` and the app
-  offers the upgrade. Keys are issued with `scripts/licence-tool.py`.
+- Plans live in `server/mav_licence.py`. Mav has **no limits** on any plan;
+  Mav Connect adds services that run on Mav's infrastructure (cloud backup
+  first). A licence key (`MAV1.<payload>.<Ed25519 signature>`) is checked
+  offline to show the plan, and server-side by the Connect services. Keys are
+  issued with `scripts/licence-tool.py`.
 - Every answer's `tokens` and `cost` (as the engine reports them) go to
   `BOT_DIR/usage.json` via `bot/ocusage.py` — by the web app (chats,
   background calls) and the worker (routines). A "stop" budget that is used up
@@ -86,7 +85,7 @@ talks to the opencode engine, and reads/writes Postgres.
 
 | Method   | Route                                                                                | Purpose                                                                          |
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| GET | `/api/plan` · POST `/api/plan/licence` (`{key}`) · `/api/plan/remove` | Free/Pro plan, limits in use, licence key |
+| GET | `/api/plan` · POST `/api/plan/licence` (`{key}`) · `/api/plan/remove` | plan (Mav / Connect), Connect services, licence key |
 | GET | `/api/usage?days=30` · POST `/api/usage/budget` (`{monthly_usd, action: warn|stop}`) · `/api/usage/small-model` | cost, tokens, budget, background model |
 | GET/POST | `/api/briefing` (`{enabled, time}`), POST `/api/briefing/run` | daily briefing settings / brief me now (returns the chat to open) |
 | GET/POST | `/api/auth/state` · `setup` · `login` · `logout` · `password` | sign-in |

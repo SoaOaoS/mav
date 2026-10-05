@@ -5,9 +5,9 @@
     scripts/licence-tool.py keygen --out mav-licence-private.key
     # then set PUBLIC_KEY in dashboard/server/mav_licence.py to the printed value
 
-    # issue a Pro key for a customer, valid one year
+    # issue a Mav Connect key for a customer, valid one year
     scripts/licence-tool.py issue --key mav-licence-private.key \\
-        --email jane@example.com --plan pro --days 365
+        --email jane@example.com --plan connect --days 365
 
     # check any key against the built-in public key
     scripts/licence-tool.py check MAV1.xxxxx.yyyyy
@@ -54,7 +54,7 @@ def main() -> None:
     i = sub.add_parser("issue")
     i.add_argument("--key", type=Path, required=True, help="private key file")
     i.add_argument("--email", required=True)
-    i.add_argument("--plan", default="pro", choices=sorted(mav_licence.PLANS))
+    i.add_argument("--plan", default="connect", choices=sorted(mav_licence.PLANS))
     i.add_argument("--days", type=int, default=365, help="0 = never expires")
     c = sub.add_parser("check")
     c.add_argument("licence")

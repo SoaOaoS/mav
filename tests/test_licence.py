@@ -1,4 +1,4 @@
-"""Mav Free / Pro: offline licence keys and the plan limits.
+"""Mav and Mav Connect: offline licence keys, plans, and no limits on Mav itself.
 
 Run: python3 -m unittest discover -s tests -v
 """
@@ -41,12 +41,16 @@ class LicenceTest(unittest.TestCase):
         mav_licence.PUBLIC_KEY = cls.saved
 
     def key(self, **payload):
-        return mav_licence.sign({"email": "a@b.c", "plan": "pro", **payload}, self.priv)
+        return mav_licence.sign({"email": "a@b.c", "plan": "connect", **payload}, self.priv)
 
     def test_valid_key(self):
         info = mav_licence.verify(self.key(exp=int(time.time()) + 3600))
         self.assertTrue(info["valid"])
-        self.assertEqual((info["plan"], info["email"]), ("pro", "a@b.c"))
+        self.assertEqual((info["plan"], info["email"]), ("connect", "a@b.c"))
+
+    def test_first_edition_pro_keys_are_connect(self):
+        info = mav_licence.verify(self.key(plan="pro"))
+        self.assertEqual(info["plan"], "connect")
 
     def test_rejections(self):
         good = self.key()
@@ -72,17 +76,18 @@ class LicenceTest(unittest.TestCase):
     def test_store_and_limits(self):
         lic = mav_licence.Licence(Path(tempfile.mkdtemp()) / "licence.json")
         self.assertEqual(lic.plan(), "free")
-        self.assertTrue(lic.allows("routines", 4))
-        self.assertFalse(lic.allows("routines", 5))
+        self.assertFalse(lic.has("backup"))
         self.assertFalse(lic.save("nope")["ok"])
         self.assertTrue(lic.save(self.key())["ok"])
-        self.assertEqual(lic.plan(), "pro")
-        self.assertTrue(lic.allows("routines", 500))
+        self.assertEqual(lic.plan(), "connect")
+        self.assertTrue(lic.has("backup"))
         lic.remove()
         self.assertEqual(lic.plan(), "free")
 
 
-class PlanGateTest(unittest.TestCase):
+class NoLimitsTest(unittest.TestCase):
+    """Mav itself is free without limits; Connect only adds services."""
+
     def setUp(self):
         self.priv, pub = keypair()
         self.saved = (mav_api.JOBS_FILE, mav_api.LICENCE, mav_licence.PUBLIC_KEY)
@@ -94,34 +99,23 @@ class PlanGateTest(unittest.TestCase):
     def tearDown(self):
         mav_api.JOBS_FILE, mav_api.LICENCE, mav_licence.PUBLIC_KEY = self.saved
 
-    def job(self, name, **kw):
-        return mav_api.save_job({"name": name, "prompt": "do it", "time": "08:00", **kw})
+    def test_free_has_no_routine_limit(self):
+        for i in range(12):
+            res = mav_api.save_job({"name": f"r{i}", "prompt": "do it", "time": "08:00"})
+            self.assertTrue(res["ok"], res)
+        self.assertTrue(mav_api.set_job_enabled("r3", False))
+        self.assertTrue(mav_api.set_job_enabled("r3", True))
 
-    def test_free_limit_on_new_routines_only(self):
-        for i in range(5):
-            self.assertTrue(self.job(f"r{i}")["ok"])
-        res = self.job("r5")
-        self.assertFalse(res["ok"])
-        self.assertTrue(res["upgrade"])
-        self.assertTrue(self.job("r0", original="r0", prompt="changed")["ok"])  # editing is fine
-        # The daily briefing never counts.
-        self.assertTrue(mav_api.set_briefing(True, "07:00")["ok"])
-        self.assertEqual(mav_api.active_routines(), 5)
-        # Switch one off: room for a new one.
-        self.assertTrue(mav_api.set_job_enabled("r1", False))
-        self.assertTrue(self.job("r5")["ok"])
-        # Turning the first back on is over the limit.
-        self.assertIsInstance(mav_api.set_job_enabled("r1", True), dict)
-
-    def test_pro_lifts_the_limit(self):
-        key = mav_licence.sign({"email": "a@b.c", "plan": "pro"}, self.priv)
-        self.assertTrue(mav_api.LICENCE.save(key)["ok"])
-        for i in range(8):
-            self.assertTrue(self.job(f"p{i}")["ok"])
+    def test_plan_lists_connect_services(self):
         plan = mav_api.get_plan()
-        self.assertEqual(plan["plan"], "pro")
-        self.assertIsNone(plan["limits"]["routines"])
-        self.assertEqual(plan["used"]["routines"], 8)
+        self.assertEqual(plan["plan"], "free")
+        backup = next(x for x in plan["services"] if x["id"] == "backup")
+        self.assertFalse(backup["included"])
+        key = mav_licence.sign({"email": "a@b.c", "plan": "connect"}, self.priv)
+        self.assertTrue(mav_api.LICENCE.save(key)["ok"])
+        plan = mav_api.get_plan()
+        self.assertEqual(plan["plan"], "connect")
+        self.assertTrue(next(x for x in plan["services"] if x["id"] == "backup")["included"])
 
 
 if __name__ == "__main__":

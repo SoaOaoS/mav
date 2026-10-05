@@ -4081,3 +4081,48 @@ kbd {
 ::selection {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
+
+/* Plan: Connect services */
+.plan-services {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.plan-services li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.plan-services li:last-child {
+  border-bottom: 0;
+}
+.plan-services li div {
+  display: grid;
+  gap: 2px;
+}
+.plan-services span {
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+.svc-tag {
+  flex: none;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--bg-sunk);
+  color: var(--ink-2);
+}
+.svc-tag.is-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.svc-tag.is-soon {
+  background: var(--signal-soft);
+  color: color-mix(in srgb, var(--signal) 70%, var(--ink));
+}

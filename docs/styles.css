@@ -1744,3 +1744,49 @@ body {
       0 8px 24px -10px rgba(52, 211, 157, 0.45);
   }
 }
+
+.plan .soon {
+  font-style: normal;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 99px;
+  background: var(--signal-soft);
+  color: color-mix(in srgb, var(--signal) 75%, var(--ink));
+  vertical-align: 1px;
+}
+.business {
+  max-width: 1100px;
+  margin: 0 auto 40px;
+  width: calc(100% - 32px);
+  border-radius: 22px;
+  padding: 26px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.business h2 {
+  margin: 0 0 6px;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.9rem;
+}
+.business p {
+  margin: 0;
+  color: var(--ink-2);
+  max-width: 680px;
+}
+.business .btn {
+  flex: none;
+}
+@media (max-width: 900px) {
+  .business {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 480px;
+  }
+}
