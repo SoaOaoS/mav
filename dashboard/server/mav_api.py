@@ -126,7 +126,15 @@ try:
 except Exception:  # noqa: BLE001
     ocselfinit = None
 
+import mav_auth  # noqa: E402
 import mav_provider  # noqa: E402
+
+# Sign-in (one owner password). MAV_AUTH=off disables it, e.g. behind your own
+# authenticating proxy.
+AUTH = mav_auth.Auth(
+    Path(os.environ.get("MAV_AUTH_FILE", BOT_DIR / "auth.json")),
+    enabled=os.environ.get("MAV_AUTH", "on").lower() not in ("off", "0", "false", "no"),
+)
 
 # Agents offered in the dashboard selector.
 # Everyday helpers shipped with Mav, in the order they are offered.
@@ -3881,7 +3889,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send(self, code: int, payload, ctype="application/json"):
+    def _send(self, code: int, payload, ctype="application/json", headers=None):
         if isinstance(payload, (dict, list)):
             data = json.dumps(payload, ensure_ascii=False, default=_json_default).encode()
         else:
@@ -3890,9 +3898,65 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "same-origin")
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
+
+    # ---- sign-in -------------------------------------------------------
+    def _guard(self, path: str) -> bool:
+        """False (and a 401 sent) when this API call needs a session."""
+        if AUTH.allowed(path, self.headers.get("Cookie", "")):
+            return True
+        self._send(401, {"error": "sign in required", "auth": True})
+        return False
+
+    def _secure(self) -> bool:
+        return bool(getattr(self.server, "is_tls", False)) or (
+            self.headers.get("X-Forwarded-Proto", "") == "https"
+        )
+
+    def _auth_post(self, path: str, payload: dict):
+        who = self.client_address[0] if self.client_address else "?"
+        cookie = self.headers.get("Cookie", "")
+        if path == "/api/auth/logout":
+            return self._send(200, {"ok": True}, headers={
+                "Set-Cookie": AUTH.set_cookie("", self._secure(), clear=True)})
+        if path == "/api/auth/setup":
+            if AUTH.configured():
+                return self._send(409, {"error": "A password is already set. Sign in instead."})
+            try:
+                AUTH.set_password(payload.get("password", ""))
+            except ValueError as exc:
+                return self._send(400, {"error": str(exc)})
+            return self._send(200, {"ok": True}, headers={
+                "Set-Cookie": AUTH.set_cookie(AUTH.issue(), self._secure())})
+        if path == "/api/auth/login":
+            wait = AUTH.throttled(who)
+            if wait:
+                return self._send(429, {"error": f"Too many attempts. Try again in {int(wait) + 1} s."})
+            if not AUTH.check_password(payload.get("password", "")):
+                AUTH.failed(who)
+                return self._send(401, {"error": "Wrong password."})
+            AUTH.succeeded(who)
+            return self._send(200, {"ok": True}, headers={
+                "Set-Cookie": AUTH.set_cookie(AUTH.issue(), self._secure())})
+        if path == "/api/auth/password":
+            if AUTH.configured() and not AUTH.valid(AUTH.cookie_token(cookie)):
+                return self._send(401, {"error": "sign in required", "auth": True})
+            if AUTH.configured() and not AUTH.check_password(payload.get("current", "")):
+                AUTH.failed(who)
+                return self._send(400, {"error": "The current password is wrong."})
+            try:
+                AUTH.set_password(payload.get("password", ""))
+            except ValueError as exc:
+                return self._send(400, {"error": str(exc)})
+            # Every other device is signed out; this one gets a fresh session.
+            return self._send(200, {"ok": True}, headers={
+                "Set-Cookie": AUTH.set_cookie(AUTH.issue(), self._secure())})
+        return self._send(404, {"error": "not found"})
 
     def _sse_open(self):
         self.send_response(200)
@@ -3900,7 +3964,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")
         self.send_header("X-Accel-Buffering", "no")
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
     def _body(self) -> dict:
@@ -3922,7 +3985,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, _, _ = self.path.partition("?")
         p = self._params()
+        if not self._guard(path):
+            return
         try:
+            if path == "/api/auth/state":
+                return self._send(200, AUTH.state(self.headers.get("Cookie", "")))
+            if path == "/api/health":
+                return self._send(200, {"ok": True})
             if path == "/api/status":
                 return self._send(200, get_status())
             if path == "/api/jobs":
@@ -4129,7 +4198,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path, _, _ = self.path.partition("?")
         payload = self._body()
+        if not self._guard(path):
+            return
         try:
+            if path.startswith("/api/auth/"):
+                return self._auth_post(path, payload)
             if path == "/api/ask":
                 prompt = (payload.get("prompt") or "").strip()
                 if not prompt:
@@ -4404,6 +4477,7 @@ def main():
     if TLS_PORT and TLS_CERT and TLS_KEY:
         try:
             tsrv = ThreadedHTTPServer((BIND, TLS_PORT), Handler)
+            tsrv.is_tls = True  # session cookies get the Secure flag
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ctx.load_cert_chain(TLS_CERT, TLS_KEY)
             tsrv.socket = ctx.wrap_socket(tsrv.socket, server_side=True)

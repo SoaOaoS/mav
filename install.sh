@@ -1028,6 +1028,9 @@ fi
 
 printf "\n  ${GRN}${B}Mav %s is ready.${R}\n\n" "$VERSION"
 printf "  ${B}Open${R}  %s\n" "$DASH_URL"
+if [[ ! -f "$BOT_DIR/auth.json" ]]; then
+  printf "        ${DIM}and choose the password that protects it (first visit only).${R}\n"
+fi
 if [[ "${A[PROVIDER]:-}" == "later" || -z "${A[MODEL_REF]:-}" ]]; then
   printf "        ${DIM}then Settings → Model to connect your AI model.${R}\n"
 fi

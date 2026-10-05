@@ -145,6 +145,7 @@ ${B}mav${R} — control your Mav assistant  ${DIM}($(installed_version))${R}
   ${B}mav logs${R} [service]       follow the logs (engine, worker, web, install)
       -n N                     show the last N lines, then exit
   ${B}mav backup${R} [file]        save memory, routines and settings to a file
+  ${B}mav password${R}             set or reset the password of the web app
   ${B}mav reconfigure${R}          change the model, or re-run the setup
   ${B}mav uninstall${R}            remove the services (your data is kept)
 EOF
@@ -213,7 +214,7 @@ cmd_doctor() {
   if [[ -n "$(env_get "$MAV_ENV_DASH" OPENCODE_MODEL)" ]]; then ok "model: $(env_get "$MAV_ENV_DASH" OPENCODE_MODEL)"
   else warn "no model configured"; info "→ open $(dashboard_url), Settings → Model"; fi
 
-  if [[ -n "$(local_api status)" ]]; then ok "web app answers at $(dashboard_url)"
+  if [[ -n "$(local_api health)" ]]; then ok "web app answers at $(dashboard_url)"
   else bad "web app does not answer"; info "→ mav logs web"; problems=$((problems + 1)); fi
 
   if ! command -v docker >/dev/null 2>&1; then
@@ -388,7 +389,7 @@ cmd_backup() {
   [[ -n "$home" && -d "$home/.config/opencode" ]] && cp -a "$home/.config/opencode" "$tmp/mav/opencode"
   if [[ -n "$bot" && -d "$bot" ]]; then
     mkdir -p "$tmp/mav/bot"
-    cp -a "$bot"/jobs.json "$bot"/jobs_state.json "$bot"/push_subs.json "$bot"/vapid_* "$bot"/dash_sessions.json \
+    cp -a "$bot"/jobs.json "$bot"/jobs_state.json "$bot"/push_subs.json "$bot"/vapid_* "$bot"/dash_sessions.json "$bot"/auth.json \
       "$tmp/mav/bot/" 2>/dev/null || true
   fi
   cat >"$tmp/mav/README.txt" <<EOF
@@ -403,6 +404,17 @@ EOF
   tar czf "$out" -C "$tmp" mav
   chmod 600 "$out"
   echo "Backup saved: $out ($(du -h "$out" | cut -f1)). It contains secrets — keep it private."
+}
+
+cmd_password() {  # set or reset the web app password
+  need_root password "$@"
+  local bot dash user
+  bot="$(env_get "$MAV_ENV_DASH" BOT_DIR)"
+  dash="$(env_get "$MAV_ENV_DASH" MAV_STATIC)"
+  user="$(env_get "$MAV_ENV_DASH" MAV_INSTALL_USER)"
+  [[ -n "$bot" && -f "$dash/server/mav_auth.py" ]] || die "Mav is not installed here (no $MAV_ENV_DASH)."
+  python3 "$dash/server/mav_auth.py" "$bot/auth.json" || exit 1
+  [[ -n "$user" ]] && chown "$user" "$bot/auth.json" 2>/dev/null || true
 }
 
 cmd_installer() {  # reconfigure / uninstall through the local installer copy
@@ -427,6 +439,7 @@ case "$cmd" in
   restart|start|stop) cmd_service "$cmd" "${1:-all}" ;;
   logs|log) cmd_logs "$@" ;;
   backup) cmd_backup "$@" ;;
+  password|passwd) cmd_password "$@" ;;
   reconfigure|config|model) cmd_installer reconfigure ;;
   uninstall|remove) cmd_installer uninstall ;;
   *) echo "Unknown command: $cmd" >&2; cmd_help >&2; exit 2 ;;
