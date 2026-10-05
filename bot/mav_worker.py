@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
 import signal
 import time
 from datetime import datetime
@@ -28,7 +27,7 @@ import ocevents
 from ocbus import EventBus
 from occonditions import should_run
 from ocinterests import Interests
-from ocjobs import DAYS, Scheduler, load_jobs
+from ocjobs import DAYS, Scheduler, load_jobs, plain_summary
 from ocmemory import Memory
 from ocnotify import _pref, ensure_schema, flush_digest, notify
 from ocprogress import ProgressTracker, follow
@@ -158,16 +157,65 @@ async def run_prompt(session_id: str, prompt: str, agent: str) -> tuple[str, Pro
         return None
 
     try:
+        before = await message_ids(session_id)
         r = await http.post(
             f"{OPENCODE_URL}/session/{session_id}/prompt_async", json=body, timeout=30
         )
         r.raise_for_status()
-        await follow(queue, tracker, ignore, idle_timeout=IDLE_TIMEOUT)
+        # The end is announced on the event stream; a slow poll of the messages
+        # backs it up, so a lost event no longer leaves a routine hanging for
+        # IDLE_TIMEOUT.
+        watchers = [
+            asyncio.create_task(follow(queue, tracker, ignore, idle_timeout=IDLE_TIMEOUT)),
+            asyncio.create_task(poll_until_done(session_id, before, tracker)),
+        ]
+        try:
+            await asyncio.wait(watchers, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for t in watchers:
+                t.cancel()
         if tracker.error:
             return "", tracker
         return await last_assistant_text(session_id), tracker
     finally:
         bus.unsubscribe(session_id, queue)
+
+
+async def message_ids(session_id: str) -> set:
+    try:
+        r = await http.get(f"{OPENCODE_URL}/session/{session_id}/message", timeout=60)
+        r.raise_for_status()
+        return {(e.get("info") or {}).get("id") for e in r.json() or []}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+async def poll_until_done(session_id: str, before: set, tracker: ProgressTracker,
+                          every: float = 5.0) -> None:
+    """Mark the tracker done once the answer's last step has finished."""
+    while not tracker.done:
+        await asyncio.sleep(every)
+        try:
+            r = await http.get(f"{OPENCODE_URL}/session/{session_id}/message", timeout=60)
+            r.raise_for_status()
+            entries = r.json() or []
+        except Exception:  # noqa: BLE001
+            continue
+        new = [
+            e for e in entries
+            if (e.get("info") or {}).get("role") == "assistant"
+            and (e.get("info") or {}).get("id") not in before
+        ]
+        if not new:
+            continue
+        info = new[-1].get("info") or {}
+        finish = info.get("finish")
+        if info.get("error") and finish is not None:
+            err = info.get("error") or {}
+            tracker.error = str(err.get("name") or "error")
+            tracker.done = True
+        elif finish is not None and finish != "tool-calls":
+            tracker.done = True
 
 
 # ------------------------------------------------------------- scheduled jobs
@@ -260,10 +308,22 @@ async def run_events_once() -> int:
         for job in jobs:
             if job.get("enabled", True) and ocevents.matches(job, event):
                 log.info("event %s/%s -> routine %s", event.get("kind"), event.get("id"), job["name"])
-                asyncio.create_task(_safe_run_job(job))
+                _spawn(_safe_run_job(job))
                 fired += 1
         ocevents.consume(event["id"])
     return fired
+
+
+# asyncio keeps only a weak reference to tasks: hold them until they finish,
+# or a routine can be garbage-collected mid-run.
+_TASKS: set = set()
+
+
+def _spawn(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+    return task
 
 
 async def _safe_run_job(job: dict) -> None:

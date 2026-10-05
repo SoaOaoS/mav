@@ -97,6 +97,9 @@ class ProgressTracker:
             self.done = True
         elif etype == "session.idle":
             self.done = True
+        elif etype == "session.status" and (props.get("status") or {}).get("type") == "idle":
+            # Newer engines announce the end this way (session.idle is legacy).
+            self.done = True
 
     # --------------------------------------------------------------- render
 

@@ -74,6 +74,12 @@ def reply_for(body: dict) -> str:
     )
 
 
+def idle(sid: str) -> None:
+    publish({"type": "session.status", "properties": {"sessionID": sid, "status": {"type": "idle"}}})
+    if not OPTS.get("no_idle_legacy"):
+        publish({"type": "session.idle", "properties": {"sessionID": sid}})
+
+
 def _touch(sid: str, entry: dict) -> None:
     publish({"type": "message.updated", "properties": {"info": {**entry["info"], "sessionID": sid}}})
 
@@ -120,6 +126,7 @@ def add_multi_step(sid: str, body: dict) -> None:
         if sid in SESSIONS:
             SESSIONS[sid]["time"]["updated"] = now_ms()
     _touch(sid, final)
+    idle(sid)
 
 
 def add_exchange(sid: str, body: dict, delay: float) -> dict:
@@ -141,6 +148,8 @@ def add_exchange(sid: str, body: dict, delay: float) -> dict:
         MESSAGES[sid].append(answer)
         if sid in SESSIONS:
             SESSIONS[sid]["time"]["updated"] = now_ms()
+    _touch(sid, answer)
+    idle(sid)
     return answer
 
 
