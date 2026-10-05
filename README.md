@@ -62,6 +62,16 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   installs it for you; changes that need a restart show a _Restart assistant_
   bar until you apply them.
 
+## Free and Pro
+
+Mav is open source (MIT) and fully usable for free, on your own machine.
+**Mav Free** includes everything — chat, helpers, memory, the daily briefing,
+connections — with room for 5 active routines and 5 "keep an eye on" items.
+**Mav Pro** lifts those limits and funds development
+([pricing](https://soaoaos.github.io/mav/pricing.html)). Paste your licence key
+in Settings → Plan: it is checked on your machine — Mav never calls home.
+Going over a limit never switches anything off; it only stops new items.
+
 ## Install
 
 On a Linux machine with systemd — Debian, Ubuntu, Arch (Omarchy, Manjaro…)
