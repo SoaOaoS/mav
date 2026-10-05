@@ -736,7 +736,12 @@ async function openChat(id, { push = true } = {}) {
     if (state.chat.id !== id) return;
     state.chat.title = s.title || state.chat.title;
     state.chat.agent = s.agent || state.chat.agent;
-    state.chat.messages = s.messages || [];
+    const st0 = streamOf(id);
+    // While an answer runs, its text belongs to the live bubble only.
+    state.chat.messages =
+      s.running || (st0 && !st0.done)
+        ? dropOpenTurn(s.messages || [])
+        : s.messages || [];
     setChatTitle(state.chat.title);
     renderAgentPills();
     renderThread();
@@ -1484,7 +1489,12 @@ const TOOL_LABELS = {
   websearch: "Searching the web",
   task: "Delegating to a helper",
 };
-function toolLabel(name) {
+function toolLabel(name, detail) {
+  if (detail) {
+    if (name === "task") return `${agentDisplay(detail)} is on it`;
+    if (name === "webfetch") return `Reading ${detail}`;
+    if (name === "websearch") return `Searching “${detail}”`;
+  }
   if (TOOL_LABELS[name]) return TOOL_LABELS[name];
   const m = /^([a-z0-9]+)_(.+)$/.exec(name || "");
   if (m) return `${m[2].replace(/[_-]/g, " ")} · ${m[1]}`;
@@ -1501,7 +1511,7 @@ function renderToolChips(host, tools) {
       (t) =>
         `<span class="tool-chip ${t.status === "running" ? "is-run" : ""}">${I(
           "tool",
-        )}<span>${esc(toolLabel(t.name))}</span></span>`,
+        )}<span>${esc(toolLabel(t.name, t.detail))}</span></span>`,
     )
     .join("");
 }
@@ -1636,9 +1646,19 @@ function applyEvent(st, ev, d) {
   } else if (ev === "delta") {
     st.reply.text += d.delta || "";
     paintStream(st);
+  } else if (ev === "reset") {
+    // The answer was rewritten (not just extended): replace, never append.
+    st.reply.text = d.text || "";
+    paintStream(st);
   } else if (ev === "tool") {
-    const i = st.tools.findIndex((t) => t.name === d.name);
-    const entry = { name: d.name, status: d.status || "running" };
+    const key = d.id || d.name;
+    const i = st.tools.findIndex((t) => (t.id || t.name) === key);
+    const entry = {
+      id: key,
+      name: d.name,
+      detail: d.detail || "",
+      status: d.status || "running",
+    };
     if (i >= 0) st.tools[i] = entry;
     else st.tools.push(entry);
     paintStream(st);
@@ -1675,12 +1695,15 @@ async function consume(st, url, ctl) {
     while ((idx = buf.indexOf("\n\n")) !== -1) {
       const block = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
-      let ev = "message";
+      let ev = "";
       const data = [];
       block.split("\n").forEach((l) => {
         if (l.startsWith("event:")) ev = l.slice(6).trim();
         else if (l.startsWith("data:")) data.push(l.slice(5).trim());
       });
+      // Keep-alive comments are not events: counting them would shift the
+      // resume cursor and replay (= duplicate) part of the answer.
+      if (!ev) continue;
       let d = {};
       try {
         d = JSON.parse(data.join("\n") || "{}");
@@ -1709,11 +1732,30 @@ async function attachStream(st, qs, opts = {}) {
       st.ctl = null;
       return;
     }
-    if (!st.done) st.error = st.error || "Connection lost.";
-    st.done = true;
   }
   st.ctl = null;
+  // The connection dropped mid-answer (phone asleep, Wi-Fi switch): the run
+  // goes on server-side, so pick it up where we left off rather than settle
+  // a half answer — that half answer plus the full one was the double reply.
+  if (!st.done) await resumeStream(st);
   finalizeStream(st, opts);
+}
+
+async function resumeStream(st) {
+  for (const wait of [500, 1500, 4000, 8000]) {
+    if (st.done) return;
+    await new Promise((r) => setTimeout(r, wait));
+    try {
+      const url = `/api/stream?session=${encodeURIComponent(st.sid)}&from=${st.seq}`;
+      await consume(st, url, null);
+    } catch (_) {
+      // run gone or server unreachable: try again, then give up below
+    }
+  }
+  if (!st.done) {
+    st.done = true;
+    st.resync = true; // let the thread reload from the server
+  }
 }
 
 // On returning to the tab (phone woke up, other app closed), make sure every
@@ -1772,14 +1814,31 @@ async function reattach(sid) {
   refreshStreamingUI();
   const url = `/api/stream?session=${encodeURIComponent(sid)}&from=0`;
   try {
-    await consume(st, url, { signal: undefined });
+    await consume(st, url, null);
   } catch (_) {
     // Could not reattach (run gone): drop it silently — the thread reloads.
     streams.delete(sid);
     refreshStreamingUI();
     return;
   }
+  if (!st.done) await resumeStream(st);
   finalizeStream(st, {});
+}
+
+/* The thread minus the answer of the turn in progress (after the last "me"). */
+function dropOpenTurn(msgs) {
+  const out = msgs.slice();
+  while (out.length && out[out.length - 1].role === "mav") out.pop();
+  return out;
+}
+
+async function reloadThread(sid) {
+  try {
+    const s = await api.get(`session?id=${encodeURIComponent(sid)}`);
+    if (state.chat.id !== sid) return;
+    state.chat.messages = s.messages || [];
+    renderThread();
+  } catch (_) {}
 }
 
 async function finalizeStream(st, opts = {}) {
@@ -1792,16 +1851,21 @@ async function finalizeStream(st, opts = {}) {
   const onScreen = state.chat.id === st.sid;
   if (onScreen && st.el) st.el.remove();
   const reply = st.reply;
-  if (st.error && !reply.text) {
+  if (onScreen && st.resync) {
+    // We lost the stream for good: the server has the real answer.
+    reloadThread(st.sid);
+  } else if (st.error && !reply.text) {
     if (onScreen) addError(st.error);
   } else {
     if (!reply.text) reply.text = "_(no answer)_";
     // Push into the thread only if this chat is on screen; otherwise the thread
-    // is reloaded from the server next time it is opened (no duplicate).
-    const lastMsg = state.chat.messages[state.chat.messages.length - 1];
-    const already =
-      lastMsg && lastMsg.role === "mav" && lastMsg.text === reply.text;
-    if (onScreen && !already) {
+    // is reloaded from the server next time it is opened (no duplicate). One
+    // turn = one answer: anything already shown for this turn is replaced.
+    if (onScreen) {
+      const msgs = state.chat.messages;
+      const trimmed = dropOpenTurn(msgs);
+      state.chat.messages = trimmed;
+      if (trimmed.length !== msgs.length) renderThread();
       state.chat.messages.push(reply);
       appendMessage(reply, { last: true, meta: true });
       if (S.speak) speak(reply.text);

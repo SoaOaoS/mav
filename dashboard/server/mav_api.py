@@ -2341,8 +2341,14 @@ def learn_facts(prompt: str) -> int:
         "nothing durable, reply exactly NONE.\n\n"
         f"Message: {prompt.strip()[:2000]}"
     )
-    raw = quick_completion(instruction, timeout=120)
-    if not raw or raw.strip().upper().startswith("NONE"):
+    return save_learned_facts(quick_completion(instruction, timeout=120))
+
+
+def save_learned_facts(raw: str) -> int:
+    """Store the '- User …' lines of a model reply as learned facts."""
+    if not (MEMORY and MEMORY_ENABLED):
+        return 0
+    if not raw or raw.strip(" :\n").upper().startswith("NONE"):
         return 0
     known = [f["fact"].lower() for f in MEMORY.facts(DEFAULT_CHAT_ID, limit=200)]
     added = 0
@@ -2406,6 +2412,92 @@ def generate_title(sid: str, prompt: str, answer: str) -> None:
             delete_session(tmp)
 
 
+# ------------------------------------------------- after-answer model calls
+# One worker, one call at a time, and only while no answer is being written:
+# on a local model (one GPU) or a rate-limited key, a title or a fact
+# extraction running next to the next answer is what made replies feel slow.
+# When both a title and facts are wanted, a single call does both.
+
+_after_q: list[tuple] = []
+_after_cv = threading.Condition()
+_after_thread: threading.Thread | None = None
+AFTER_IDLE_WAIT = float(os.environ.get("MAV_AFTER_IDLE_WAIT", "120"))
+
+
+def _engine_busy() -> bool:
+    with _runs_lock:
+        return any(r.status == "running" for r in RUNS.values())
+
+
+def wants_facts(prompt: str) -> bool:
+    text = (prompt or "").strip()
+    return bool(
+        MEMORY and MEMORY_ENABLED and 15 <= len(text) <= 4000 and ABOUT_ME_RE.search(text)
+    )
+
+
+def schedule_after_answer(sid: str, prompt: str, answer: str, needs_title: bool) -> None:
+    facts = wants_facts(prompt)
+    if not (needs_title or facts):
+        return
+    global _after_thread
+    with _after_cv:
+        _after_q.append((sid, prompt, answer, needs_title, facts))
+        if _after_thread is None or not _after_thread.is_alive():
+            _after_thread = threading.Thread(target=_after_worker, daemon=True)
+            _after_thread.start()
+        _after_cv.notify()
+
+
+def _after_worker() -> None:
+    while True:
+        with _after_cv:
+            while not _after_q:
+                if not _after_cv.wait(timeout=300):
+                    return
+            job = _after_q.pop(0)
+        # Let the engine finish whatever the person is waiting on (bounded).
+        waited = 0.0
+        while _engine_busy() and waited < AFTER_IDLE_WAIT:
+            time.sleep(1.0)
+            waited += 1.0
+        try:
+            after_answer(*job)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def after_answer(sid: str, prompt: str, answer: str, needs_title: bool, facts: bool) -> None:
+    if needs_title and not facts:
+        return generate_title(sid, prompt, answer)
+    if facts and not needs_title:
+        learn_facts(prompt)
+        return
+    instruction = (
+        "Two short tasks about the conversation below.\n"
+        "1. On the first line write `TITLE: ` followed by a title of 2 to 5 "
+        "words in the language of the user's message (no quotes, no final "
+        "punctuation).\n"
+        "2. Then write `FACTS:` and, one per line starting with '- ', the "
+        "durable personal facts about the user stated in their message "
+        "(where they live, job, family, health or diet, preferences, "
+        "recurring constraints, goals), each a short third-person sentence "
+        "starting with 'User', in the language of the message. Ignore one-off "
+        "requests. If there is none, write `FACTS: NONE`.\n\n"
+        f"User: {prompt.strip()[:2000]}\n\nAssistant: {answer.strip()[:800]}"
+    )
+    raw = quick_completion(instruction, timeout=120)
+    if not raw:
+        return
+    title_line = next((l for l in raw.splitlines() if l.strip().upper().startswith("TITLE")), "")
+    title = _clean_title(title_line.split(":", 1)[-1] if ":" in title_line else "")
+    if title and session_meta(sid).get("title_locked") is not True:
+        rename_session(sid, title)
+        set_session_meta(sid, titled=True)
+    _, _, fact_block = raw.partition("FACTS")
+    save_learned_facts(fact_block)
+
+
 def rename_session(sid: str, title: str) -> bool:
     name = (title or "").strip()[:80]
     if not sid or not name:
@@ -2446,12 +2538,22 @@ def _part_text(parts: list) -> str:
     )
 
 
-def session_messages(sid: str) -> list[dict]:
-    try:
-        entries = http_json(f"{OPENCODE_URL}/session/{sid}/message", timeout=12) or []
-    except Exception:
-        return []
-    msgs = []
+def session_messages(sid: str, entries: list | None = None) -> list[dict]:
+    """The chat as the person sees it: one bubble per turn.
+
+    The engine stores a turn as several assistant entries — one per step
+    (thinking, calling a tool or a helper, then the answer). Shown one by one,
+    a reloaded chat would repeat "Assistant · 10:42" for every step of the same
+    answer, so consecutive assistant entries are merged into one message (same
+    text the live stream showed). A user entry carrying only hidden parts (the
+    injected memory, an internal continuation) does not split the turn.
+    """
+    if entries is None:
+        try:
+            entries = http_json(f"{OPENCODE_URL}/session/{sid}/message", timeout=12) or []
+        except Exception:
+            return []
+    msgs: list[dict] = []
     for e in entries:
         info = e.get("info") or {}
         role = info.get("role")
@@ -2460,16 +2562,27 @@ def session_messages(sid: str) -> list[dict]:
         text = _part_text(e.get("parts") or [])
         if not text:
             continue
-        msg = {
-            "role": "me" if role == "user" else "mav",
-            "text": text,
-            "ts": (info.get("time") or {}).get("created"),
-        }
-        if role == "assistant":
-            # The agent that actually answered (field name varies by version).
-            msg["agent"] = info.get("agent") or info.get("mode") or ""
-        msgs.append(msg)
+        ts = (info.get("time") or {}).get("created")
+        if role == "user":
+            msgs.append({"role": "me", "text": text, "ts": ts})
+            continue
+        # The agent that actually answered (field name varies by version).
+        agent = info.get("agent") or info.get("mode") or ""
+        prev = msgs[-1] if msgs else None
+        if prev and prev["role"] == "mav":
+            prev["text"] = f"{prev['text']}\n\n{text}"
+            prev["agent"] = prev.get("agent") or agent
+            continue
+        msgs.append({"role": "mav", "text": text, "ts": ts, "agent": agent})
     return msgs
+
+
+def _drop_open_turn(msgs: list[dict]) -> list[dict]:
+    """Remove the answer still being written (the live stream shows it)."""
+    out = list(msgs)
+    while out and out[-1]["role"] == "mav":
+        out.pop()
+    return out
 
 
 def export_session_markdown(sid: str) -> str:
@@ -2619,14 +2732,18 @@ class Run:
                 self.recalled = int(data.get("recalled") or 0)
             elif event == "delta":
                 self.text += data.get("delta") or ""
+            elif event == "reset":
+                self.text = data.get("text") or ""
             elif event == "tool":
                 name = data.get("name") or "tool"
+                key = data.get("id") or name
                 status = data.get("status") or "running"
-                entry = next((t for t in self.tools if t.get("name") == name), None)
+                entry = next((t for t in self.tools if t.get("id", t.get("name")) == key), None)
                 if entry:
                     entry["status"] = status
                 else:
-                    self.tools.append({"name": name, "status": status})
+                    self.tools.append({"id": key, "name": name, "status": status,
+                                       "detail": data.get("detail") or ""})
             elif event == "done":
                 if not self.text and data.get("text"):
                     self.text = data.get("text") or ""
@@ -3222,6 +3339,124 @@ def valid_agents() -> set:
     return names or _agents_cache["names"]
 
 
+# ----------------------------------------------------------- engine events
+# Waking up on the engine's own event stream (GET /event) instead of re-reading
+# the whole conversation every 0.4 s: a word written by the model reaches the
+# browser right away, and a long chat (with big tool outputs) is no longer
+# re-downloaded several times a second. Without the event stream, polling
+# falls back to a gentle backoff.
+
+
+class EngineEvents:
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
+        self.connected = False
+        self._lock = threading.Lock()
+        self._marks: dict[str, int] = {}
+        self._cv = threading.Condition(self._lock)
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._loop, daemon=True)
+            self._thread.start()
+
+    @staticmethod
+    def session_of(event: dict) -> str:
+        props = event.get("properties") or {}
+        return (
+            props.get("sessionID")
+            or (props.get("info") or {}).get("sessionID")
+            or (props.get("part") or {}).get("sessionID")
+            or ""
+        )
+
+    def _bump(self, sid: str) -> None:
+        with self._cv:
+            self._marks[sid] = self._marks.get(sid, 0) + 1
+            self._cv.notify_all()
+
+    def mark(self, sid: str) -> int:
+        with self._lock:
+            return self._marks.get(sid, 0)
+
+    def wait(self, sid: str, seen: int, timeout: float) -> int:
+        """Block until something happens in `sid` (or timeout); new mark."""
+        with self._cv:
+            if self._marks.get(sid, 0) == seen:
+                self._cv.wait(timeout)
+            return self._marks.get(sid, 0)
+
+    def _loop(self) -> None:
+        backoff = 1.0
+        while True:
+            try:
+                req = urllib.request.Request(
+                    f"{self.base_url}/event", headers={"Accept": "text/event-stream"}
+                )
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    self.connected = True
+                    backoff = 1.0
+                    data: list[str] = []
+                    for raw in r:
+                        line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                        if line.startswith("data:"):
+                            data.append(line[5:].strip())
+                            continue
+                        if line or not data:
+                            continue
+                        try:
+                            event = json.loads("\n".join(data))
+                        except Exception:  # noqa: BLE001
+                            event = {}
+                        data = []
+                        sid = self.session_of(event) if isinstance(event, dict) else ""
+                        if sid:
+                            self._bump(sid)
+            except Exception:  # noqa: BLE001
+                pass
+            self.connected = False
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)
+
+
+ENGINE_EVENTS = EngineEvents(OPENCODE_URL)
+
+# Does the engine honour ?limit= (newest N messages)? Checked once, lazily.
+_limit_ok: dict = {"known": False, "ok": False}
+MSG_WINDOW = 80
+
+
+def _messages_url(sid: str, full: list | None = None) -> str:
+    """Messages URL for polling, limited to the newest entries when supported."""
+    base = f"{OPENCODE_URL}/session/{sid}/message"
+    if not _limit_ok["known"] and full:
+        try:
+            tail = http_json(f"{base}?limit=1", timeout=8) or []
+            if len(full) > 1:  # with a single message, first == last: no answer
+                last_full = (full[-1].get("info") or {}).get("id")
+                _limit_ok["ok"] = (
+                    len(tail) == 1 and (tail[0].get("info") or {}).get("id") == last_full
+                )
+                _limit_ok["known"] = True
+        except Exception:  # noqa: BLE001
+            _limit_ok.update(known=True, ok=False)
+    return f"{base}?limit={MSG_WINDOW}" if _limit_ok["ok"] else base
+
+
+def _tool_detail(part: dict) -> str:
+    """A human hint for a tool step: which helper, which page, which search."""
+    state = part.get("state") or {}
+    inp = state.get("input") or {}
+    if part.get("tool") == "task":
+        return str(inp.get("subagent_type") or inp.get("agent") or "")
+    if inp.get("url"):
+        return urllib.parse.urlparse(str(inp["url"])).netloc or ""
+    if inp.get("query"):
+        return str(inp["query"])[:60]
+    return ""
+
+
 def stream_answer(
     prompt: str,
     sid: str,
@@ -3300,7 +3535,7 @@ def stream_answer(
 
     yield sse("start", {"session": sid, "agent": ag, "recalled": recalled})
 
-    deadline = time.time() + 900      # garde-fou global (15 min)
+    deadline = time.time() + 900      # overall guard (15 min)
     idle_limit = 240                  # no real progress (4 min)
     last_progress = time.time()
     last_sig = None
@@ -3311,6 +3546,14 @@ def stream_answer(
     engine_error = None
     tools_state: dict = {}
     interrupted = False
+    # Text of every assistant entry of this turn, by id, in order: a window of
+    # the newest messages can scroll an early step out, its text stays here.
+    texts: dict[str, str] = {}
+    url = _messages_url(sid, before)
+    ENGINE_EVENTS.start()
+    mark = ENGINE_EVENTS.mark(sid)
+    heard = False
+    pause = 0.15
 
     while time.time() < deadline and time.time() - last_progress < idle_limit:
         # Stop requested from another request (interrupt-and-reprocess): abort
@@ -3324,9 +3567,23 @@ def stream_answer(
                 pass
             break
 
-        time.sleep(0.4)
+        # Wait for the engine to say something about this chat. With the event
+        # stream that is instant; a slow safety poll still runs in case an event
+        # is missed. Without it, poll with a backoff (0.15 s → 1.2 s).
+        if ENGINE_EVENTS.connected:
+            # Long safety poll once this chat's events are seen flowing; short
+            # until then, in case this engine version names them differently.
+            new_mark = ENGINE_EVENTS.wait(sid, mark, 1.5 if heard else 0.4)
+            if new_mark != mark:
+                heard = True
+                time.sleep(0.08)  # let a burst of tokens land in one read
+                new_mark = ENGINE_EVENTS.mark(sid)
+            mark = new_mark
+        else:
+            time.sleep(pause)
+            pause = min(pause * 1.4, 1.2)
         try:
-            entries = http_json(f"{OPENCODE_URL}/session/{sid}/message", timeout=12) or []
+            entries = http_json(url, timeout=12) or []
         except Exception:
             continue
         if not entries:
@@ -3342,7 +3599,9 @@ def stream_answer(
         accepted = True
 
         # Visible answer only: "text" parts, never reasoning.
-        text = "\n\n".join(_part_text(e.get("parts") or []) for e in new_assistant).strip()
+        for e in new_assistant:
+            texts[(e.get("info") or {}).get("id") or ""] = _part_text(e.get("parts") or [])
+        text = "\n\n".join(t for t in texts.values() if t).strip()
 
         last = new_assistant[-1]
         linfo = last.get("info") or {}
@@ -3354,12 +3613,14 @@ def stream_answer(
             for p in (e.get("parts") or [])
             if p.get("type") == "tool"
         )
-        sig = (len(new_assistant), linfo.get("finish"), len(text), tool_sig)
+        sig = (len(texts), linfo.get("finish"), len(text), tool_sig)
         if sig != last_sig:
             last_sig = sig
             last_progress = time.time()
+            pause = 0.15
 
-        # Surface tool/MCP activity so the web app can show it live.
+        # Surface tool/MCP activity so the web app can show it live — with the
+        # helper's name when the assistant delegates.
         for e in new_assistant:
             for part in (e.get("parts") or []):
                 if part.get("type") != "tool":
@@ -3368,11 +3629,17 @@ def stream_answer(
                 status = (part.get("state") or {}).get("status") or "running"
                 if key and tools_state.get(key) != status:
                     tools_state[key] = status
-                    yield sse("tool", {"name": part.get("tool") or "tool", "status": status})
+                    yield sse("tool", {
+                        "id": key, "name": part.get("tool") or "tool",
+                        "status": status, "detail": _tool_detail(part),
+                    })
 
         if text != last_text:
             last_text = text
             delta = text[len(last_sent):] if text.startswith(last_sent) else text
+            if not text.startswith(last_sent):
+                yield sse("reset", {"text": text})
+                delta = ""
             last_sent = text
             if delta:
                 yield sse("delta", {"delta": delta})
@@ -3410,15 +3677,14 @@ def stream_answer(
     yield sse("done", {"session": sid, "text": final, "agent": ag})
 
     if not raw_session and final:
+        # Cheap, local work right away; model calls (title, learned facts) go
+        # through one queue that waits for the engine to be idle, so they never
+        # slow down the answer the person is waiting for.
         threading.Thread(
             target=remember_exchange, args=(prompt, final, sid, ag), daemon=True
         ).start()
-        threading.Thread(target=learn_facts, args=(prompt,), daemon=True).start()
         threading.Thread(target=learn_interests, args=(prompt,), daemon=True).start()
-        if needs_title:
-            threading.Thread(
-                target=generate_title, args=(sid, prompt, final), daemon=True
-            ).start()
+        schedule_after_answer(sid, prompt, final, needs_title)
 
 
 def ask(
@@ -3432,6 +3698,12 @@ def ask(
     """Blocking version (routines, summaries, fallback)."""
     last = ""
     for chunk in stream_answer(prompt, sid, agent, files, raw_session=raw_session, with_memory=with_memory):
+        if chunk.startswith("event: reset"):
+            try:
+                last = json.loads(chunk.split("data: ", 1)[1]).get("text") or ""
+            except Exception:
+                pass
+            continue
         if not chunk.startswith("event: delta"):
             if chunk.startswith("event: done"):
                 try:
@@ -3691,11 +3963,19 @@ class Handler(BaseHTTPRequestHandler):
                 sid = p.get("id", "")
                 if not sid:
                     return self._send(400, {"error": "missing id"})
+                run = get_run(sid)
+                running = bool(run and run.status == "running")
+                msgs = session_messages(sid)
+                if running:
+                    # The answer in progress belongs to the live stream: sending
+                    # it here too is what showed the last answer twice.
+                    msgs = _drop_open_turn(msgs)
                 return self._send(200, {
                     "id": sid,
                     "title": session_title(sid)[len(PREFIX):],
                     "agent": session_meta(sid).get("agent", ""),
-                    "messages": session_messages(sid),
+                    "messages": msgs,
+                    "running": running,
                 })
             if path == "/api/session/export":
                 sid = p.get("id", "")
