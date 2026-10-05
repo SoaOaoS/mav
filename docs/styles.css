@@ -2,40 +2,59 @@
    Mav — marketing site. Glass aesthetic matching the dashboard.
    ========================================================================== */
 :root {
-  --bg: #eef1f4;
-  --ink: #1c1b19;
-  --ink-2: #55524c;
-  --ink-3: #8b877f;
-  --line: #e8e5df;
-  --line-2: #f0eee9;
-  --accent: #2f6f5e;
-  --accent-2: #1f4d41;
-  --accent-soft: #e6f0ec;
-  --warm: #c07a4b;
-  --blue: #4a6fa5;
-  --ok: #3f9d6f;
+  /* Mav brand v2 — "Midnight & Emerald" (see docs/BRAND.md). */
+  color-scheme: light;
+  --bg: #fafaf7;
+  --bg-2: #f3f2ee;
+  --ink: #0e1013;
+  --ink-2: #4a4f57;
+  --ink-3: #8a9099;
+  --line: #e6e5df;
+  --line-2: #efeee9;
+  --accent: #0f7a5c;
+  --accent-2: #0a4a38;
+  --accent-soft: #e4f2ec;
+  --on-accent: #ffffff;
+  --signal: #e8962e;
+  --signal-soft: #fdf1e1;
+  --warm: #c46a2c;
+  --blue: #3b5bdb;
+  --ok: #16a06a;
+  --danger: #c2412d;
+  --cta: #0e1013;
+  --on-cta: #ffffff;
+  --brand-1: #12936e;
+  --brand-2: #0a4a38;
+  --halo-1: #bfe8d7;
+  --halo-2: #fde3bf;
+  --halo-3: #dfe5f7;
+  --code-bg: #0e1116;
+  --code-ink: #e7eaee;
 
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-bg-strong: rgba(255, 255, 255, 0.78);
-  --glass-brd: rgba(255, 255, 255, 0.7);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-strong: rgba(255, 255, 255, 0.86);
+  --glass-brd: rgba(14, 16, 19, 0.06);
   --glass-shadow:
-    0 1px 1px rgba(20, 30, 40, 0.05), 0 10px 30px rgba(20, 40, 60, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --shadow-sm: 0 1px 2px rgba(28, 27, 25, 0.05);
-  --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 8px 24px rgba(28, 27, 25, 0.06);
+    0 0 0 1px rgba(14, 16, 19, 0.04), 0 1px 2px rgba(14, 16, 19, 0.05),
+    0 18px 40px -18px rgba(14, 16, 19, 0.18);
+  --shadow-sm: 0 0 0 1px rgba(14, 16, 19, 0.05), 0 1px 2px rgba(14, 16, 19, 0.05);
+  --shadow:
+    0 0 0 1px rgba(14, 16, 19, 0.05), 0 1px 2px rgba(14, 16, 19, 0.04),
+    0 12px 32px -12px rgba(14, 16, 19, 0.14);
   --shadow-lg:
-    0 1px 2px rgba(28, 27, 25, 0.04), 0 18px 48px rgba(28, 27, 25, 0.1);
+    0 0 0 1px rgba(14, 16, 19, 0.06), 0 2px 6px rgba(14, 16, 19, 0.06),
+    0 32px 72px -20px rgba(14, 16, 19, 0.28);
 
   /* ---- Radii ---- */
-  --radius-lg: 22px;
-  --radius: 16px;
+  --radius-lg: 20px;
+  --radius: 14px;
   --radius-sm: 10px;
-  --radius-xs: 8px;
+  --radius-xs: 7px;
 
   /* ---- Typography ---- */
-  --font: "Inter", system-ui, -apple-system, sans-serif;
-  --display: "Fraunces", Georgia, serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: "Geist", "Inter", system-ui, -apple-system, sans-serif;
+  --display: "Instrument Serif", Georgia, serif;
+  --mono: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* ---- Motion ---- */
   --dur-fast: 120ms;
@@ -43,6 +62,46 @@
   --dur-med: 200ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0b0d10;
+    --bg-2: #0f1215;
+    --ink: #eef0f2;
+    --ink-2: #aab1ba;
+    --ink-3: #747c86;
+    --line: #22272d;
+    --line-2: #1a1e23;
+    --accent: #34d39d;
+    --accent-2: #9ff0d1;
+    --accent-soft: #0f2a21;
+    --on-accent: #04140e;
+    --signal: #f5b04f;
+    --signal-soft: #2e2213;
+    --danger: #f0806d;
+    --cta: #eef0f2;
+    --on-cta: #0b0d10;
+    --brand-1: #34d39d;
+    --brand-2: #0b5a43;
+    --halo-1: #0f3b2d;
+    --halo-2: #3a2a12;
+    --halo-3: #182040;
+    --code-bg: #07090b;
+    --glass-bg: rgba(19, 22, 26, 0.7);
+    --glass-bg-strong: rgba(19, 22, 26, 0.86);
+    --glass-brd: rgba(255, 255, 255, 0.06);
+    --glass-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.4),
+      0 18px 40px -18px rgba(0, 0, 0, 0.7);
+    --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.4),
+      0 12px 32px -12px rgba(0, 0, 0, 0.6);
+    --shadow-lg:
+      0 0 0 1px rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.5),
+      0 32px 72px -20px rgba(0, 0, 0, 0.75);
+  }
 }
 
 * {
@@ -94,21 +153,21 @@ body {
   height: 46vw;
   left: -8vw;
   top: -10vw;
-  background: radial-gradient(circle, #bfe3d5, transparent 70%);
+  background: radial-gradient(circle, var(--halo-1), transparent 70%);
 }
 .h2 {
   width: 40vw;
   height: 40vw;
   right: -6vw;
   top: 8vw;
-  background: radial-gradient(circle, #d9e2f5, transparent 70%);
+  background: radial-gradient(circle, var(--halo-3), transparent 70%);
 }
 .h3 {
   width: 52vw;
   height: 52vw;
   left: 20vw;
   bottom: -24vw;
-  background: radial-gradient(circle, #f3e6d5, transparent 70%);
+  background: radial-gradient(circle, var(--halo-2), transparent 70%);
 }
 
 /* -------- glass -------- */
@@ -153,7 +212,7 @@ body {
     radial-gradient(circle at 65% 70%, #2f6f5e, #173a33);
   box-shadow:
     inset -3px -4px 8px rgba(0, 0, 0, 0.25),
-    0 2px 8px rgba(47, 111, 94, 0.35);
+    0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .orb.big {
   width: 72px;
@@ -185,7 +244,7 @@ body {
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-bg);
   transition:
     border-color var(--dur-fast) var(--ease),
     background var(--dur-fast) var(--ease),
@@ -290,7 +349,7 @@ main {
   border-radius: var(--radius-xs);
   padding: 0.4rem 0.7rem;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
   flex: none;
   transition:
@@ -307,7 +366,7 @@ main {
   display: inline-block;
   font-weight: 600;
   text-decoration: none;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-radius: 999px;
   padding: 0.6rem 1.1rem;
@@ -360,7 +419,7 @@ main {
   align-items: center;
   gap: 0.4rem;
   padding: 0.6rem 0.8rem;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-bg);
   border-bottom: 1px solid var(--line);
 }
 .dot {
@@ -391,7 +450,7 @@ main {
 .mock-side {
   padding: 0.7rem 0.5rem;
   border-right: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--glass-bg);
 }
 .ms {
   display: flex;
@@ -404,12 +463,12 @@ main {
   margin-bottom: 0.15rem;
 }
 .ms.active {
-  background: rgba(47, 111, 94, 0.1);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   font-weight: 600;
   color: var(--accent-2);
 }
 .ms.active2 {
-  background: rgba(74, 111, 165, 0.1);
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
   font-weight: 600;
   color: var(--blue);
 }
@@ -428,7 +487,7 @@ main {
   gap: 0.8rem;
 }
 .mock-card {
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--glass-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0.7rem;
@@ -466,7 +525,7 @@ main {
   margin-left: auto;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-radius: 999px;
   padding: 0.25rem 0.6rem;
@@ -484,18 +543,18 @@ main {
   max-width: 90%;
 }
 .bubble.mav {
-  background: rgba(47, 111, 94, 0.1);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent-2);
 }
 .bubble.me {
-  background: rgba(74, 111, 165, 0.12);
-  color: #34517a;
+  background: color-mix(in srgb, var(--blue) 14%, transparent);
+  color: var(--ink);
   margin-left: auto;
 }
 .bubble.typing {
   display: inline-flex;
   gap: 4px;
-  background: rgba(47, 111, 94, 0.1);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .bubble.typing span {
   width: 6px;
@@ -610,7 +669,7 @@ main {
   height: 30px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 0.9rem;
   margin-bottom: 0.6rem;
@@ -790,7 +849,7 @@ main {
 }
 .docs-nav a:hover,
 .docs-nav a.active {
-  background: rgba(47, 111, 94, 0.1);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent-2);
 }
 .docs-nav .nav-group {
@@ -834,8 +893,8 @@ main {
   border-radius: var(--radius-xs);
 }
 .docs-body pre {
-  background: #14201c;
-  color: #e8f0ec;
+  background: var(--code-bg);
+  color: var(--code-ink);
   border-radius: var(--radius-sm);
   padding: 1rem 1.1rem;
   overflow-x: auto;
@@ -987,7 +1046,7 @@ a.pill:hover {
   display: grid;
   place-items: center;
   background:
-    radial-gradient(60% 60% at 50% 30%, #dfefe8 0%, transparent 70%), var(--bg);
+    radial-gradient(60% 60% at 50% 30%, var(--accent-soft) 0%, transparent 70%), var(--bg);
   transition:
     opacity 0.6s var(--ease-out),
     visibility 0.6s;
@@ -1012,7 +1071,7 @@ a.pill:hover {
     radial-gradient(circle at 65% 70%, #2f6f5e, #173a33);
   box-shadow:
     inset -4px -5px 10px rgba(0, 0, 0, 0.25),
-    0 8px 30px rgba(47, 111, 94, 0.4);
+    0 8px 30px color-mix(in srgb, var(--accent) 40%, transparent);
   animation: orbPulse 1.6s var(--ease) infinite;
 }
 .splash-name {
@@ -1031,7 +1090,7 @@ a.pill:hover {
   width: 150px;
   height: 3px;
   border-radius: 999px;
-  background: rgba(47, 111, 94, 0.15);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   overflow: hidden;
 }
 .splash-bar i {
@@ -1054,13 +1113,13 @@ a.pill:hover {
     transform: scale(1);
     box-shadow:
       inset -4px -5px 10px rgba(0, 0, 0, 0.25),
-      0 8px 30px rgba(47, 111, 94, 0.35);
+      0 8px 30px color-mix(in srgb, var(--accent) 35%, transparent);
   }
   50% {
     transform: scale(1.06);
     box-shadow:
       inset -4px -5px 10px rgba(0, 0, 0, 0.25),
-      0 12px 40px rgba(47, 111, 94, 0.55);
+      0 12px 40px color-mix(in srgb, var(--accent) 55%, transparent);
   }
 }
 @keyframes splashBar {
@@ -1115,7 +1174,7 @@ a.pill:hover {
   height: 30vw;
   right: 4vw;
   bottom: 4vw;
-  background: radial-gradient(circle, #e7d9f5, transparent 70%);
+  background: radial-gradient(circle, var(--halo-3), transparent 70%);
   opacity: 0.45;
 }
 
@@ -1129,7 +1188,7 @@ a.pill:hover {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--glass-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0.5rem 0.6rem;
@@ -1141,7 +1200,7 @@ a.pill:hover {
 }
 .toast.t-critical {
   animation-delay: 0.2s;
-  border-left: 3px solid #b84a3a;
+  border-left: 3px solid var(--danger);
 }
 .toast.t-useful {
   animation-delay: 0.9s;
@@ -1158,11 +1217,11 @@ a.pill:hover {
   height: 22px;
   border-radius: 50%;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-accent);
   flex: none;
 }
 .t-critical .toast-ico {
-  background: #b84a3a;
+  background: var(--danger);
 }
 .t-useful .toast-ico {
   background: var(--ok);
@@ -1242,7 +1301,7 @@ a.pill:hover {
   color: var(--ink-2);
   padding: 0.35rem 0.6rem;
   border-radius: var(--radius-xs);
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-bg);
   border: 1px solid var(--line-2);
   opacity: 0;
   transform: translateX(-10px);
@@ -1267,7 +1326,7 @@ a.pill:hover {
   flex: none;
 }
 .l-critical i {
-  background: #b84a3a;
+  background: var(--danger);
 }
 .l-important i {
   background: var(--warm);
@@ -1296,13 +1355,13 @@ a.pill:hover {
 .seg-demo span {
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-bg);
   border: 1px solid var(--line);
   color: var(--ink-2);
 }
 .seg-demo .on {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -1331,7 +1390,7 @@ a.pill:hover {
 .draft-acts b {
   font-size: 0.76rem;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-radius: 999px;
   padding: 0.25rem 0.7rem;
 }
@@ -1394,3 +1453,132 @@ a.pill:hover {
     animation: none;
   }
 }
+
+
+/* ==========================================================================
+   Brand v2 — "Midnight & Emerald" (see docs/BRAND.md)
+   ========================================================================== */
+body {
+  font-feature-settings: "ss01", "cv11";
+  letter-spacing: -0.006em;
+}
+::selection {
+  color: var(--ink);
+}
+
+/* The mark: emerald disc, amber orbit and its sun. */
+.orb,
+.splash-orb {
+  position: relative;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.55), transparent 38%),
+    linear-gradient(150deg, var(--brand-1), var(--brand-2));
+  box-shadow:
+    inset 0 -3px 8px rgba(0, 0, 0, 0.25),
+    0 0 0 1px color-mix(in srgb, var(--brand-2) 40%, transparent),
+    0 6px 18px -6px color-mix(in srgb, var(--brand-1) 60%, transparent);
+}
+.orb::after,
+.splash-orb::after {
+  content: "";
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--signal);
+  border-right-color: var(--signal);
+  border-left-color: color-mix(in srgb, var(--signal) 30%, transparent);
+  transform: rotate(-20deg);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--signal) 70%, transparent));
+}
+.orb.big::after,
+.splash-orb::after {
+  border-width: 3px;
+}
+
+/* Editorial serif for big moments, Geist for everything else. */
+.brand,
+.hero h1,
+.section-head h2,
+.final-cta h2 {
+  font-family: var(--display);
+  font-weight: 400;
+}
+.brand {
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+}
+.hero h1 {
+  font-size: clamp(2.8rem, 6.4vw, 4.6rem);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+.section-head h2,
+.final-cta h2 {
+  font-size: clamp(2rem, 4.2vw, 3rem);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.grad {
+  font-style: italic;
+  background: linear-gradient(100deg, var(--accent) 10%, color-mix(in srgb, var(--accent) 55%, var(--signal)) 70%, var(--signal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-right: 0.08em;
+}
+.pill {
+  background: var(--glass-bg);
+  color: var(--ink-2);
+  box-shadow: var(--shadow-sm);
+  letter-spacing: 0.06em;
+}
+
+/* Marketing CTAs wear ink, not green: calm and confident. */
+.btn {
+  background: var(--cta);
+  color: var(--on-cta);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(14, 16, 19, 0.2),
+    0 8px 20px -8px rgba(14, 16, 19, 0.45);
+}
+.btn.ghost {
+  background: var(--glass-bg);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.copy-btn {
+  background: var(--cta);
+  color: var(--on-cta);
+}
+
+/* Glass: crisper, hairline rings. */
+.glass {
+  border-color: var(--glass-brd);
+}
+.nav.glass {
+  background: var(--glass-bg-strong);
+}
+.nav-links a:hover {
+  color: var(--ink);
+}
+.nav-gh:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+  background: var(--glass-bg);
+}
+.halo {
+  opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  .halo {
+    opacity: 0.5;
+  }
+  .btn {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 8px 24px -10px rgba(52, 211, 157, 0.45);
+  }
+}
+
