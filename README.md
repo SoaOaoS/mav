@@ -69,8 +69,9 @@ chat, helpers, memory, the daily briefing, unlimited routines and watches.
 **Mav Connect** ([pricing](https://soaoaos.github.io/mav/pricing.html)) adds
 services that need the cloud: encrypted cloud backup today, secure remote
 access and a native mobile app next, and priority support. Paste your
-licence key in Settings → Plan. Backups are encrypted on your machine before
-they leave it.
+licence key in Settings → Plan. Mav then backs itself up every night —
+memory, chats, routines, settings — encrypted on your machine with your
+recovery key before anything leaves it.
 
 ## Install
 
@@ -192,6 +193,7 @@ mav/
 ├── agents/             # the everyday helpers (Assistant, Researcher, …)
 ├── bot/                # mav-worker: routines, watching, memory, notifications
 ├── dashboard/          # the web app (front-end + server/)
+├── connect/            # Mav Connect service (Cloudflare Worker + R2)
 ├── scripts/mav         # the mav command
 ├── scripts/            # database schema, version helper
 ├── tests/              # unit and script tests (run by CI)
