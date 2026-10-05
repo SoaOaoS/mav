@@ -14,6 +14,9 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 [![Release](https://img.shields.io/github/v/release/SoaOaoS/mav?label=release&color=0f7a5c)](https://github.com/SoaOaoS/mav/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-E8962E)](LICENSE)
 [![Website](https://img.shields.io/badge/website-soaoaos.github.io%2Fmav-0F7A5C)](https://soaoaos.github.io/mav/)
+[![CodeQL](https://github.com/SoaOaoS/mav/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/SoaOaoS/mav/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/SoaOaoS/mav/badge)](https://securityscorecards.dev/viewer/?uri=github.com/SoaOaoS/mav)
+[![Security policy](https://img.shields.io/badge/security-policy-E8962E)](SECURITY.md)
 
 `curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
 
@@ -149,6 +152,13 @@ Unattended install: `sudo ./install.sh --yes` with `MAV_PROVIDER`
 The web app is protected by a password you choose on your first visit.
 Everything runs on your machine. The only thing that leaves it is what you send
 to the model provider you chose — or nothing at all with a local Ollama.
+
+## Security
+
+Static analysis (**CodeQL**) and a supply-chain posture check
+(**OpenSSF Scorecard**) run on every push to `main`; secret scanning and push
+protection are enabled. To report a vulnerability privately, see
+[SECURITY.md](SECURITY.md).
 
 ## Upgrading from the Telegram version
 
