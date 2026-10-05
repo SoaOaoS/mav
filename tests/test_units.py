@@ -280,13 +280,35 @@ class Downloads(unittest.TestCase):
             mav_api.ASSET_ROOTS.append(root)
         root.mkdir(parents=True, exist_ok=True)
 
-    def test_extension_gate(self):
-        p = Path("/tmp/opencode/mav-test-notes.exe")
-        p.write_text("x")
+    def test_any_type_is_downloadable(self):
+        # Any extension is served now (the dashboard can hand back any file).
+        p = Path("/tmp/opencode/mav-test-binary.exe")
+        p.write_text("MZ")
         try:
-            self.assertIsNone(mav_api.download_response(str(p)))
+            res = mav_api.download_response(str(p))
+            self.assertIsNotNone(res)
+            self.assertEqual(res[2], "mav-test-binary.exe")
         finally:
             p.unlink(missing_ok=True)
+
+    def test_sensitive_files_blocked(self):
+        for name in ("prod.env", ".env", "server.key", "secret-api-key.txt",
+                     "mail.conf", "push_subs.json", ".netrc"):
+            p = Path("/tmp/opencode") / name
+            p.write_text("SECRET")
+            try:
+                self.assertIsNone(
+                    mav_api.download_response(str(p)), f"{name} should be blocked"
+                )
+                self.assertTrue(mav_api.is_sensitive(p), name)
+            finally:
+                p.unlink(missing_ok=True)
+
+    def test_dotenv_in_a_folder_blocked(self):
+        with tempfile.TemporaryDirectory(dir="/tmp/opencode") as d:
+            p = Path(d) / ".env.local"
+            p.write_text("TOKEN=x")
+            self.assertIsNone(mav_api.download_response(str(p)))
 
     def test_serves_allowed_file(self):
         p = Path("/tmp/opencode/mav-test-rapport.md")

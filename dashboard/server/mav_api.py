@@ -2625,6 +2625,9 @@ def chart_data(symbol: str, rng: str = "1mo") -> dict:
 
 # Downloadable documents, code and archives. Only these extensions are
 # served, and only from the same roots as the image asset route.
+# Mime hints purely to serve a good Content-Type. Any other extension still
+# downloads (application/octet-stream): the gate is the *denylist* below, not
+# this map.
 DOWNLOAD_EXT = {
     ".md": "text/markdown; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",
@@ -2652,13 +2655,46 @@ DOWNLOAD_EXT = {
     ".webp": "image/webp",
 }
 
+# Sensitive files: never downloadable, whatever the extension. The point is to
+# let Mav hand you *any* file it produced (any type), while keeping secrets
+# (env files, keys, credentials, mail config…) out of reach.
+SENSITIVE_NAMES = {
+    ".netrc", ".git-credentials", ".npmrc", ".pypirc", ".htpasswd", ".pgpass",
+    "mail.conf", "mav.env", "mav-dashboard.env", "mav-server.env",
+    "push_subs.json", "auth.json", "credentials.json",
+}
+SENSITIVE_EXTS = {
+    ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", ".ppk",
+    ".asc", ".gpg", ".kdbx", ".env",
+}
+SENSITIVE_WORDS = ("secret", "credential", "password", "passwd", "token", "apikey", "api_key")
+
+
+def is_sensitive(p: "Path") -> bool:
+    """True for files that must never be served (env, keys, credentials…)."""
+    name = p.name.lower()
+    if name in SENSITIVE_NAMES:
+        return True
+    # .env and friends: ".env", ".env.local", "prod.env"…
+    if name == ".env" or name.endswith(".env") or name.startswith(".env."):
+        return True
+    if p.suffix.lower() in SENSITIVE_EXTS:
+        return True
+    if any(w in name for w in SENSITIVE_WORDS):
+        return True
+    # A dotfile is private by convention: do not serve it unless it is a
+    # harmless, explicitly wanted type (e.g. a generated .md/.csv).
+    if name.startswith(".") and p.suffix.lower() not in (".md", ".txt", ".csv", ".json", ".html", ".svg"):
+        return True
+    return False
+
 
 def resolve_download(name: str) -> "Path | None":
-    """Resolve a downloadable file, tolerating a bare filename.
+    """Resolve a downloadable file of *any* type, except sensitive ones.
 
     An absolute path is used as-is (within an allowed root); a bare name is
     searched in the media archive, the attachments folder and the allowed
-    roots so `[[file:rapport.md]]` works right after a file was produced.
+    roots so `[[file:rapport.xlsx]]` works right after a file was produced.
     """
     name = urllib.parse.unquote(str(name or "")).strip()
     if not name:
@@ -2668,7 +2704,9 @@ def resolve_download(name: str) -> "Path | None":
     roots = _asset_roots()
 
     def allowed(p: Path) -> bool:
-        if p.suffix.lower() not in DOWNLOAD_EXT or not p.is_file():
+        if not p.is_file():
+            return False
+        if is_sensitive(p):
             return False
         try:
             rp = str(p.resolve())

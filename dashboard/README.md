@@ -99,10 +99,15 @@ An answer can embed two directives, each on its own line:
   be absolute (within an allowed root) or a bare filename, resolved in the
   media archive, the attachments folder and `tools/` output folders.
 
-`/api/download` only serves documents, code and archives from the same roots
-as `/api/asset` (images stay images-only there), so no arbitrary file is ever
-exposed. Every answer also has a **Download** action in its toolbar that saves
-the message as a local `.md` file.
+`/api/download` serves **any file type** from the same roots as `/api/asset`
+(images stay images-only there), so Mav can hand back whatever it produced —
+a PDF, a spreadsheet, an archive, a binary… The one exception is **sensitive
+files**, which are never served: `.env` (and `*.env`), private keys
+(`.pem`, `.key`, `.p12`…), credential/config files (`mail.conf`,
+`mav*.env`, `push_subs.json`, `auth.json`, `.netrc`, `.pgpass`…), and any
+name containing `secret` / `credential` / `password` / `token` / `apikey`.
+Every answer also has a **Download** action in its toolbar that saves the
+message as a local `.md` file.
 
 > ⚠️ **No authentication**: keep it on your home network or behind a VPN.
 
