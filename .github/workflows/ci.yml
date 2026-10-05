@@ -16,7 +16,7 @@ jobs:
       - name: Shell scripts (shellcheck)
         run: |
           shellcheck -S warning install.sh get.sh run-opencode.sh scripts/mav \
-            scripts/next-version.sh dashboard/tools/make_certs.sh tests/*.sh
+            scripts/next-version.sh scripts/agent-hashes.sh dashboard/tools/make_certs.sh tests/*.sh
 
       - name: Python (compile)
         run: python3 -m py_compile bot/*.py dashboard/server/*.py dashboard/tools/*.py
@@ -28,6 +28,12 @@ jobs:
 
       - name: JSON
         run: python3 -m json.tool dashboard/mcp-catalog.json > /dev/null
+
+      - name: Helper checksums up to date
+        run: |
+          scripts/agent-hashes.sh
+          git diff --exit-code agents/shipped.sha256 \
+            || { echo "::error::run scripts/agent-hashes.sh and commit agents/shipped.sha256"; exit 1; }
 
       - name: Tests
         run: |

@@ -51,7 +51,7 @@ check "credentials reused from an existing compose file" "mav:Abc123xyz:mav:5433
 # existing file back after the copy. A bot/jobs.json shipped empty once erased
 # every routine on update.
 check "routines survive an update" "KEEP-ME" bash -c "
-  $(sed -n '/^snapshot_file() {/,/^}/p; /^restore_file() {/,/^}/p' install.sh)
+  $(sed -n '/^snapshot_file() {/p; /^restore_file() {/p' install.sh)
   D='$T/jobs'; mkdir -p \"\$D/bot\"
   printf 'KEEP-ME' > \"\$D/bot/jobs.json\"
   snap=\$(snapshot_file \"\$D/bot/jobs.json\")

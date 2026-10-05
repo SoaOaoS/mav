@@ -835,11 +835,21 @@ copy_files() {
   fi
   chown -R "$(owner)" "$src"
 
-  # Everyday helper templates: added when missing, never overwritten.
-  local adir="${A[INSTALL_HOME]}/.config/opencode/agent" tpl
+  # Everyday helper templates: added when missing, updated when the installed
+  # copy is one we shipped (never edited), left alone when customised.
+  local adir="${A[INSTALL_HOME]}/.config/opencode/agent" tpl dest sum
   mkdir -p "$adir"
   for tpl in "$SCRIPT_DIR"/agents/*.md; do
-    [[ -e "$tpl" && ! -f "$adir/$(basename "$tpl")" ]] && cp "$tpl" "$adir/"
+    [[ -e "$tpl" ]] || continue
+    dest="$adir/$(basename "$tpl")"
+    if [[ ! -f "$dest" ]]; then
+      cp "$tpl" "$dest"
+    elif ! cmp -s "$tpl" "$dest"; then
+      sum="$(sha256sum <"$dest" | cut -d' ' -f1)"
+      if grep -qx "$sum  $(basename "$tpl")" "$SCRIPT_DIR/agents/shipped.sha256" 2>/dev/null; then
+        cp "$tpl" "$dest"
+      fi
+    fi
   done
   chown -R "$(owner)" "${A[INSTALL_HOME]}/.config"
 
