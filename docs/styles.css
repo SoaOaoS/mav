@@ -1790,3 +1790,43 @@ body {
     max-width: 480px;
   }
 }
+
+/* ================= Thanks (after checkout) ================= */
+.thanks .orb.big {
+  margin-bottom: 6px;
+}
+.steps-thanks {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.steps-thanks article {
+  border-radius: 20px;
+  padding: 22px;
+}
+.steps-thanks h2 {
+  margin: 10px 0 6px;
+  font-size: 1.1rem;
+}
+.steps-thanks p {
+  margin: 0;
+  color: var(--ink-2);
+}
+.thanks-foot {
+  text-align: center;
+  color: var(--ink-2);
+  padding: 28px 16px 80px;
+}
+@media (max-width: 860px) {
+  .steps-thanks {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+  }
+}
+.thanks-foot a {
+  color: var(--accent);
+  font-weight: 600;
+}
