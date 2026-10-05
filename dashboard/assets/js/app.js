@@ -336,12 +336,6 @@ const api = {
       data = await r.json();
     } catch (_) {}
     if (r.status === 401 && data && data.auth && LIVE) showAuthGate("login");
-    // A Free-plan limit: offer the upgrade right where it happened.
-    if (r.status === 402 && data && data.upgrade)
-      toast(data.error, {
-        action: { label: "See Pro", run: () => go("settings", "plan") },
-        duration: 9000,
-      });
     if (!r.ok) {
       const err = new Error((data && data.error) || `HTTP ${r.status}`);
       err.data = data;
@@ -3891,40 +3885,34 @@ $$("[data-stab]").forEach((t) =>
     history.replaceState(null, "", `#settings/${t.dataset.stab}`);
   }),
 );
-/* ---------- Plan (Free / Pro) ---------- */
+/* ---------- Plan (Mav / Mav Connect) ----------
+   Mav itself has no limits. Connect = services on Mav's infrastructure. */
 function renderPlan(p) {
-  const pro = p.plan === "pro";
-  $("#planBadge").textContent = p.label || (pro ? "Pro" : "Free");
-  $("#planBadge").classList.toggle("is-pro", pro);
-  $("#planTitle").textContent = pro ? "You're on Mav Pro — thank you" : "You're on Mav Free";
-  const fl = p.free_limits || {};
-  $("#planLead").textContent = pro
-    ? `No limits${p.email ? ` · ${p.email}` : ""}${p.expires ? ` · renews by ${new Date(p.expires * 1000).toLocaleDateString()}` : ""}.`
-    : `Everything Mav does, with room for ${fl.routines} routines and ${fl.watch} “keep an eye on” items. The daily briefing is always included.`;
-  $("#planUpgrade").hidden = pro;
+  const paid = p.plan !== "free";
+  $("#planBadge").textContent = p.label || (paid ? "Connect" : "Mav");
+  $("#planBadge").classList.toggle("is-pro", paid);
+  $("#planTitle").textContent = paid
+    ? `You have Mav ${p.label} — thank you`
+    : "Mav is free, with no limits";
+  $("#planLead").textContent = paid
+    ? `${p.email ? `${p.email}` : "Licence active"}${p.expires ? ` · renews by ${new Date(p.expires * 1000).toLocaleDateString()}` : ""}.`
+    : "Everything runs on your machine. Mav Connect adds the services that need the cloud — and funds Mav.";
+  $("#planUpgrade").hidden = paid;
   $("#planUpgrade").href = p.checkout_url || "#";
-  const rows = [
-    ["Active routines", p.used.routines, p.limits.routines],
-    ["Keep an eye on", p.used.watch, p.limits.watch],
-  ];
-  $("#planUsage").innerHTML = rows
-    .map(([label, used, lim]) => {
-      const pct = lim ? Math.min(100, (100 * used) / lim) : 0;
-      return `<div><div class="plan-usage-row"><span>${esc(label)}</span><strong>${used}${lim ? ` / ${lim}` : " · unlimited"}</strong></div>
-        ${lim ? `<div class="usage-meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-high" : ""}"><i style="width:${pct}%"></i></div>` : ""}</div>`;
+  $("#planServices").innerHTML = (p.services || [])
+    .map((x) => {
+      const tag = x.status === "soon" ? "Coming soon" : x.included ? "Included" : "Connect";
+      return `<li class="${x.included ? "is-on" : ""}"><div><strong>${esc(x.label)}</strong><span>${esc(x.detail)}</span></div><em class="svc-tag ${x.status === "soon" ? "is-soon" : x.included ? "is-on" : ""}">${tag}</em></li>`;
     })
     .join("");
-  $("#planPerks").innerHTML = pro
-    ? ""
-    : (p.perks || []).map((x) => `<li>${esc(x)}</li>`).join("");
   $("#licenceRemove").hidden = !p.has_key;
   $("#licenceText").textContent = p.reason
     ? p.reason
     : p.has_key
       ? "Licence active on this machine."
-      : "Paste the key from your purchase email. It is checked on this machine — Mav never calls home.";
+      : "Paste the key from your purchase email to turn on Mav Connect.";
   const brand = $("#brandPro");
-  if (brand) brand.hidden = !pro;
+  if (brand) brand.hidden = !paid;
 }
 async function loadPlan() {
   if (!LIVE) return;
@@ -3940,7 +3928,7 @@ $("#licenceSave").addEventListener("click", async () => {
     const r = await api.post("plan/licence", { key });
     $("#licenceKey").value = "";
     renderPlan(r.plan_info);
-    toast("Mav Pro is active. Thank you!");
+    toast("Mav Connect is active. Thank you!");
   } catch (ex) {
     toast(ex.message, { error: true });
   }

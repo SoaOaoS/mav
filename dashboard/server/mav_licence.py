@@ -1,11 +1,12 @@
-"""Plans and licence keys: Mav Free and Mav Pro.
+"""Plans and licence keys: Mav (free) and Mav Connect.
 
-Mav stays open source and fully usable for free. Free has generous limits on
-the things that run on their own (routines, "keep an eye on" items); Pro lifts
-them. Nothing that already exists is ever switched off: going over a limit
-only blocks creating *new* items.
+Mav is open source and free without limits on your own machine — nothing in
+this module restricts what the app does. Mav Connect is a subscription to
+services that run on Mav's infrastructure (encrypted cloud backup first,
+then remote access and the mobile app); its licence key is what those
+services check, server-side. That is the part a patched install cannot fake.
 
-A licence key is checked offline — no call home, no account server:
+A licence key is also checked offline here, to show the plan in the app:
 
     MAV1.<base64url(JSON payload)>.<base64url(Ed25519 signature)>
 
@@ -27,16 +28,23 @@ PUBLIC_KEY = os.environ.get("MAV_LICENCE_PUBKEY", "XzZKcHvh7D5w-Jyh-qcoYFvkJ4nab
 CHECKOUT_URL = os.environ.get("MAV_CHECKOUT_URL", "https://soaoaos.github.io/mav/pricing.html")
 PREFIX = "MAV1"
 
-# None = unlimited. The daily briefing is never counted: it is free for all.
+# Mav itself has no limits, on any plan. Plans differ only by the services
+# they include (see CONNECT_SERVICES). "pro" keys (first edition) = Connect.
 PLANS = {
-    "free": {"label": "Free", "routines": 5, "watch": 5},
-    "pro": {"label": "Pro", "routines": None, "watch": None},
+    "free": {"label": "Mav", "services": []},
+    "connect": {"label": "Connect", "services": ["backup"]},
+    "business": {"label": "Business", "services": ["backup"]},
 }
-PRO_PERKS = [
-    "Unlimited routines",
-    "Unlimited “keep an eye on” items",
-    "Priority support and early features",
-    "Funds Mav’s development — thank you",
+ALIASES = {"pro": "connect"}
+CONNECT_SERVICES = [
+    {"id": "backup", "label": "Encrypted cloud backup", "status": "live",
+     "detail": "Daily, encrypted on this machine before it leaves — restore anywhere."},
+    {"id": "remote", "label": "Secure remote access", "status": "soon",
+     "detail": "Your Mav at your own address, from anywhere, without opening a port."},
+    {"id": "mobile", "label": "Native mobile app", "status": "soon",
+     "detail": "Real iPhone and Android notifications, widgets, share to Mav."},
+    {"id": "support", "label": "Priority support", "status": "live",
+     "detail": "Answers from the people who build Mav."},
 ]
 
 
@@ -87,12 +95,13 @@ def verify(key: str, public_key_b64: str | None = None, now: float | None = None
     except Exception:  # noqa: BLE001
         out["reason"] = "This licence key is damaged — copy it again in full."
         return out
-    plan = payload.get("plan") if payload.get("plan") in PLANS else "free"
+    plan = ALIASES.get(payload.get("plan"), payload.get("plan"))
+    plan = plan if plan in PLANS else "free"
     exp = payload.get("exp")
     out.update(plan=plan, email=str(payload.get("email") or ""), expires=exp,
                id=str(payload.get("id") or ""))
     if exp and float(exp) < (now or time.time()):
-        out.update(plan="free", reason="This licence has expired — renew it to keep Pro.")
+        out.update(plan="free", reason="This licence has expired — renew Mav Connect to keep its services.")
         out["expired"] = True
         return out
     out["valid"] = True
@@ -135,10 +144,6 @@ class Licence:
     def plan(self) -> str:
         return self.current()["plan"]
 
-    def limit(self, what: str) -> int | None:
-        return PLANS[self.plan()].get(what)
-
-    def allows(self, what: str, current_count: int) -> bool:
-        """May one more `what` be created when `current_count` exist?"""
-        lim = self.limit(what)
-        return lim is None or current_count < lim
+    def has(self, service: str) -> bool:
+        """Does the current licence include this Connect service?"""
+        return service in PLANS[self.plan()]["services"]
