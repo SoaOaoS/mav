@@ -9,10 +9,18 @@ Connect key gets `401`. Backups arrive already encrypted by Mav (AES-256-GCM,
 the key never leaves the user's machine): this service stores unreadable
 bytes only.
 
+**Live service:** `https://mav-connect.mav-ai.workers.dev` (set in
+`DEFAULT_CONNECT_URL`, `bot/occonnect.py`).
+
 ## Deploy (once, ~5 minutes)
 
 1. A Cloudflare account (free plan is enough to start) and Node.js.
 2. Create the bucket and deploy:
+
+   On a server without a browser, skip `wrangler login`: create an API token
+   (dash.cloudflare.com → My Profile → API Tokens → template "Edit Cloudflare
+   Workers", with *Workers Scripts: Edit* and *Workers R2 Storage: Edit*) and
+   `export CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…` instead.
 
    ```bash
    cd connect

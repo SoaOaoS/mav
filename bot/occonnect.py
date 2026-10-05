@@ -31,7 +31,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 # The deployed Connect service (connect/README.md). MAV_CONNECT_URL overrides.
-DEFAULT_CONNECT_URL = ""
+DEFAULT_CONNECT_URL = "https://mav-connect.mav-ai.workers.dev"
 MAGIC = b"MAVBK1"
 MAX_ARCHIVE = 90 * 1024 * 1024
 # BOT_DIR files never put in a backup (secrets that belong to this machine).
