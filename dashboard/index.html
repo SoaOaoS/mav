@@ -77,6 +77,24 @@
   </head>
   <body class="is-loading">
     <!-- ============ SPLASH ============ -->
+    <!-- Sign-in / first-run "protect your Mav" (shown by app.js) -->
+    <div class="auth-gate" id="authGate" hidden>
+      <form class="auth-card" id="authForm" autocomplete="on">
+        <span class="splash-orb auth-orb" aria-hidden="true"></span>
+        <h1 id="authTitle">Welcome back</h1>
+        <p id="authLead">Enter your password to open Mav.</p>
+        <input type="text" name="username" value="mav" autocomplete="username" hidden />
+        <input class="input" type="password" id="authPassword" placeholder="Password"
+          autocomplete="current-password" required minlength="8" />
+        <input class="input" type="password" id="authPassword2" placeholder="Repeat the password"
+          autocomplete="new-password" minlength="8" hidden />
+        <p class="auth-error" id="authError" role="alert" hidden></p>
+        <button class="btn btn-primary" type="submit" id="authSubmit">Sign in</button>
+        <p class="auth-foot" id="authFoot">Forgot it? On the machine running Mav:
+          <code>sudo mav password</code></p>
+      </form>
+    </div>
+
     <div class="splash" id="splash" aria-hidden="true">
       <div class="splash-inner">
         <span class="splash-orb"></span>
@@ -836,6 +854,16 @@
                   <button class="btn btn-ghost btn-sm" id="versionCheck">
                     Check for updates
                   </button>
+                </div>
+                <div class="setting-row" id="accountRow">
+                  <div>
+                    <strong>Password</strong>
+                    <span id="accountText">Only people with the password can open Mav.</span>
+                  </div>
+                  <div class="row">
+                    <button class="btn btn-ghost btn-sm" id="passwordChange">Change</button>
+                    <button class="btn btn-ghost btn-sm" id="signOut">Sign out</button>
+                  </div>
                 </div>
                 <div class="setting-row">
                   <div>
