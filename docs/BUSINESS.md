@@ -200,7 +200,11 @@ encrypted cloud backup; pricing page; brand v2.
 
    then automatically from the store's webhook (a tiny serverless function
    calling the same `mav_licence.sign`).
-4. Point the buttons at the store: `BUY_URL` in `docs/pricing.js` and
+4. Deploy the Connect service once (`connect/README.md`: `wrangler deploy`,
+   ~5 minutes, free tier) and put its URL in `DEFAULT_CONNECT_URL`
+   (`bot/occonnect.py`), then release. To cut off a refunded licence, add its
+   id to `REVOKED` in `connect/wrangler.toml`.
+5. Point the buttons at the store: `BUY_URL` in `docs/pricing.js` and
    `MAV_CHECKOUT_URL` (default: the pricing page) for the app's *Get Mav Connect*.
 
 Until then, the buttons open a GitHub issue so early supporters can still

@@ -73,6 +73,12 @@ talks to the opencode engine, and reads/writes Postgres.
   first). A licence key (`MAV1.<payload>.<Ed25519 signature>`) is checked
   offline to show the plan, and server-side by the Connect services. Keys are
   issued with `scripts/licence-tool.py`.
+- Mav Connect cloud backup (`bot/occonnect.py`): the database (COPY per
+  table), the engine's chat history and config, routines and settings go into
+  one tar.gz, encrypted on this machine (AES-256-GCM, key from the user's
+  recovery key via scrypt) and sent to the Connect service (`connect/`, a
+  Cloudflare Worker that checks the licence server-side). The worker backs up
+  nightly; the Plan tab can back up, show the recovery key and restore.
 - Every answer's `tokens` and `cost` (as the engine reports them) go to
   `BOT_DIR/usage.json` via `bot/ocusage.py` — by the web app (chats,
   background calls) and the worker (routines). A "stop" budget that is used up
@@ -85,6 +91,7 @@ talks to the opencode engine, and reads/writes Postgres.
 
 | Method   | Route                                                                                | Purpose                                                                          |
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| GET | `/api/connect` · `/api/connect/recovery-key` · POST `/api/connect/backup` · `/api/connect/restore` (`{id, recovery_key}`) | Mav Connect cloud backup |
 | GET | `/api/plan` · POST `/api/plan/licence` (`{key}`) · `/api/plan/remove` | plan (Mav / Connect), Connect services, licence key |
 | GET | `/api/usage?days=30` · POST `/api/usage/budget` (`{monthly_usd, action: warn|stop}`) · `/api/usage/small-model` | cost, tokens, budget, background model |
 | GET/POST | `/api/briefing` (`{enabled, time}`), POST `/api/briefing/run` | daily briefing settings / brief me now (returns the chat to open) |

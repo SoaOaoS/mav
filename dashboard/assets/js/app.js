@@ -3919,7 +3919,109 @@ async function loadPlan() {
   try {
     renderPlan(await api.get("plan"));
   } catch (_) {}
+  loadBackup();
 }
+
+/* ---------- Mav Connect: cloud backup ---------- */
+const fmtSize = (n) =>
+  !n ? "0 KB" : n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+const backupWhen = (id) => {
+  // ids look like 2026-10-05T03-12-45-123Z.mavbak
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})/.exec(id || "");
+  return m ? new Date(`${m[1]}T${m[2]}:${m[3]}:00Z`).toLocaleString() : id;
+};
+let backupPoll = 0;
+async function loadBackup() {
+  if (!LIVE) return;
+  let b;
+  try {
+    b = await api.get("connect");
+  } catch (_) {
+    return;
+  }
+  const card = $("#backupCard");
+  card.hidden = !b.available;
+  if (!b.available) return;
+  const text = $("#backupText");
+  const can = b.included && b.configured;
+  $("#backupNow").disabled = !can || b.running;
+  $("#backupNow").textContent = b.running ? "Backing up…" : "Back up now";
+  if (!b.included) text.textContent = "Comes with Mav Connect: a daily backup of your memory, chats, routines and settings — encrypted on this machine before it leaves.";
+  else if (!b.configured) text.textContent = "The Mav Connect service isn't set up on this machine yet.";
+  else {
+    const last = b.last && b.last.at ? `Last backup ${new Date(b.last.at * 1000).toLocaleString()} (${fmtSize(b.last.size || 0)}).` : "No backup yet.";
+    const r = b.remote;
+    const space = r ? ` ${fmtSize(r.used_bytes)} of ${fmtSize(r.quota_bytes)} used.` : "";
+    text.textContent = `${last}${space} Mav backs up every night on its own.${b.error ? ` ⚠ ${b.error}` : ""}`;
+  }
+  const list = (b.remote && b.remote.backups) || [];
+  $("#backupList").innerHTML = list
+    .map((x) => `<li><div><strong>${esc(backupWhen(x.id))}</strong> <span>· ${fmtSize(x.size)}</span></div><button class="btn btn-ghost btn-sm" data-restore="${esc(x.id)}">Restore</button></li>`)
+    .join("");
+  clearTimeout(backupPoll);
+  if (b.running) backupPoll = setTimeout(loadBackup, 3000);
+}
+$("#backupNow").addEventListener("click", async () => {
+  if (!needLive()) return;
+  try {
+    await api.post("connect/backup");
+    toast("Backing up — encrypted on this machine first.");
+    loadBackup();
+  } catch (ex) {
+    toast(ex.message, { error: true });
+  }
+});
+$("#backupKey").addEventListener("click", async () => {
+  if (!needLive()) return;
+  const r = await api.get("connect/recovery-key").catch(() => null);
+  if (!r) return;
+  modal.open({
+    title: "Your recovery key",
+    body: `<p>Backups are encrypted with this key, on this machine. To restore on a new machine you will need it — <strong>we can't recover it for you</strong>. Keep it in your password manager.</p>
+      <div class="recovery-key">${esc(r.key)}</div>`,
+    actions: [
+      { label: "Copy", run: () => (copyText(r.key), false) },
+      { label: "Done", kind: "btn-primary" },
+    ],
+  });
+});
+function confirmRestore(id, askKey) {
+  modal.open({
+    title: "Restore this backup?",
+    body: `<p>Your memory, chats, routines and settings will be replaced by the backup from <strong>${esc(backupWhen(id))}</strong>. Then restart Mav.</p>
+      ${askKey ? `<div class="field"><label>Recovery key of that machine</label><input id="restoreKey" placeholder="XXXX-XXXX-…" autocomplete="off" spellcheck="false"></div>` : ""}`,
+    actions: [
+      { label: "Cancel" },
+      {
+        label: "Restore",
+        kind: "btn-primary",
+        run: async () => {
+          try {
+            await api.post("connect/restore", {
+              id,
+              recovery_key: askKey ? $("#restoreKey").value : "",
+            });
+            toast("Restored. Restart Mav to finish.", {
+              action: { label: "Restart", run: () => go("settings", "advanced") },
+            });
+          } catch (ex) {
+            toast(ex.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+}
+$("#backupList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-restore]");
+  if (b) confirmRestore(b.dataset.restore, false);
+});
+$("#backupRestoreOther").addEventListener("click", () => {
+  const first = $("#backupList [data-restore]");
+  if (!first) return toast("No backup in your Mav Connect space yet.");
+  confirmRestore(first.dataset.restore, true);
+});
 $("#licenceSave").addEventListener("click", async () => {
   if (!needLive()) return;
   const key = $("#licenceKey").value.trim();

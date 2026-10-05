@@ -138,6 +138,72 @@ import mav_licence  # noqa: E402
 LICENCE = mav_licence.Licence(BOT_DIR / "licence.json")
 
 
+# ------------------------------------------------------- Mav Connect: backup
+try:
+    import occonnect  # noqa: E402
+
+    CONNECT_BACKUP = occonnect.Backup(BOT_DIR, PG_DSN)
+except Exception:  # noqa: BLE001
+    occonnect = None
+    CONNECT_BACKUP = None
+_backup_job: dict = {"running": False, "error": "", "result": None}
+
+
+def connect_info(with_remote: bool = True) -> dict:
+    """Cloud backup status for Settings → Plan."""
+    if CONNECT_BACKUP is None:
+        return {"available": False}
+    info = {
+        "available": True,
+        "configured": bool(occonnect.connect_url()),
+        "included": LICENCE.has("backup"),
+        "last": CONNECT_BACKUP.last(),
+        "running": _backup_job["running"],
+        "error": _backup_job["error"],
+        "remote": None,
+    }
+    if with_remote and info["configured"] and info["included"]:
+        try:
+            info["remote"] = CONNECT_BACKUP.status()
+        except Exception as exc:  # noqa: BLE001
+            info["error"] = str(exc)
+    return info
+
+
+def connect_backup_now() -> dict:
+    if CONNECT_BACKUP is None:
+        return {"ok": False, "error": "Cloud backup is unavailable here."}
+    if not LICENCE.has("backup"):
+        return {"ok": False, "error": "Cloud backup comes with Mav Connect."}
+    if _backup_job["running"]:
+        return {"ok": True, "running": True}
+
+    def work():
+        _backup_job.update(running=True, error="")
+        try:
+            _backup_job["result"] = CONNECT_BACKUP.backup_now()
+        except Exception as exc:  # noqa: BLE001
+            _backup_job["error"] = str(exc)
+        finally:
+            _backup_job["running"] = False
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"ok": True, "running": True}
+
+
+def connect_restore(backup_id: str, recovery_key: str) -> dict:
+    if CONNECT_BACKUP is None:
+        return {"ok": False, "error": "Cloud backup is unavailable here."}
+    if not re.match(r"^[A-Za-z0-9_.-]+\.mavbak$", backup_id or ""):
+        return {"ok": False, "error": "Pick a backup to restore."}
+    try:
+        res = CONNECT_BACKUP.restore(backup_id, recovery_key.strip())
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    mark_pending("restore")
+    return res
+
+
 def get_plan() -> dict:
     """The plan shown in Settings → Plan. Mav has no limits on any plan;
     Mav Connect adds services that run on Mav's infrastructure."""
@@ -4198,6 +4264,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_briefing())
             if path == "/api/plan":
                 return self._send(200, get_plan())
+            if path == "/api/connect":
+                return self._send(200, connect_info())
+            if path == "/api/connect/recovery-key":
+                if CONNECT_BACKUP is None:
+                    return self._send(404, {"error": "unavailable"})
+                return self._send(200, {"key": CONNECT_BACKUP.recovery_key()})
             if path == "/api/usage":
                 if USAGE is None:
                     return self._send(200, {"available": False})
@@ -4421,6 +4493,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/plan/licence":
                 res = LICENCE.save(str(payload.get("key") or ""))
                 return self._send(200 if res.get("ok") else 400, {**res, "plan_info": get_plan()})
+            if path == "/api/connect/backup":
+                res = connect_backup_now()
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/connect/restore":
+                res = connect_restore(str(payload.get("id") or ""), str(payload.get("recovery_key") or ""))
+                return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/plan/remove":
                 LICENCE.remove()
                 return self._send(200, {"ok": True, "plan_info": get_plan()})
