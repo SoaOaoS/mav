@@ -3864,6 +3864,7 @@ function openSettingsTab(tab) {
         loadMcp();
         loadMail();
       },
+      usage: loadUsage,
       general: () => {
         loadAdvanced();
         checkVersion();
@@ -3877,6 +3878,104 @@ $$("[data-stab]").forEach((t) =>
     history.replaceState(null, "", `#settings/${t.dataset.stab}`);
   }),
 );
+/* ---------- Usage ---------- */
+const money = (v) =>
+  v >= 100 ? `$${Math.round(v)}` : v >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(v ? 3 : 2)}`;
+const compact = (n) =>
+  n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n || 0);
+let budgetAction = "warn";
+function setBudgetAction(v) {
+  budgetAction = v === "stop" ? "stop" : "warn";
+  $$("#budgetAction [data-v]").forEach((b) =>
+    b.classList.toggle("is-active", b.dataset.v === budgetAction),
+  );
+}
+async function loadUsage() {
+  if (!LIVE) return;
+  let u;
+  try {
+    u = await api.get("usage");
+  } catch (_) {
+    return;
+  }
+  if (!u.available) {
+    $("#usageMeterText").textContent = "Usage tracking is not available.";
+    return;
+  }
+  $("#usageCost").textContent = money(u.cost || 0);
+  $("#usageAnswers").textContent = String(u.answers || 0);
+  $("#usageTokens").textContent = compact(u.tokens || 0);
+  const b = u.budget || {};
+  const meter = $("#usageMeter");
+  if (b.monthly_usd) {
+    const pct = Math.min(100, u.used_pct || 0);
+    meter.hidden = false;
+    meter.querySelector("i").style.width = `${pct}%`;
+    meter.classList.toggle("is-high", pct >= 80 && pct < 100);
+    meter.classList.toggle("is-over", pct >= 100);
+    $("#usageMeterText").textContent =
+      `${money(u.cost || 0)} of ${money(b.monthly_usd)} (${Math.round(u.used_pct || 0)} %)` +
+      (u.blocked ? " — new answers are paused until you raise the budget." : "");
+  } else {
+    meter.hidden = true;
+    $("#usageMeterText").textContent = "No budget set.";
+  }
+  const max = Math.max(...u.days.map((d) => d.cost), 0);
+  $("#usageBars").innerHTML = u.days
+    .map((d) => {
+      const h = max ? Math.max(2, Math.round((90 * d.cost) / max)) : 2;
+      return `<i class="${d.cost ? "" : "is-zero"}" style="height:${h}px" title="${esc(d.day)} · ${money(d.cost)} · ${d.answers} answer(s)"></i>`;
+    })
+    .join("");
+  const label = { chat: "Chats", routine: "Routines & briefing", background: "Background (titles, memory)" };
+  $("#usageSplit").innerHTML = Object.entries(u.by_source || {})
+    .map(([k, v]) => `<span><strong>${esc(label[k] || k)}</strong> ${money(v.cost)} · ${v.answers}</span>`)
+    .join("");
+  $("#budgetAmount").value = b.monthly_usd || "";
+  setBudgetAction(b.action);
+  $("#smallModel").value = u.small_model || "";
+  // Suggestions: the models of the provider already connected.
+  try {
+    const cur = ((await api.get("config/provider")).current || {});
+    if (cur.provider) {
+      const r = await api.post("config/provider/test", {
+        provider: cur.preset === "custom" ? cur.provider : cur.preset || cur.provider,
+        base_url: cur.base_url || "",
+      });
+      $("#smallModelList").innerHTML = (r.models || [])
+        .map((m) => (typeof m === "string" ? m : m.id))
+        .map((m) => `<option value="${esc(`${cur.provider}/${m}`)}">`)
+        .join("");
+    }
+  } catch (_) {}
+}
+$("#budgetAction").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-v]");
+  if (b) setBudgetAction(b.dataset.v);
+});
+$("#budgetSave").addEventListener("click", async () => {
+  if (!needLive()) return;
+  try {
+    await api.post("usage/budget", {
+      monthly_usd: Number($("#budgetAmount").value || 0),
+      action: budgetAction,
+    });
+    toast("Budget saved.");
+    loadUsage();
+  } catch (ex) {
+    toast(ex.message, { error: true });
+  }
+});
+$("#smallModelSave").addEventListener("click", async () => {
+  if (!needLive()) return;
+  try {
+    await api.post("usage/small-model", { model: $("#smallModel").value });
+    toast($("#smallModel").value ? "Background model saved." : "Background work uses your main model.");
+  } catch (ex) {
+    toast(ex.message, { error: true });
+  }
+});
+
 function setStatus(id, text, kind) {
   const el = $("#" + id);
   if (!el) return;

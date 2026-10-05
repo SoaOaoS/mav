@@ -40,6 +40,17 @@ LISTENERS: list = []  # queues of the /event subscribers
 OPTS = {"multi": False, "word_delay": 0.05}
 
 
+def usage_info(body: dict, reply: str) -> dict:
+    """Tokens and cost like the engine reports them ($3 / $15 per M tokens)."""
+    sent = sum(len(p.get("text", "")) for p in body.get("parts", []) if p.get("type") == "text")
+    tin, tout = sent // 4 + 10, len(reply) // 4 + 1
+    return {
+        "tokens": {"input": tin, "output": tout, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+        "cost": round((tin * 3 + tout * 15) / 1e6, 8),
+        "providerID": "fake", "modelID": (body.get("model") or {}).get("modelID") or "fake-1",
+    }
+
+
 def publish(event: dict) -> None:
     with LOCK:
         for q in list(LISTENERS):
@@ -124,6 +135,7 @@ def add_multi_step(sid: str, body: dict) -> None:
             final["parts"][0]["text"] = " ".join(words[: i + 1])
         _touch(sid, final)
     with LOCK:
+        final["info"].update(usage_info(body, final["parts"][0]["text"]))
         final["info"]["finish"] = "stop"
         if sid in SESSIONS:
             SESSIONS[sid]["time"]["updated"] = now_ms()
@@ -139,12 +151,14 @@ def add_exchange(sid: str, body: dict, delay: float) -> dict:
     with LOCK:
         MESSAGES.setdefault(sid, []).append(user)
     time.sleep(delay)
+    reply = reply_for(body)
     answer = {
         "info": {
             "id": uuid.uuid4().hex, "role": "assistant", "finish": "stop",
             "agent": body.get("agent") or "general", "time": {"created": now_ms()},
+            **usage_info(body, reply),
         },
-        "parts": [{"type": "text", "text": reply_for(body)}],
+        "parts": [{"type": "text", "text": reply}],
     }
     with LOCK:
         MESSAGES[sid].append(answer)
