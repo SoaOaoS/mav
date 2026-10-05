@@ -315,6 +315,7 @@ const api = {
     const r = await fetch(`/api/${path}`, {
       headers: { Accept: "application/json" },
     });
+    if (r.status === 401 && LIVE) showAuthGate("login");
     if (!r.ok) throw new Error(String(r.status));
     return r.json();
   },
@@ -328,6 +329,7 @@ const api = {
     try {
       data = await r.json();
     } catch (_) {}
+    if (r.status === 401 && data && data.auth && LIVE) showAuthGate("login");
     if (!r.ok) {
       const err = new Error((data && data.error) || `HTTP ${r.status}`);
       err.data = data;
@@ -5526,11 +5528,105 @@ function hideSplash() {
   document.body.classList.remove("is-loading");
 }
 
+/* ---------- Sign-in ----------
+   First run: create the password that protects this Mav. Afterwards: sign in.
+   The session is an HttpOnly cookie; the server answers 401 without it. */
+let authMode = "";
+function showAuthGate(mode) {
+  if (authMode === mode) return;
+  authMode = mode;
+  const setup = mode === "setup";
+  $("#authTitle").textContent = setup ? "Protect your Mav" : "Welcome back";
+  $("#authLead").textContent = setup
+    ? "Choose a password. Anyone who wants to open Mav — from this device or your phone — will need it."
+    : "Enter your password to open Mav.";
+  $("#authPassword").autocomplete = setup ? "new-password" : "current-password";
+  $("#authPassword2").hidden = !setup;
+  $("#authPassword2").required = setup;
+  $("#authSubmit").textContent = setup ? "Set password and continue" : "Sign in";
+  $("#authFoot").hidden = setup;
+  $("#authError").hidden = true;
+  $("#authGate").hidden = false;
+  hideSplash();
+  setTimeout(() => $("#authPassword").focus(), 50);
+}
+$("#authForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = $("#authPassword").value;
+  const err = $("#authError");
+  err.hidden = true;
+  if (authMode === "setup" && pw !== $("#authPassword2").value) {
+    err.textContent = "The two passwords differ.";
+    err.hidden = false;
+    return;
+  }
+  $("#authSubmit").disabled = true;
+  try {
+    const r = await fetch(`/api/auth/${authMode === "setup" ? "setup" : "login"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pw }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "Could not sign in.");
+    location.reload();
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.hidden = false;
+    $("#authSubmit").disabled = false;
+  }
+});
+
+$("#signOut").addEventListener("click", async () => {
+  if (!needLive()) return;
+  await api.post("auth/logout").catch(() => {});
+  location.reload();
+});
+$("#passwordChange").addEventListener("click", () => {
+  if (!needLive()) return;
+  modal.open({
+    title: "Change password",
+    body: `<div class="field"><label>Current password</label><input type="password" id="pwCur" autocomplete="current-password"></div>
+      <div class="field"><label>New password (8+ characters)</label><input type="password" id="pwNew" autocomplete="new-password"></div>
+      <p class="hint">Every other device will have to sign in again.</p>`,
+    actions: [
+      { label: "Cancel" },
+      {
+        label: "Change password",
+        kind: "btn-primary",
+        run: async () => {
+          try {
+            await api.post("auth/password", {
+              current: $("#pwCur").value,
+              password: $("#pwNew").value,
+            });
+            toast("Password changed.");
+          } catch (ex) {
+            toast(ex.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+});
+
 async function boot() {
   hydrateIcons();
   // The splash only stays for the real first load; a safety net dismisses it
   // after 2 s no matter what, so the app is never stuck behind it.
   setTimeout(hideSplash, 2000);
+  let auth = null;
+  try {
+    const r = await fetch("/api/auth/state", { headers: { Accept: "application/json" } });
+    if (r.ok) auth = await r.json();
+  } catch (_) {}
+  if (auth && auth.enabled && (auth.setup_needed || !auth.authenticated)) {
+    LIVE = true;
+    document.body.dataset.mode = "live";
+    return showAuthGate(auth.setup_needed ? "setup" : "login");
+  }
+  if (auth && !auth.enabled) $("#accountRow").hidden = true;
   let status = null;
   try {
     status = await api.get("status");
