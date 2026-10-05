@@ -5,42 +5,54 @@
 
 :root {
   color-scheme: light;
-  --bg: #f6f5f1;
+  /* Mav brand v2 — "Midnight & Emerald".
+     Ink: blue-black. Paper: warm white. Emerald = the brand, actions.
+     Amber "signal" = proactive moments only (briefing, alerts, Pro). */
+  --bg: #fafaf7;
   --bg-elev: #ffffff;
-  --bg-sunk: #efede7;
-  --bg-hover: #ebe8e1;
-  --ink: #1d1c1a;
-  --ink-2: #57534c;
-  --ink-3: #8c877e;
-  --line: #e5e1d8;
-  --line-2: #eeebe4;
-  --accent: #2f6f5e;
-  --accent-hover: #255a4c;
-  --accent-soft: #e3efea;
-  --accent-ink: #1f4d41;
+  --bg-sunk: #f3f2ee;
+  --bg-hover: #eeede8;
+  --ink: #0e1013;
+  --ink-2: #4a4f57;
+  --ink-3: #8a9099;
+  --line: #e6e5df;
+  --line-2: #efeee9;
+  --accent: #0f7a5c;
+  --accent-hover: #0b6449;
+  --accent-soft: #e4f2ec;
+  --accent-ink: #0a4a38;
   --on-accent: #ffffff;
-  --warm: #b8693a;
-  --warm-soft: #f7e9df;
-  --danger: #b84a3a;
-  --danger-soft: #f8e5e1;
-  --ok: #3f9d6f;
-  --warn: #c9973f;
-  --off: #b6b2aa;
-  --user-bubble: #ebe8e0;
-  --code-bg: #f1efe9;
-  --shadow-sm: 0 1px 2px rgba(28, 27, 25, 0.05);
-  --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 8px 24px rgba(28, 27, 25, 0.06);
+  --signal: #e8962e;
+  --signal-soft: #fdf1e1;
+  --warm: #c46a2c;
+  --warm-soft: #fbeee3;
+  --danger: #c2412d;
+  --danger-soft: #fbe7e3;
+  --err: var(--danger);
+  --ok: #16a06a;
+  --warn: #d48a1c;
+  --off: #b9bdc4;
+  --user-bubble: #f0efea;
+  --code-bg: #f4f3ef;
+  --ring: 0 0 0 1px rgba(14, 16, 19, 0.06);
+  --shadow-sm: 0 0 0 1px rgba(14, 16, 19, 0.05), 0 1px 2px rgba(14, 16, 19, 0.05);
+  --shadow:
+    0 0 0 1px rgba(14, 16, 19, 0.05), 0 1px 2px rgba(14, 16, 19, 0.04),
+    0 12px 32px -12px rgba(14, 16, 19, 0.14);
   --shadow-lg:
-    0 2px 6px rgba(28, 27, 25, 0.06), 0 24px 60px rgba(28, 27, 25, 0.16);
+    0 0 0 1px rgba(14, 16, 19, 0.06), 0 2px 6px rgba(14, 16, 19, 0.06),
+    0 32px 72px -20px rgba(14, 16, 19, 0.28);
+  --brand-1: #12936e;
+  --brand-2: #0a4a38;
 
-  --radius-lg: 20px;
-  --radius: 14px;
-  --radius-sm: 10px;
-  --radius-xs: 7px;
+  --radius-lg: 18px;
+  --radius: 12px;
+  --radius-sm: 9px;
+  --radius-xs: 6px;
 
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --display: "Fraunces", Georgia, serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Instrument Serif", Georgia, serif;
+  --mono: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --dur-fast: 120ms;
   --dur: 180ms;
@@ -50,60 +62,82 @@
   --sidebar-w: 268px;
 }
 
-/* Dark theme: by system preference unless the user forced light. */
+/* Dark theme ("Midnight"): by system preference unless the user forced light. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #17181a;
-    --bg-elev: #202124;
-    --bg-sunk: #1b1c1e;
-    --bg-hover: #2a2b2e;
-    --ink: #ecebe7;
-    --ink-2: #b4b0a8;
-    --ink-3: #85817a;
-    --line: #313236;
-    --line-2: #2a2b2e;
-    --accent: #5fb39a;
-    --accent-hover: #74c4ab;
-    --accent-soft: #1f3530;
-    --accent-ink: #a6dccb;
-    --on-accent: #0f1f1a;
-    --warm: #e09a6b;
-    --warm-soft: #3a2a20;
-    --danger: #e3786a;
-    --danger-soft: #3a2220;
-    --user-bubble: #2b2c30;
-    --code-bg: #1a1b1d;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
-    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 60px rgba(0, 0, 0, 0.5);
+    --bg: #0b0d10;
+    --bg-elev: #13161a;
+    --bg-sunk: #0f1215;
+    --bg-hover: #1a1e23;
+    --ink: #eef0f2;
+    --ink-2: #aab1ba;
+    --ink-3: #747c86;
+    --line: #22272d;
+    --line-2: #1a1e23;
+    --accent: #34d39d;
+    --accent-hover: #5ee0b4;
+    --accent-soft: #0f2a21;
+    --accent-ink: #9ff0d1;
+    --on-accent: #04140e;
+    --signal: #f5b04f;
+    --signal-soft: #2e2213;
+    --warm: #eda06c;
+    --warm-soft: #2e2016;
+    --danger: #f0806d;
+    --danger-soft: #331b17;
+    --ok: #34d39d;
+    --warn: #f5b04f;
+    --user-bubble: #1a1e23;
+    --code-bg: #0f1215;
+    --ring: 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.4),
+      0 12px 32px -12px rgba(0, 0, 0, 0.6);
+    --shadow-lg:
+      0 0 0 1px rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.5),
+      0 32px 72px -20px rgba(0, 0, 0, 0.75);
+    --brand-1: #34d39d;
+    --brand-2: #0b5a43;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #17181a;
-  --bg-elev: #202124;
-  --bg-sunk: #1b1c1e;
-  --bg-hover: #2a2b2e;
-  --ink: #ecebe7;
-  --ink-2: #b4b0a8;
-  --ink-3: #85817a;
-  --line: #313236;
-  --line-2: #2a2b2e;
-  --accent: #5fb39a;
-  --accent-hover: #74c4ab;
-  --accent-soft: #1f3530;
-  --accent-ink: #a6dccb;
-  --on-accent: #0f1f1a;
-  --warm: #e09a6b;
-  --warm-soft: #3a2a20;
-  --danger: #e3786a;
-  --danger-soft: #3a2220;
-  --user-bubble: #2b2c30;
-  --code-bg: #1a1b1d;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 60px rgba(0, 0, 0, 0.5);
+  --bg: #0b0d10;
+  --bg-elev: #13161a;
+  --bg-sunk: #0f1215;
+  --bg-hover: #1a1e23;
+  --ink: #eef0f2;
+  --ink-2: #aab1ba;
+  --ink-3: #747c86;
+  --line: #22272d;
+  --line-2: #1a1e23;
+  --accent: #34d39d;
+  --accent-hover: #5ee0b4;
+  --accent-soft: #0f2a21;
+  --accent-ink: #9ff0d1;
+  --on-accent: #04140e;
+  --signal: #f5b04f;
+  --signal-soft: #2e2213;
+  --warm: #eda06c;
+  --warm-soft: #2e2016;
+  --danger: #f0806d;
+  --danger-soft: #331b17;
+  --ok: #34d39d;
+  --warn: #f5b04f;
+  --user-bubble: #1a1e23;
+  --code-bg: #0f1215;
+  --ring: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  --shadow-lg:
+    0 0 0 1px rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.5),
+    0 32px 72px -20px rgba(0, 0, 0, 0.75);
+  --brand-1: #34d39d;
+  --brand-2: #0b5a43;
 }
 
 /* ---------- Base ---------- */
@@ -3916,4 +3950,134 @@ button.memory-updated:hover {
 .plan-hero .btn {
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* ============================================================
+   Brand v2 — "Midnight & Emerald"
+   The mark: an emerald disc crossed by an amber arc — a day that
+   keeps going while you sleep. Serif (Instrument) only for big,
+   editorial moments; everything else is Geist.
+   ============================================================ */
+body {
+  font-feature-settings: "ss01", "cv11";
+  letter-spacing: -0.006em;
+}
+.orb,
+.splash-orb {
+  position: relative;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.55), transparent 38%),
+    linear-gradient(150deg, var(--brand-1), var(--brand-2));
+  box-shadow:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--brand-2) 40%, transparent);
+}
+.orb::after,
+.splash-orb::after {
+  content: "";
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--signal);
+  border-right-color: color-mix(in srgb, var(--signal) 55%, transparent);
+  transform: rotate(-30deg);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--signal) 60%, transparent));
+}
+.splash-orb::after {
+  border-width: 3px;
+}
+body.is-thinking .orb::after {
+  animation: orb-orbit 1.4s linear infinite;
+}
+@keyframes orb-orbit {
+  to {
+    transform: rotate(330deg);
+  }
+}
+
+/* Serif only where it is a moment. */
+.brand-name,
+.view-head h1,
+.welcome h1,
+.empty-chat h2,
+.auth-card h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.brand-name {
+  font-size: 1.45rem;
+}
+.view-head h1 {
+  font-size: clamp(2rem, 3vw, 2.5rem);
+}
+.welcome h1 {
+  font-size: clamp(2.2rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+.chat-title,
+.md-h,
+.card-head h2,
+.modal-head h2,
+.topbar-title {
+  font-family: var(--font);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* Buttons: crisp, with a hairline highlight. */
+.btn {
+  letter-spacing: -0.01em;
+}
+.btn-primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 1px color-mix(in srgb, var(--accent) 70%, #000),
+    0 1px 2px rgba(14, 16, 19, 0.12);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn-ghost {
+  box-shadow: var(--shadow-sm);
+  border-color: transparent;
+}
+
+/* Surfaces: hairline rings instead of heavy borders. */
+.card,
+.composer,
+.modal-box,
+.usage-stat {
+  border-color: transparent;
+  box-shadow: var(--shadow);
+}
+.composer:focus-within {
+  box-shadow:
+    var(--shadow),
+    0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Proactive moments wear the signal colour. */
+.chip-accent {
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+  color: color-mix(in srgb, var(--signal) 75%, var(--ink));
+  background: var(--signal-soft);
+}
+.plan-badge.is-pro,
+.brand-pro {
+  background: linear-gradient(135deg, var(--signal), color-mix(in srgb, var(--signal) 60%, var(--warm)));
+  color: #1b1204;
+}
+
+/* Code in Geist Mono, quieter background. */
+code,
+pre,
+kbd {
+  font-family: var(--mono);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }

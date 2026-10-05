@@ -179,17 +179,19 @@ function fmtDays(days) {
 
 /* Agent identity: a stable colour + initial per agent name. */
 function agentColor(name) {
+  // Brand v2 helper palette: same lightness and saturation, distinct hues,
+  // readable with white initials in light and dark themes.
   const fixed = {
-    assistant: "#2f6f5e",
-    researcher: "#2f6fb0",
-    writer: "#a8457a",
-    planner: "#b8693a",
-    money: "#3f8f4f",
+    assistant: "#0f7a5c", // emerald — the brand
+    researcher: "#3b5bdb", // indigo
+    writer: "#b4407a", // rose
+    planner: "#c26a1c", // amber-brown
+    money: "#2f8a3a", // green
   };
   if (fixed[name]) return fixed[name];
   let h = 0;
   for (const c of String(name || "mav")) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `hsl(${h} 45% 45%)`;
+  return `hsl(${h} 55% 42%)`;
 }
 function agentDisplay(name) {
   if (!name) return "Assistant";
