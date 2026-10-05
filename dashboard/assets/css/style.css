@@ -3743,3 +3743,98 @@ button.memory-updated:hover {
   padding: 0.3rem 0.5rem;
   font: inherit;
 }
+
+/* ---------- Usage ---------- */
+.usage-head {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.usage-stat {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: grid;
+  gap: 2px;
+}
+.usage-stat span {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+.usage-stat strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+.usage-meter {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--bg-sunk);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.usage-meter i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width var(--dur-fast) var(--ease);
+}
+.usage-meter.is-high i {
+  background: var(--warn);
+}
+.usage-meter.is-over i {
+  background: var(--danger);
+}
+.usage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 90px;
+  margin: 10px 0;
+}
+.usage-bars i {
+  flex: 1;
+  min-height: 2px;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 3px 3px 0 0;
+}
+.usage-bars i.is-zero {
+  background: var(--line);
+}
+.usage-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+.num-input {
+  width: 90px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+}
+.num-input.wide {
+  width: 220px;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .usage-stat strong {
+    font-size: 1.1rem;
+  }
+}
+@media (max-width: 640px) {
+  #spanel-usage .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  #spanel-usage .setting-row .row {
+    flex-wrap: wrap;
+  }
+}

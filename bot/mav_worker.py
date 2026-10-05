@@ -25,6 +25,7 @@ import httpx
 
 import ocbriefing
 import ocevents
+import ocusage
 from ocbus import EventBus
 from occonditions import should_run
 from ocinterests import Interests
@@ -81,6 +82,7 @@ http: httpx.AsyncClient | None = None
 bus: EventBus | None = None
 memory = Memory(BOT_DIR / "memory.json")
 interests = Interests(BOT_DIR / "interests.json", chat_id=OWNER_ID)
+usage = ocusage.Usage(BOT_DIR / "usage.json")
 
 # How often the interests/pursuit pass runs (seconds). Default: 6 h. The
 # per-interest cadence (weekly/monthly…) is enforced by the store itself, so
@@ -178,11 +180,36 @@ async def run_prompt(session_id: str, prompt: str, agent: str,
         finally:
             for t in watchers:
                 t.cancel()
+        await record_usage(session_id, before)
         if tracker.error:
             return "", tracker
         return await last_assistant_text(session_id), tracker
     finally:
         bus.unsubscribe(session_id, queue)
+
+
+async def record_usage(session_id: str, before: set) -> None:
+    """Count the routine's tokens and cost; warn once near the budget."""
+    try:
+        r = await http.get(f"{OPENCODE_URL}/session/{session_id}/message", timeout=60)
+        entries = [
+            e for e in r.json() or []
+            if (e.get("info") or {}).get("role") == "assistant"
+            and (e.get("info") or {}).get("id") not in before
+        ]
+        await asyncio.to_thread(usage.record_entries, "routine", entries)
+        level = await asyncio.to_thread(usage.alert_due)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("usage not recorded: %s", exc)
+        return
+    if level:
+        b = usage.budget()
+        notify(
+            "💸 Budget reached" if level >= 100 else "💸 80 % of your budget used",
+            f"${usage.month_cost():.2f} of ${b['monthly_usd']:.2f} this month.",
+            chat_id=OWNER_ID, topic="usage", url="./#settings/usage",
+            level="important", dedup_key=f"budget:{level}:{time.strftime('%Y-%m')}",
+        )
 
 
 async def message_ids(session_id: str) -> set:
@@ -251,6 +278,9 @@ async def run_job(job: dict) -> None:
     ok, why = _resolve_condition(job)
     if not ok:
         log.info("routine %s skipped: %s", name, why)
+        return
+    if usage.blocked():
+        log.warning("routine %s skipped: the monthly budget is used up", name)
         return
     agent = job.get("agent") or DEFAULT_AGENT
     if not await agent_known(agent):
