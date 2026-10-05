@@ -68,6 +68,11 @@ talks to the opencode engine, and reads/writes Postgres.
   schedule in the worker, or *Brief me*), `bot/ocbriefing.py` gathers facts,
   the last day's alerts and reports, pending drafts and interests into a
   hidden context; the chat shows only "Brief me on my day.".
+- Every answer's `tokens` and `cost` (as the engine reports them) go to
+  `BOT_DIR/usage.json` via `bot/ocusage.py` — by the web app (chats,
+  background calls) and the worker (routines). A "stop" budget that is used up
+  refuses new answers with a clear message; background calls use the
+  "background model" when one is set.
 - Memory (facts + exchanges) is injected as a hidden part when a chat starts,
   and each answer is stored (`bot/ocmemory.py`, shared with the worker).
 - The model provider is written by `server/mav_provider.py`, the same module
@@ -75,6 +80,7 @@ talks to the opencode engine, and reads/writes Postgres.
 
 | Method   | Route                                                                                | Purpose                                                                          |
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| GET | `/api/usage?days=30` · POST `/api/usage/budget` (`{monthly_usd, action: warn|stop}`) · `/api/usage/small-model` | cost, tokens, budget, background model |
 | GET/POST | `/api/briefing` (`{enabled, time}`), POST `/api/briefing/run` | daily briefing settings / brief me now (returns the chat to open) |
 | GET/POST | `/api/auth/state` · `setup` · `login` · `logout` · `password` | sign-in |
 | GET      | `/api/status`                                                                        | assistant health, model, counters                                                |
