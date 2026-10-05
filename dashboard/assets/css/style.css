@@ -1776,6 +1776,148 @@ h6.md-h {
   flex-wrap: wrap;
 }
 
+/* ---------- Interests ---------- */
+.autonomy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.autonomy-card .ac-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+.autonomy-card .ac-row p {
+  margin: 0.2rem 0 0;
+}
+.autonomy-card .segmented {
+  align-self: flex-start;
+}
+.selfinit {
+  margin-bottom: 1rem;
+}
+.selfinit-card {
+  border-color: var(--accent);
+}
+.selfinit-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.selfinit-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+.interest-add {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.interest-add input {
+  flex: 1 1 200px;
+}
+.interests {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.icard {
+  padding: 0.9rem 1rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color var(--dur) var(--ease);
+}
+.icard:hover {
+  border-color: var(--accent);
+}
+.icard.is-dislike {
+  opacity: 0.85;
+  border-left: 3px solid var(--warn, #c98a2f);
+}
+.icard.is-muted {
+  opacity: 0.6;
+}
+.icard .ihead {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.icard .ihead strong {
+  font-size: 0.98rem;
+}
+.icard .imeta {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+.icard .ibars {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.icard .ibar {
+  position: relative;
+  width: 120px;
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.icard .ibar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.icard .iconflict {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm, 8px);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.icard .ievidence {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.icard .iev {
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}
+.icard .iev .imeta {
+  color: var(--ink-3);
+}
+.icard .iacts {
+  margin-top: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.icard .isel {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--bg-elev);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 8px);
+}
+
 /* ---------- Template picker ---------- */
 .tpl-grid {
   display: grid;

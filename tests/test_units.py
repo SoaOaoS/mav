@@ -22,12 +22,15 @@ import occonditions  # noqa: E402
 import ocdebates  # noqa: E402
 import ocdrafts  # noqa: E402
 import ocevents  # noqa: E402
+import ocinterests  # noqa: E402
 import ocjobs  # noqa: E402
 import ocmail  # noqa: E402
 import ocmemory  # noqa: E402
 import ocpriority  # noqa: E402
+import ocpursuit  # noqa: E402
 import ocroutine_nl  # noqa: E402
 import ocroutine_templates  # noqa: E402
+import ocselfinit  # noqa: E402
 import ocwatch  # noqa: E402
 import mav_api  # noqa: E402
 
@@ -646,6 +649,202 @@ class Templates(unittest.TestCase):
                 or "every_minutes" in when,
                 t["id"],
             )
+
+
+class InterestDetection(unittest.TestCase):
+    def test_like_detected(self):
+        obs = ocinterests.detect_observations("J'adore le PSG et je vais au match samedi")
+        self.assertTrue(obs)
+        self.assertEqual(obs[0]["polarity"], "like")
+        self.assertEqual(obs[0]["entity"], "PSG")
+        self.assertEqual(obs[0]["category"], "sport")
+        self.assertEqual(obs[0]["key"], "psg")
+
+    def test_dislike_detected(self):
+        obs = ocinterests.detect_observations("je déteste l'OM, franchement")
+        self.assertTrue(obs)
+        self.assertEqual(obs[0]["polarity"], "dislike")
+
+    def test_english_like(self):
+        obs = ocinterests.detect_observations("I love the Lakers, big fan")
+        self.assertTrue(obs)
+        self.assertEqual(obs[0]["polarity"], "like")
+        self.assertEqual(obs[0]["category"], "sport")
+
+    def test_no_interest_returns_empty(self):
+        self.assertEqual(ocinterests.detect_observations("Quel temps fait-il ?"), [])
+
+    def test_clause_split_two_polarities(self):
+        obs = ocinterests.detect_observations("j'aime le Real mais je déteste le Barça")
+        pols = {o["polarity"] for o in obs}
+        self.assertIn("like", pols)
+        self.assertIn("dislike", pols)
+
+
+class InterestScoring(unittest.TestCase):
+    def test_decay_halves_over_half_life(self):
+        now = 1_000_000_000
+        one_hl = now - int(ocinterests.HALF_LIFE_DAYS * 86400)
+        self.assertAlmostEqual(ocinterests.decay(1.0, one_hl, now=now), 0.5, places=3)
+
+    def test_blend_is_asymptotic(self):
+        s = 0.0
+        for _ in range(50):
+            s = ocinterests.blend_score(s, 1.0, kind="explicit")
+        self.assertLess(s, 1.0)
+        self.assertGreater(s, 0.9)
+
+    def test_confidence_conflict_caps(self):
+        self.assertGreater(ocinterests.confidence_of(2, 1), 0.4)
+        self.assertLessEqual(ocinterests.confidence_of(2, 1, conflicted=True), 0.25)
+
+    def test_pick_cadence(self):
+        self.assertEqual(ocinterests.pick_cadence(0.9, 0.9), "weekly")
+        self.assertEqual(ocinterests.pick_cadence(0.6, 0.5), "biweekly")
+        self.assertEqual(ocinterests.pick_cadence(0.2, 0.1), "quarterly")
+
+
+class InterestStore(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.store = ocinterests.Interests(self.tmp / "interests.json", chat_id=7)
+        self.store._pg = None  # force the JSON backend, no Postgres in tests
+        self.store.backend = "file"
+
+    def test_add_and_list(self):
+        self.store.add("Cyber", category="tech", cadence="weekly")
+        items = self.store.list()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["label"], "Cyber")
+        self.assertEqual(items[0]["polarity"], "like")
+
+    def test_observe_strengthens(self):
+        self.store.learn_from_text("j'adore la cyber et le pentest")
+        first = self.store.get("cyber")
+        self.store.learn_from_text("vraiment, j'aime la cyber")
+        second = self.store.get("cyber")
+        self.assertGreater(second["score"], first["score"])
+        self.assertGreaterEqual(len(second["evidence"]), 2)
+
+    def test_contradiction_flags_conflicted(self):
+        self.store.learn_from_text("j'aime le PSG")
+        self.assertEqual(self.store.get("psg")["polarity"], "like")
+        self.store.learn_from_text("en fait je déteste le PSG")
+        rec = self.store.get("psg")
+        self.assertTrue(rec["conflicted"])
+        ok, why = ocinterests.should_pursue(rec)
+        self.assertFalse(ok)
+        self.assertEqual(why, "conflicted evidence")
+
+    def test_dislike_never_pursued(self):
+        self.store.add("OM", polarity="dislike")
+        self.assertFalse(ocinterests.should_pursue(self.store.get("om"))[0])
+
+    def test_feedback_downvote_mutes(self):
+        self.store.add("Jazz", category="music")
+        self.store.feedback("jazz", False)
+        rec = self.store.get("jazz")
+        self.assertTrue(rec["muted"])
+        self.assertEqual(rec["cadence"], "off")
+
+    def test_touch_engaged_raises_score(self):
+        self.store.add("Linux", category="tech")
+        before = self.store.get("linux")["score"]
+        self.store.touch("linux", engaged=True)
+        self.assertGreater(self.store.get("linux")["score"], before)
+
+
+class Pursuit(unittest.TestCase):
+    def test_headline_matches_entity(self):
+        interest = {"key": "psg", "label": "PSG", "entity": "PSG", "polarity": "like"}
+        items = [
+            {"title": "Transfert record au Real Madrid", "link": "u1", "id": "a"},
+            {"title": "Le PSG s'impose en Ligue des champions", "link": "u2", "id": "b"},
+        ]
+        hit = ocpursuit.headline_for(interest, items)
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit["ref"], "b")
+
+    def test_no_match_returns_none(self):
+        interest = {"key": "psg", "label": "PSG", "entity": "PSG"}
+        items = [{"title": "La météo de demain", "link": "u", "id": "x"}]
+        self.assertIsNone(ocpursuit.headline_for(interest, items))
+
+    def test_seen_ref_skipped(self):
+        interest = {"key": "psg", "label": "PSG", "entity": "PSG"}
+        items = [{"title": "PSG champion", "link": "u", "id": "b"}]
+        self.assertIsNone(ocpursuit.headline_for(interest, items, seen_ref="b"))
+
+    def test_matches_single_entity(self):
+        interest = {"key": "btc", "label": "Bitcoin", "entity": "BTC"}
+        self.assertGreaterEqual(ocpursuit.matches(interest, "BTC hits a new high"), 0.5)
+
+
+class SelfInit(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.jobs = self.tmp / "jobs.json"
+        self.store = ocinterests.Interests(self.tmp / "interests.json", chat_id=7)
+        self.store._pg = None
+        self.store.backend = "file"
+        self.store.add("Cyber", category="tech", cadence="weekly", source="manual")
+
+    def test_watchable_rules(self):
+        self.assertTrue(ocselfinit.watchable(self.store.get("cyber")))
+        self.store.add("OM", polarity="dislike")
+        self.assertFalse(ocselfinit.watchable(self.store.get("om")))
+        self.store.update("cyber", muted=True)
+        self.assertFalse(ocselfinit.watchable(self.store.get("cyber")))
+
+    def test_check_minutes_by_cadence(self):
+        cyber = self.store.get("cyber")
+        cyber["cadence"] = "weekly"
+        self.assertEqual(ocselfinit.check_minutes(cyber), ocselfinit.CHECK_MINUTES["weekly"])
+        cyber["pinned"] = True
+        self.assertEqual(ocselfinit.check_minutes(cyber), ocselfinit.PINNED_CHECK_MINUTES)
+
+    def test_plan_creates_watchdog(self):
+        diff = ocselfinit.plan_jobs(self.store.list(), [])
+        self.assertEqual(len(diff["create"]), 1)
+        job = diff["create"][0]
+        self.assertEqual(job["source"], "interest")
+        self.assertEqual(job["interest_key"], "cyber")
+        self.assertEqual(job["every_minutes"], ocselfinit.CHECK_MINUTES["weekly"])
+
+    def test_reconcile_suggest_writes_nothing(self):
+        import json as _json
+
+        self.jobs.write_text("[]")
+        ocselfinit.reconcile(self.store, self.jobs, autonomy="suggest")
+        self.assertEqual(_json.loads(self.jobs.read_text()), [])
+
+    def test_reconcile_auto_applies(self):
+        import json as _json
+
+        self.jobs.write_text("[]")
+        res = ocselfinit.reconcile(self.store, self.jobs, autonomy="auto")
+        self.assertTrue(res["applied"])
+        jobs = _json.loads(self.jobs.read_text())
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["interest_key"], "cyber")
+
+    def test_never_shadows_handmade(self):
+        hand = {"name": ocselfinit.routine_name(self.store.get("cyber")),
+                "prompt": "mine", "every_minutes": 60}
+        diff = ocselfinit.plan_jobs(self.store.list(), [hand])
+        self.assertEqual(diff["create"], [])
+
+    def test_vetoed_auto_kept(self):
+        existing = ocselfinit.routine_for(self.store.get("cyber"))
+        existing["enabled"] = False
+        diff = ocselfinit.plan_jobs(self.store.list(), [existing])
+        self.assertEqual(diff["create"], [])
+        self.assertEqual(len(diff["vetoed"]), 1)
+
+    def test_retire_when_interest_cools(self):
+        existing = ocselfinit.routine_for(self.store.get("cyber"))
+        diff = ocselfinit.plan_jobs([], [existing])
+        self.assertEqual(len(diff["retire"]), 1)
 
 
 if __name__ == "__main__":

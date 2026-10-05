@@ -111,6 +111,21 @@ except Exception:  # noqa: BLE001
     ocroutine_nl = None
     ROUTINE_TEMPLATES = []
 
+# Interests: what the user cares about, and the watchdog routines Mav spawns
+# from them. Optional, like the rest.
+try:
+    from ocinterests import Interests, CADENCES, CADENCE_DAYS, CATEGORIES, POLARITIES  # noqa: E402
+
+    INTERESTS = Interests(BOT_DIR / "interests.json", chat_id=DEFAULT_CHAT_ID)
+except Exception:  # noqa: BLE001
+    INTERESTS = None
+    CADENCES, CADENCE_DAYS, CATEGORIES, POLARITIES = (
+        ("off", "weekly", "biweekly", "monthly", "quarterly"), {}, (), ("like", "dislike"))
+try:
+    import ocselfinit  # noqa: E402
+except Exception:  # noqa: BLE001
+    ocselfinit = None
+
 import mav_provider  # noqa: E402
 
 # Agents offered in the dashboard selector.
@@ -1949,6 +1964,157 @@ def watch_remove(item_id: int) -> bool:
     return True
 
 
+# ----------------------------------------------------------------- interests
+
+
+def interests_autonomy() -> str:
+    """How much latitude Mav has to spawn its own watchdogs."""
+    level = "suggest"
+    try:
+        rows = pg_query("select value from preferences where key = 'interests.autonomy' limit 1")
+        if rows and rows[0].get("value"):
+            level = rows[0]["value"]
+    except Exception:  # noqa: BLE001
+        pass
+    return level if level in ("off", "suggest", "auto") else "suggest"
+
+
+def set_interests_autonomy(level: str) -> dict:
+    level = (level or "suggest").strip().lower()
+    if level not in ("off", "suggest", "auto"):
+        return {"ok": False, "error": "Level must be off, suggest or auto."}
+    pg_exec(
+        "insert into preferences (chat_id, key, value, ts) values (%s, 'interests.autonomy', %s, %s) "
+        "on conflict (chat_id, key) do update set value = excluded.value, ts = excluded.ts",
+        (DEFAULT_CHAT_ID, level, int(time.time())),
+    )
+    return {"ok": True, "level": level}
+
+
+def _selfinit_diff() -> dict:
+    if INTERESTS is None or ocselfinit is None:
+        return {"create": [], "update": [], "retire": [], "keep": [], "counts": {}}
+    try:
+        return ocselfinit.reconcile(INTERESTS, JOBS_FILE, autonomy="suggest")
+    except Exception as exc:  # noqa: BLE001
+        return {"create": [], "update": [], "retire": [], "keep": [],
+                "counts": {}, "error": str(exc)[:200]}
+
+
+def get_interests() -> dict:
+    """The interest profile, the self-init proposal, and the knobs to steer it."""
+    items = INTERESTS.list(include_muted=True) if INTERESTS else []
+    now = int(time.time())
+    for it in items:
+        due = int(it.get("next_due") or 0)
+        it["due_in_days"] = round((due - now) / 86400, 1) if due else None
+    diff = _selfinit_diff()
+    return {
+        "interests": items,
+        "backend": INTERESTS.backend if INTERESTS else "none",
+        "autonomy": interests_autonomy(),
+        "categories": list(CATEGORIES),
+        "cadences": list(CADENCES),
+        "cadence_days": CADENCE_DAYS,
+        "selfinit": diff,
+    }
+
+
+def add_interest(payload: dict) -> dict:
+    if INTERESTS is None:
+        return {"ok": False, "error": "Interests unavailable."}
+    label = str(payload.get("label") or "").strip()
+    if not label:
+        return {"ok": False, "error": "A label is required."}
+    rec = INTERESTS.add(
+        label,
+        polarity=str(payload.get("polarity") or "like"),
+        category=str(payload.get("category") or "other"),
+        entity=str(payload.get("entity") or ""),
+        cadence=str(payload.get("cadence") or ""),
+        source="dashboard",
+    )
+    return {"ok": rec is not None, "interest": rec}
+
+
+def update_interest(payload: dict) -> dict:
+    if INTERESTS is None:
+        return {"ok": False, "error": "Interests unavailable."}
+    key = str(payload.get("key") or "").strip()
+    if not key:
+        return {"ok": False, "error": "A key is required."}
+    fields = {}
+    for f in ("pinned", "muted", "cadence", "polarity", "label", "category", "notes"):
+        if f in payload:
+            fields[f] = payload[f]
+    if payload.get("resolve_conflict"):
+        fields["resolve_conflict"] = True
+    rec = INTERESTS.update(key, **fields)
+    return {"ok": rec is not None, "interest": rec}
+
+
+def delete_interest(key: str) -> dict:
+    if INTERESTS is None:
+        return {"ok": False, "error": "Interests unavailable."}
+    return {"ok": INTERESTS.delete(key)}
+
+
+def interest_feedback(key: str, positive: bool) -> dict:
+    if INTERESTS is None:
+        return {"ok": False, "error": "Interests unavailable."}
+    rec = INTERESTS.feedback(key, positive)
+    return {"ok": rec is not None, "interest": rec}
+
+
+def interest_context(key: str) -> dict:
+    """Open a chat about one interest: recent news + a prompt to work with.
+
+    This is how a nudge becomes a conversation — Mav brings the topic, the user
+    takes it from there.
+    """
+    if INTERESTS is None:
+        return {"ok": False, "error": "Interests unavailable."}
+    interest = INTERESTS.get(key)
+    if not interest:
+        return {"ok": False, "error": "Unknown interest."}
+    label = interest.get("label") or key
+    sid = routine_session(f"Intérêt · {label}")
+    # Best-effort headline context so the chat does not start from nothing.
+    try:
+        from ocwatch import news_items  # noqa: PLC0415
+
+        query = interest.get("entity") or interest.get("label") or key
+        heads = news_items(query)[:5]
+    except Exception:  # noqa: BLE001
+        heads = []
+    lines = [
+        f"Contexte : « {label} » fait partie des centres d'intérêt de l'utilisateur "
+        f"(catégorie {interest.get('category') or 'autre'}, suivi {interest.get('cadence') or 'mensuel'}).",
+        "Actualité récente à creuser :",
+    ]
+    lines += [f"- {h.get('title')} ({h.get('link')})" for h in heads] or ["- (rien de frais)"]
+    lines.append("Ouvre la conversation sur ce sujet : dis-moi ce qui bouge et pose-moi une question.")
+    prompt = "\n".join(lines)
+    try:
+        answer = ask(prompt, DEFAULT_AGENT, sid, raw_session=True, with_memory=False)
+        if answer and not answer.startswith("Error:"):
+            return {"ok": True, "session": sid, "answer": answer}
+        return {"ok": True, "session": sid, "answer": ""}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200], "session": sid}
+
+
+def selfinit_apply() -> dict:
+    """Force Mav to bring its watchdogs in line now (regardless of autonomy)."""
+    if INTERESTS is None or ocselfinit is None:
+        return {"ok": False, "error": "Self-init unavailable."}
+    try:
+        res = ocselfinit.reconcile(INTERESTS, JOBS_FILE, autonomy="auto")
+        return {"ok": True, **res}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+
+
 def get_agents() -> dict:
     """Agents offered in the chat picker, with their description."""
     # Internal agents we do not offer in the selector.
@@ -2194,6 +2360,22 @@ def learn_facts(prompt: str) -> int:
         if added >= 3:
             break
     return added
+
+
+def learn_interests(prompt: str) -> int:
+    """Detect the user's interests/likes/dislikes in their message.
+
+    Pure, dependency-free and explainable (regex + scoring in ocinterests), so
+    it costs nothing and never invents a fact. Every hit keeps its evidence. A
+    statement that contradicts a recorded interest is flagged, not silently
+    flipped — Mav stops pushing until the user settles it.
+    """
+    if INTERESTS is None or not prompt or len(prompt) > 4000:
+        return 0
+    try:
+        return INTERESTS.learn_from_text(prompt, source="chat")
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def generate_title(sid: str, prompt: str, answer: str) -> None:
@@ -3041,6 +3223,7 @@ def stream_answer(
             target=remember_exchange, args=(prompt, final, sid, ag), daemon=True
         ).start()
         threading.Thread(target=learn_facts, args=(prompt,), daemon=True).start()
+        threading.Thread(target=learn_interests, args=(prompt,), daemon=True).start()
         if needs_title:
             threading.Thread(
                 target=generate_title, args=(sid, prompt, final), daemon=True
@@ -3273,6 +3456,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, get_memory())
             if path == "/api/watch":
                 return self._send(200, get_watch())
+            if path == "/api/interests":
+                return self._send(200, get_interests())
             if path == "/api/notifications":
                 return self._send(200, get_notifications())
             if path == "/api/notification":
@@ -3549,6 +3734,26 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/update":
                 res = start_update()
                 return self._send(200 if res.get("ok") else 500, res)
+            if path == "/api/interests/add":
+                res = add_interest(payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/interests/update":
+                res = update_interest(payload)
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/interests/delete":
+                return self._send(200, delete_interest(str(payload.get("key") or "")))
+            if path == "/api/interests/feedback":
+                return self._send(200, interest_feedback(
+                    str(payload.get("key") or ""), bool(payload.get("positive"))))
+            if path == "/api/interests/open":
+                res = interest_context(str(payload.get("key") or ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/interests/autonomy":
+                res = set_interests_autonomy(str(payload.get("level") or ""))
+                return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/interests/apply":
+                res = selfinit_apply()
+                return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/watch/add":
                 ok = watch_add(payload.get("kind", ""), payload.get("target", ""))
                 return self._send(200 if ok else 400, {"ok": ok})
@@ -3653,6 +3858,17 @@ def ensure_schema() -> None:
         pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS email_subject text")
         # The original Message-ID, so the reply threads in the mailbox.
         pg_exec("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS message_id text")
+        # Interests profile (what the user cares about) and the watchdog routines
+        # Mav spawns from it.
+        if INTERESTS is not None:
+            try:
+                INTERESTS._ensure()
+                if INTERESTS._pg is not None:
+                    INTERESTS._pg.cursor().execute(
+                        "ALTER TABLE interests ADD COLUMN IF NOT EXISTS last_ref text"
+                    )
+            except Exception:  # noqa: BLE001
+                pass
     except Exception:  # noqa: BLE001
         pass
 

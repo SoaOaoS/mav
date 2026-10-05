@@ -27,11 +27,14 @@ import httpx
 import ocevents
 from ocbus import EventBus
 from occonditions import should_run
+from ocinterests import Interests
 from ocjobs import DAYS, Scheduler, load_jobs
 from ocmemory import Memory
-from ocnotify import ensure_schema, flush_digest, notify
+from ocnotify import _pref, ensure_schema, flush_digest, notify
 from ocprogress import ProgressTracker, follow
-from ocwatch import Watch
+from ocpursuit import headline_for, mark_pursued
+from ocselfinit import reconcile
+from ocwatch import Watch, news_items
 
 # --------------------------------------------------------------------- config
 
@@ -77,6 +80,12 @@ log = logging.getLogger("mav-worker")
 http: httpx.AsyncClient | None = None
 bus: EventBus | None = None
 memory = Memory(BOT_DIR / "memory.json")
+interests = Interests(BOT_DIR / "interests.json", chat_id=OWNER_ID)
+
+# How often the interests/pursuit pass runs (seconds). Default: 6 h. The
+# per-interest cadence (weekly/monthly…) is enforced by the store itself, so
+# this is only the polling rhythm.
+PURSUIT_INTERVAL = int(os.environ.get("PURSUIT_INTERVAL", "21600"))
 
 
 # ------------------------------------------------------------- opencode calls
@@ -275,6 +284,106 @@ async def events_loop() -> None:
         await asyncio.sleep(30)
 
 
+# ---------------------------------------------------------------- interests
+
+
+def interests_autonomy() -> str:
+    """How much latitude Mav has to spawn watchdogs: off | suggest | auto."""
+    val = (_pref(OWNER_ID, "interests.autonomy", "suggest") or "suggest").strip().lower()
+    return val if val in ("off", "suggest", "auto") else "suggest"
+
+
+async def self_init_once() -> dict:
+    """Bring Mav's self-generated watchdogs in line with the user's interests.
+
+    In ``auto`` mode this creates/updates/retires routines in jobs.json; the
+    scheduler picks them up without a restart. In ``suggest``/``off`` it only
+    computes the diff, which the dashboard surfaces as a proposal.
+    """
+    try:
+        return await asyncio.to_thread(
+            reconcile, interests, JOBS_FILE, autonomy=interests_autonomy()
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("self-init failed: %s", exc)
+        return {"applied": False, "error": str(exc)[:200]}
+
+
+async def self_init_loop() -> None:
+    while True:
+        try:
+            res = await self_init_once()
+            if res.get("applied") and res.get("counts"):
+                log.info("self-init: %s", res["counts"])
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("self-init loop error")
+        await asyncio.sleep(PURSUIT_INTERVAL)
+
+
+async def pursuit_once() -> list[dict]:
+    """Reach out about interests that have something concrete to say.
+
+    The decision (which interest, which story) is pure and done in a thread;
+    only the delivery touches the engine/notifications. A bare interest with no
+    fresh, matching story is left alone: no fake small talk.
+    """
+    try:
+        chosen = await asyncio.to_thread(
+            lambda: [
+                (i, headline_for(i, (news_items(i.get("entity") or i.get("label") or i.get("key")))
+                                 or [], seen_ref=i.get("last_ref") or ""))
+                for i in interests.due()
+            ]
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("pursuit planning failed: %s", exc)
+        return []
+
+    out: list[dict] = []
+    for interest, hit in chosen:
+        if not hit:
+            continue
+        last = int(interest.get("last_pursued") or 0)
+        if last and time.time() - last < 20 * 3600:
+            continue
+        url, sid = "./", ""
+        try:
+            sid = await routine_session(f"Intérêt · {interest.get('label') or interest['key']}")
+            url = f"./#chat/{sid}"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("pursuit session failed: %s", exc)
+        notify(
+            f"✨ {interest.get('label') or interest['key']}",
+            (hit.get("title") or "")[:200],
+            chat_id=OWNER_ID,
+            topic="pursuit",
+            url=url,
+            level="useful",
+            dedup_key=f"pursuit:{interest['key']}:{hit.get('ref')}",
+        )
+        try:
+            mark_pursued(interests, interest, hit)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("pursuit mark failed: %s", exc)
+        out.append({"key": interest["key"], "hit": hit, "session": sid})
+        log.info("pursuit: reached out about %s", interest.get("key"))
+    return out
+
+
+async def pursuit_loop() -> None:
+    while True:
+        try:
+            if interests_autonomy() != "off":
+                await pursuit_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("pursuit loop error")
+        await asyncio.sleep(PURSUIT_INTERVAL)
+
+
 # ---------------------------------------------------------------- digest
 
 
@@ -351,6 +460,10 @@ async def main() -> None:
     watch_task = asyncio.create_task(watch.run())
     events_task = asyncio.create_task(events_loop())
     digest_task = asyncio.create_task(digest_loop())
+    # Self-init first, then the pursuit loop: Mav gives itself the watchdogs
+    # its interests require before deciding whether to reach out.
+    selfinit_task = asyncio.create_task(self_init_loop())
+    pursuit_task = asyncio.create_task(pursuit_loop())
     log.info("worker ready: %d routine(s), owner %s", len(load_jobs(JOBS_FILE)), OWNER_ID)
 
     stop = asyncio.Event()
@@ -366,6 +479,8 @@ async def main() -> None:
     watch_task.cancel()
     events_task.cancel()
     digest_task.cancel()
+    selfinit_task.cancel()
+    pursuit_task.cancel()
     await scheduler.stop()
     await bus.stop()
     await http.aclose()
