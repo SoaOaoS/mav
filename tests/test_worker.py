@@ -51,7 +51,8 @@ class WorkerRoutineTest(unittest.TestCase):
             except Exception:  # noqa: BLE001
                 time.sleep(0.1)
         self.sent = []
-        self.saved = (mav_worker.OPENCODE_URL, mav_worker.notify, mav_worker.memory)
+        self.saved = (mav_worker.OPENCODE_URL, mav_worker.notify, mav_worker.memory,
+                      mav_worker.briefing_context)
         mav_worker.OPENCODE_URL = self.url
         mav_worker.notify = lambda title, body, **kw: self.sent.append((title, body, kw))
 
@@ -64,7 +65,8 @@ class WorkerRoutineTest(unittest.TestCase):
     def tearDown(self):
         self.proc.terminate()
         self.proc.wait(5)
-        mav_worker.OPENCODE_URL, mav_worker.notify, mav_worker.memory = self.saved
+        (mav_worker.OPENCODE_URL, mav_worker.notify, mav_worker.memory,
+         mav_worker.briefing_context) = self.saved
 
     async def _run(self, job, with_bus=True, poll_every=None):
         mav_worker.http = httpx.AsyncClient(timeout=30)
@@ -89,6 +91,16 @@ class WorkerRoutineTest(unittest.TestCase):
         self.assertIn("Morning", title)
         self.assertIn("Good morning", body)
         self.assertTrue(kw["url"].startswith("./#chat/"))
+
+    def test_scheduled_briefing_has_its_context(self):
+        mav_worker.briefing_context = lambda: "<daily-briefing>\nctx\n</daily-briefing>"
+        import ocbriefing
+
+        asyncio.run(self._run(ocbriefing.default_job()))
+        title, body, kw = self.sent[0]
+        self.assertEqual(title, "☀️ Your briefing")
+        self.assertEqual(kw["topic"], "briefing")
+        self.assertIn("received your briefing", body)
 
     def test_routine_finishes_without_events(self):
         start = time.time()
