@@ -54,8 +54,16 @@ if [[ -n "$REF" ]]; then
   TARBALL="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${REF}"
   VERSION="${REF}@$(date +%Y-%m-%d)"; CHANNEL="main"
 else
-  TAG="$(get "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null |
-    sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
+  # Latest tag, without the GitHub API first: its anonymous rate limit returns
+  # 403 to installers, which used to send us down the "no release" path and
+  # report "main@<date>" instead of the real version. The releases Atom feed
+  # has no such limit and works with curl and wget alike.
+  TAG="$(get "https://github.com/${REPO}/releases.atom" 2>/dev/null |
+    sed -n 's#.*/releases/tag/\([^"]*\)".*#\1#p' | head -1 || true)"
+  if [[ -z "$TAG" ]]; then
+    TAG="$(get "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null |
+      sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
+  fi
   if [[ -n "$TAG" ]]; then
     TARBALL="https://codeload.github.com/${REPO}/tar.gz/refs/tags/${TAG}"
     VERSION="$TAG"; CHANNEL="release"

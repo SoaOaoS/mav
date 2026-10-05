@@ -21,7 +21,11 @@ while [[ $# -gt 0 ]]; do
 done
 echo "curl $url" >>"$STUB_LOG"
 case "$url" in
-  */releases/latest) [[ -n "${STUB_NO_RELEASE:-}" ]] && exit 22; echo '{"tag_name":"v1.2.0"}' ;;
+  # The releases Atom feed is the primary source (no rate limit).
+  */releases.atom) [[ -n "${STUB_NO_ATOM:-}${STUB_NO_RELEASE:-}" ]] && exit 22
+    echo '<feed><entry><link rel="alternate" type="text/html" href="https://github.com/o/r/releases/tag/v1.2.0"/></entry></feed>' ;;
+  # The anonymous API is rate-limited (403) by default: it must never be required.
+  */releases/latest) [[ -n "${STUB_API_OK:-}" ]] && { echo '{"tag_name":"v1.5.0"}'; exit 0; }; exit 22 ;;
   */tar.gz/*) [[ -n "${STUB_DL_FAIL:-}" ]] && exit 22; cp "$STUB_TARBALL" "$out" ;;
   *) exit 7 ;;
 esac
@@ -58,6 +62,11 @@ check "already up to date"   "Already up to date (v1.2.0)"   "$MAV" update
 check "--force reinstalls"   "installer args=--update version=v1.2.0" "$MAV" update --force
 STUB_DL_FAIL=1 check "download fails → local copy" "installer args=--update version=v1.2.0 channel=" "$MAV" update --force
 STUB_NO_RELEASE=1 check "no release → main"  "tar.gz/refs/heads/main" "$MAV" update
+# The API may be reachable even when the Atom feed is not: fall back to it.
+STUB_NO_ATOM=1 STUB_API_OK=1 check "atom unreachable → API fallback" "latest:    v1.5.0" "$MAV" version
+# Regression: the API is rate-limited (403) by default in the stub, so the
+# version must still resolve via the Atom feed instead of "main@<date>".
+check "tag found despite API 403"  "tar.gz/refs/tags/v1.2.0" "$MAV" update --force
 check "--local"              "installer args=--update"      "$MAV" update --local
 check "restart worker"       "systemctl restart mav-worker" "$MAV" restart worker
 check "restart bad service"  "Unknown service"              "$MAV" restart toaster

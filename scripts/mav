@@ -80,10 +80,20 @@ fetch() {  # fetch URL [curl args…] — retries, timeouts, fails on HTTP error
   curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 "$@" "$url"
 }
 
-# Latest released version (vX.Y.Z), or empty if none / unreachable.
+# Latest released tag (vX.Y.Z), or empty if none / unreachable.
+# Prefer the releases Atom feed: the anonymous GitHub API rate limit returns
+# 403 to `mav`, which used to look like "no release found". That sent updates
+# and status down the branch path (a "main@<date>" version) even though a real
+# release existed. The Atom feed has no such limit; the API stays as fallback.
 latest_version() {
-  fetch "$MAV_GITHUB_API/repos/$MAV_REPO/releases/latest" -H "Accept: application/vnd.github+json" 2>/dev/null |
-    python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true
+  local tag
+  tag="$(fetch "https://github.com/$MAV_REPO/releases.atom" 2>/dev/null |
+    sed -n 's#.*/releases/tag/\([^"]*\)".*#\1#p' | head -1 || true)"
+  if [[ -z "$tag" ]]; then
+    tag="$(fetch "$MAV_GITHUB_API/repos/$MAV_REPO/releases/latest" -H "Accept: application/vnd.github+json" 2>/dev/null |
+      python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)"
+  fi
+  printf '%s\n' "$tag"
 }
 
 semver_gt() {  # semver_gt A B → true if A > B (A, B like v1.2.3)
