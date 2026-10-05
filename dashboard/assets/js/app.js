@@ -158,17 +158,6 @@ function dayGroup(ts) {
   if (diff <= 30) return "Previous 30 days";
   return "Older";
 }
-function fmtBytes(b) {
-  if (!b) return "—";
-  const g = b / 1e9;
-  return g >= 1 ? `${g.toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`;
-}
-function fmtUptime(s) {
-  if (!s) return "—";
-  const d = Math.floor(s / 86400),
-    h = Math.floor((s % 86400) / 3600);
-  return d > 0 ? `${d}d ${h}h` : `${h}h`;
-}
 const DAY_NAMES = {
   mon: "Mon",
   tue: "Tue",
@@ -445,7 +434,10 @@ function route() {
     if (arg && arg !== state.chat.id)
       openChat(decodeURIComponent(arg), { push: false });
     else if (!arg && state.chat.id) newChat(null, { push: false });
-    else go("chat", null, { push: false });
+    else {
+      go("chat", null, { push: false });
+      updateChatActions(); // nothing to pin, export or delete yet
+    }
     return;
   }
   // Old links from the previous layout.
@@ -1515,10 +1507,6 @@ function renderToolChips(host, tools) {
     )
     .join("");
 }
-function setToolChips(list) {
-  const host = document.querySelector(".msg.is-streaming .msg-tools");
-  renderToolChips(host, list || []);
-}
 
 async function send(raw, opts = {}) {
   const text = (raw || "").trim();
@@ -1867,7 +1855,7 @@ async function finalizeStream(st, opts = {}) {
       state.chat.messages = trimmed;
       if (trimmed.length !== msgs.length) renderThread();
       state.chat.messages.push(reply);
-      appendMessage(reply, { last: true, meta: true });
+      st.replyEl = appendMessage(reply, { last: true, meta: true });
       if (S.speak) speak(reply.text);
       if (routineDraft) offerRoutine(routineDraft);
     }
@@ -1884,7 +1872,8 @@ async function finalizeStream(st, opts = {}) {
   queues.set(st.sid, q);
   renderQueue();
   if (next) sendQueued(st.sid, next);
-  if (!st.error && prompt && ABOUT_ME_RE.test(prompt)) watchForMemory(st.sid);
+  if (!st.error && prompt && ABOUT_ME_RE.test(prompt))
+    watchForMemory(st.sid, st.replyEl);
   if (document.hidden && !st.error && reply.text)
     notifyLocal(agentDisplay(reply.agent), reply.text);
 }
@@ -1937,11 +1926,16 @@ function addError(msg) {
    yourself): show "Memory updated" under the answer when it does. */
 const ABOUT_ME_RE =
   /\b(i|i'm|im|i've|my|me|we|our|je|j'|moi|mon|ma|mes|nous|notre)\b/i;
-async function watchForMemory(sid) {
+// One watcher at a time: a newer answer takes over, so a fact learned from an
+// earlier message is never announced twice (or under the wrong answer).
+let memoryWatch = 0;
+async function watchForMemory(sid, bubble) {
   const base = state.status && Number(state.status.facts);
   if (!Number.isFinite(base)) return;
-  for (const wait of [4000, 8000, 15000]) {
+  const token = ++memoryWatch;
+  for (const wait of [4000, 8000, 15000, 30000]) {
     await new Promise((r) => setTimeout(r, wait));
+    if (token !== memoryWatch) return;
     let st;
     try {
       st = await api.get("status");
@@ -1951,8 +1945,11 @@ async function watchForMemory(sid) {
     renderStatus(st);
     if (Number(st.facts) > base) {
       if (state.chat.id !== sid) return;
-      const last = [...$$(".msg.mav")].pop();
-      if (!last) return;
+      const last =
+        bubble && document.body.contains(bubble)
+          ? bubble
+          : [...$$(".msg.mav")].pop();
+      if (!last || last.querySelector(".memory-updated")) return;
       const note = document.createElement("button");
       note.className = "recall-note memory-updated";
       note.innerHTML = `${I("brain")} Memory updated`;
@@ -2903,6 +2900,19 @@ const RECUR_LANGS = {
     at: /\b(?:a|las)\s+(\d{1,2})(?:[:h.](\d{2}))?\s*h?\b/i,
   },
 };
+// `\b` only knows ASCII letters: "à 18h", "matinée", "sábado" never matched.
+// Rebuild every pattern with Unicode-aware word boundaries.
+const UB =
+  "(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))";
+function uniRe(src, flags = "i") {
+  return new RegExp(src.split("\\b").join(UB), flags.includes("u") ? flags : flags + "u");
+}
+function wordRe(word) {
+  return uniRe(`\\b${escRe(word)}\\b`);
+}
+for (const L of Object.values(RECUR_LANGS))
+  for (const k of ["recur", "weekly", "interval", "hourly", "at"])
+    L[k] = uniRe(L[k].source, L[k].flags);
 const RECUR_ORDER = ["fr", "en", "es"];
 function recurLang(text) {
   return RECUR_ORDER.find((l) => RECUR_LANGS[l].recur.test(text)) || "en";
@@ -2925,6 +2935,9 @@ function draftRoutine(text) {
   };
   const consumed = [];
   let m;
+  // The recurrence itself ("every morning", "tous les jours", "daily"…) is
+  // not part of what to do.
+  if ((m = t.match(L.recur))) consumed.push(m[0]);
   if ((m = t.match(L.interval))) {
     d.mode = "hours";
     d.hours = Number(m[1]);
@@ -2935,7 +2948,7 @@ function draftRoutine(text) {
     consumed.push(m[0]);
   }
   const days = Object.entries(L.days)
-    .filter(([w]) => new RegExp(`\\b${w}s?\\b`).test(t))
+    .filter(([w]) => uniRe(`\\b${escRe(w)}s?\\b`).test(t))
     .map(([, v]) => v);
   if (L.weekdays.some((w) => t.includes(w))) {
     d.days = ["mon", "tue", "wed", "thu", "fri"];
@@ -2950,7 +2963,7 @@ function draftRoutine(text) {
   }
   if (d.mode !== "hours" && d.days.length < 7) d.mode = "weekly";
   for (const [word, h] of Object.entries(L.part)) {
-    if (new RegExp(`\\b${word}\\b`).test(t)) {
+    if (wordRe(word).test(t)) {
       d.time = h;
       consumed.push(word);
       break;
@@ -2979,7 +2992,7 @@ function draftRoutine(text) {
     : what.charAt(0).toUpperCase() + what.slice(1);
   const nameSrc = remind ? remind[3] : what;
   d.name = (nameSrc.split(/\s+/).slice(0, 4).join(" ") || "Routine")
-    .replace(/[^\w\s.-]/g, "")
+    .replace(/[^\p{L}\p{N}\s.-]/gu, "")
     .trim();
   d.name = d.name.charAt(0).toUpperCase() + d.name.slice(1);
   d.agent = currentAgent();
@@ -3223,7 +3236,7 @@ function editRoutine(src, existing = false) {
           .split(/\s+/)
           .slice(0, 4)
           .join(" ")
-          .replace(/[^\w\s.-]/g, "")
+          .replace(/[^\p{L}\p{N}\s.-]/gu, "")
           .trim() || "Routine";
     const domRaw = String(fd.get("days_of_month") || "");
     const job = draftToJob({
