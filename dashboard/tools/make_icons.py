@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generates Mav's PWA icons (brand v2 mark) as PNG, no external dependency.
+"""Generates Mav's PWA icons (brand v3 mark) as PNG, no external dependency.
 
-The mark: an emerald disc crossed by an amber arc, on a midnight tile.
+The mark: a flat emerald disc and an amber dot that cuts a notch into it,
+on a midnight tile. Same geometry as icons/favicon.svg.
 
 Usage: python3 make_icons.py
-Produit dans icons/ : 192, 512, 512-maskable, apple-touch (180).
+Writes to icons/: 192, 512, 512-maskable, apple-touch (180).
 """
 
 import math
@@ -15,60 +16,36 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parent.parent / "icons"
 OUT.mkdir(exist_ok=True)
 
-# Palette (brand v2 — "Midnight & Emerald")
-TILE_TOP = (20, 24, 29)      # midnight
-TILE_BOT = (11, 13, 16)
-EM_LIGHT = (52, 211, 157)    # emerald, lit side
-EM_DARK = (10, 74, 56)       # emerald, shade
-AMBER = (245, 176, 79)       # signal
-WHITE = (255, 255, 255)
-SS = 3                       # supersampling per axis (anti-aliasing)
+TILE = (14, 17, 22)          # midnight
+EMERALD = (52, 211, 157)
+AMBER = (245, 176, 79)
+SS = 4                       # supersampling per axis (anti-aliasing)
 
-
-def lerp(a, b, t):
-    t = max(0.0, min(1.0, t))
-    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+# The mark in a 100x100 box: disc, dot, and the notch the dot cuts.
+DISC = (44, 56, 44)
+DOT = (82, 18, 16)
+NOTCH = 23
 
 
 def sample(x, y, size, maskable):
     """Colour and alpha at a sub-pixel position."""
-    cx = cy = size / 2
-    dx, dy = x - cx, y - cy
     R = size / 2
+    dx, dy = x - R, y - R
     if not maskable:
-        rr = size * 0.22
+        rr = size * 0.234
         qx = max(abs(dx) - (R - rr), 0)
         qy = max(abs(dy) - (R - rr), 0)
         if math.hypot(qx, qy) > rr:
-            return (0, 0, 0), 0.0
-    col = lerp(TILE_TOP, TILE_BOT, y / size)
-    orb_r = size * (0.33 if maskable else 0.36)
-    r = math.hypot(dx, dy)
-    if r <= orb_r:
-        # Lit from the top-left, shaded bottom-right.
-        t = math.hypot(x - size * 0.38, y - size * 0.34) / (orb_r * 1.7)
-        col = lerp(EM_LIGHT, EM_DARK, t)
-        glint = max(0.0, 1.0 - math.hypot(x - size * 0.40, y - size * 0.36) / (orb_r * 0.55))
-        col = lerp(col, WHITE, glint * 0.45)
-        # The amber orbit: a thin arc whose tail fades, led by a small sun.
-        ring_r, ring_w = orb_r * 0.62, orb_r * 0.055
-        ang = math.degrees(math.atan2(dy, dx))  # 0 = right, -90 = up
-        head = 10.0
-        if abs(r - ring_r) <= ring_w and -190 <= ang <= head or (ang > 160 and abs(r - ring_r) <= ring_w):
-            a = ang - 360 if ang > 160 else ang
-            tail = max(0.0, min(1.0, (a + 190) / 120))
-            col = lerp(col, AMBER, tail ** 1.4)
-        hx = cx + ring_r * math.cos(math.radians(head))
-        hy = cy + ring_r * math.sin(math.radians(head))
-        dh = math.hypot(x - hx, y - hy)
-        if dh <= ring_w * 2.1:
-            col = lerp(AMBER, (255, 236, 200), max(0.0, 1 - dh / (ring_w * 1.2)) * 0.6)
-        elif dh <= ring_w * 4:
-            col = lerp(col, AMBER, (1 - (dh - ring_w * 2.1) / (ring_w * 1.9)) * 0.35)
-    elif r <= orb_r * 1.12:
-        # Soft emerald glow around the disc.
-        col = lerp(lerp(col, EM_LIGHT, 0.25), col, (r - orb_r) / (orb_r * 0.12))
-    return col, 1.0
+            return TILE, 0.0
+    box = size * (0.56 if maskable else 0.68)
+    u = (x - (size - box) / 2) / box * 100
+    v = (y - (size - box) / 2) / box * 100
+    if math.hypot(u - DOT[0], v - DOT[1]) <= DOT[2]:
+        return AMBER, 1.0
+    if (math.hypot(u - DISC[0], v - DISC[1]) <= DISC[2]
+            and math.hypot(u - DOT[0], v - DOT[1]) > NOTCH):
+        return EMERALD, 1.0
+    return TILE, 1.0
 
 
 def pixel(x, y, size, maskable=False):
