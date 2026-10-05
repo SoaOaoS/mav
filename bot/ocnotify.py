@@ -213,7 +213,7 @@ def _update_record(nid: int, channels, delivered) -> None:
     if pg is None or nid is None:
         return
     try:
-        _pg.cursor().execute(
+        pg.cursor().execute(
             "UPDATE notifications SET channels = %s, delivered = %s WHERE id = %s",
             (channels, delivered, nid),
         )

@@ -202,6 +202,7 @@ class Scheduler:
         self.state_path = Path(state_path)
         self.runner = runner  # async (job) -> None
         self._task: asyncio.Task | None = None
+        self._tasks: set = set()
 
     def _state(self) -> dict:
         try:
@@ -226,7 +227,9 @@ class Scheduler:
             if due(job, now, state.get(name)):
                 self._mark(name, now.strftime("%Y-%m-%d %H:%M"))
                 log.info("firing job %s", name)
-                asyncio.create_task(self._safe_run(job))
+                task = asyncio.create_task(self._safe_run(job))
+                self._tasks.add(task)  # keep a reference until it finishes
+                task.add_done_callback(self._tasks.discard)
 
     async def _safe_run(self, job: dict) -> None:
         try:

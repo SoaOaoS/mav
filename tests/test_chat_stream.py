@@ -7,7 +7,6 @@ twice; live updates come from the engine's event stream.
 Run: python3 -m unittest discover -s tests -v
 """
 
-import json
 import socket
 import subprocess
 import sys
