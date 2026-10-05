@@ -361,6 +361,9 @@
               <button class="tab" data-rtab="drafts">
                 Drafts <span class="count" id="draftCount"></span>
               </button>
+              <button class="tab" data-rtab="interests">
+                Interests <span class="count" id="interestCount"></span>
+              </button>
             </div>
 
             <div class="rpanel is-active" id="rpanel-routines">
@@ -389,6 +392,70 @@
                 </p>
               </div>
               <div class="drafts" id="draftList"></div>
+            </div>
+
+            <div class="rpanel" id="rpanel-interests">
+              <div class="panel-bar">
+                <p class="hint">
+                  What Mav has understood you care about — each with the
+                  evidence behind it. Mav keeps an eye on its own and only
+                  reaches out when it has something worth saying. Correct it
+                  here anytime.
+                </p>
+              </div>
+
+              <div class="card autonomy-card">
+                <div class="ac-row">
+                  <div>
+                    <strong>Self-initiated watch</strong>
+                    <p class="hint">
+                      Let Mav create, tune and retire its own watch routines
+                      from these interests.
+                    </p>
+                  </div>
+                  <span class="badge" id="interestBackend"></span>
+                </div>
+                <div class="segmented" id="autonomySeg">
+                  <button type="button" data-autonomy="off">Off</button>
+                  <button type="button" data-autonomy="suggest">Suggest</button>
+                  <button type="button" data-autonomy="auto">Automatic</button>
+                </div>
+                <p class="hint" id="autonomyHint"></p>
+              </div>
+
+              <div class="selfinit" id="selfinitBox" hidden></div>
+
+              <form
+                class="card inline-form interest-add"
+                id="interestForm"
+                autocomplete="off"
+              >
+                <input
+                  type="text"
+                  id="interestLabel"
+                  placeholder="e.g. Cybersecurity, PSG, Bitcoin…"
+                />
+                <select id="interestCategory" aria-label="Category">
+                  <option value="other">Other</option>
+                  <option value="sport">Sport</option>
+                  <option value="finance">Finance</option>
+                  <option value="tech">Tech</option>
+                  <option value="games">Games</option>
+                  <option value="music">Music</option>
+                  <option value="food">Food</option>
+                  <option value="travel">Travel</option>
+                  <option value="culture">Culture</option>
+                </select>
+                <select id="interestPolarity" aria-label="Like or dislike">
+                  <option value="like">I like it</option>
+                  <option value="dislike">I dislike it</option>
+                </select>
+                <button class="btn btn-primary" type="submit">
+                  <i data-i="plus"></i> Add
+                </button>
+              </form>
+
+              <div class="interests" id="interestList"></div>
             </div>
 
             <div class="rpanel" id="rpanel-watch">

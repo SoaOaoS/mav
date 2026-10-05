@@ -91,6 +91,16 @@ const ICON_PATHS = {
     '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>',
   tag: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
   news: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>',
+  "bell-off":
+    '<path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 8 3 8H7M4 4l16 16M10 20a2 2 0 0 0 4 0"/>',
+  gamepad:
+    '<rect x="2" y="7" width="20" height="10" rx="4"/><path d="M7 10v4M5 12h4M15 11h.01M18 13h.01"/>',
+  music:
+    '<path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/>',
+  coffee:
+    '<path d="M4 8h13v5a5 5 0 0 1-10 0zM17 9h1a3 3 0 0 1 0 6h-1M6 3v2M10 3v2M14 3v2"/>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
+  send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
 };
 function icon(name, cls = "") {
   const p = ICON_PATHS[name] || ICON_PATHS.sparkle;
@@ -368,6 +378,7 @@ const state = {
   inbox: [],
   drafts: [],
   proactivity: "normal",
+  interests: { interests: [], autonomy: "suggest", selfinit: null },
   view: "chat",
 };
 
@@ -2142,6 +2153,7 @@ function openRoutinesTab(tab) {
   );
   if (tab === "watch") loadWatch();
   else if (tab === "drafts") loadDrafts();
+  else if (tab === "interests") loadInterests();
   else loadRoutines();
 }
 $$("[data-rtab]").forEach((t) =>
@@ -3096,6 +3108,260 @@ $("#watchList").addEventListener("click", async (e) => {
   await api.post("watch/remove", { id: Number(rm.dataset.rm) }).catch(() => {});
   toast("Stopped.");
   loadWatch();
+});
+
+/* ================================================================
+   10b. Interests — the control tower
+   ================================================================ */
+const INTEREST_CAT = {
+  sport: { ico: "activity", label: "Sport" },
+  finance: { ico: "chart", label: "Finance" },
+  tech: { ico: "cpu", label: "Tech" },
+  games: { ico: "gamepad", label: "Games" },
+  music: { ico: "music", label: "Music" },
+  food: { ico: "coffee", label: "Food" },
+  travel: { ico: "globe", label: "Travel" },
+  culture: { ico: "book", label: "Culture" },
+  other: { ico: "sparkle", label: "Other" },
+};
+const AUTONOMY_LABEL = {
+  off: "Mav observes your interests but never creates watch routines on its own.",
+  suggest: "Mav proposes watch routines and you accept them with one click.",
+  auto: "Mav creates, tunes and retires its own watch routines without asking.",
+};
+async function loadInterests() {
+  if (LIVE) {
+    try {
+      state.interests = await api.get("interests");
+    } catch (_) {}
+  }
+  renderInterests();
+}
+function renderInterests() {
+  const data = state.interests || {};
+  const items = data.interests || [];
+  $("#interestCount").textContent =
+    items.filter((i) => i.polarity === "like").length || "";
+  const b = $("#interestBackend");
+  if (b) {
+    b.className = "badge " + (data.backend === "postgres" ? "ok" : "warn");
+    b.textContent =
+      data.backend === "postgres" ? "Profile on" : LIVE ? "File only" : "Demo";
+  }
+  const aut = data.autonomy || "suggest";
+  $$("#autonomySeg [data-autonomy]").forEach((x) =>
+    x.classList.toggle("is-active", x.dataset.autonomy === aut),
+  );
+  const hint = $("#autonomyHint");
+  if (hint) hint.textContent = AUTONOMY_LABEL[aut] || "";
+
+  renderSelfInit(data.selfinit);
+
+  const box = $("#interestList");
+  if (!box) return;
+  if (!items.length) {
+    box.innerHTML = `<div class="empty-state"><strong>Nothing learned yet</strong>
+      Talk to Mav, or add a topic above (say “j'adore la cyber”, “I love the Lakers”). Mav records each one with its evidence and turns the ones it can into watches.</div>`;
+    return;
+  }
+  box.innerHTML = items
+    .map((it) => {
+      const cat = INTEREST_CAT[it.category] || INTEREST_CAT.other;
+      const pct = Math.round((it.score || 0) * 100);
+      const conf = Math.round((it.confidence || 0) * 100);
+      const dislike = it.polarity === "dislike";
+      const flags = [
+        dislike ? `<span class="badge warn">dislike</span>` : "",
+        it.pinned ? `<span class="badge ok">pinned</span>` : "",
+        it.muted ? `<span class="badge warn">muted</span>` : "",
+        it.conflicted ? `<span class="badge warn">uncertain</span>` : "",
+        it.last_ref ? `<span class="badge">watched</span>` : "",
+      ].join("");
+      const ev = (it.evidence || [])
+        .slice(-2)
+        .map(
+          (e) =>
+            `<div class="iev">“${esc(e.snippet || "")}” <span class="imeta">${esc(fmtRel(e.ts))} · ${esc(e.source || "")}</span></div>`,
+        )
+        .join("");
+      const cadences = ["off", "weekly", "biweekly", "monthly", "quarterly"];
+      return `<div class="icard ${dislike ? "is-dislike" : ""} ${it.muted ? "is-muted" : ""}">
+        <div class="ihead">
+          ${I(cat.ico)} <strong>${esc(it.label)}</strong>
+          <span class="imeta">${esc(cat.label)}${it.polarity === "like" && it.cadence ? " · " + esc(it.cadence) : ""}</span>
+          <span class="grow"></span>
+          ${flags}
+          <button class="icon-btn" data-iopen="${esc(it.key)}" title="Open a chat about this">${I("chat")}</button>
+          <button class="icon-btn" data-iboost="${esc(it.key)}" title="More like this">${I("plus")}</button>
+          <button class="icon-btn" data-imute="${esc(it.key)}" title="${it.muted ? "Unmute" : "Mute"}">${I(it.muted ? "bell" : "bell-off")}</button>
+          <button class="icon-btn" data-ipin="${esc(it.key)}" title="${it.pinned ? "Unpin" : "Pin"}">${I("pin")}</button>
+          <button class="icon-btn danger" data-idel="${esc(it.key)}" title="Forget">${I("trash")}</button>
+        </div>
+        <div class="ibars">
+          <span class="ibar" title="Interest strength"><i style="width:${pct}%"></i></span>
+          <span class="imeta">interest ${pct}% · confidence ${conf}%</span>
+          ${it.due_in_days != null ? `<span class="imeta">· next nudge in ${it.due_in_days <= 0 ? "queued" : it.due_in_days + "d"}</span>` : ""}
+        </div>
+        ${
+          it.conflicted
+            ? `<div class="iconflict">You said both. Settle it:
+          <button class="btn btn-ghost btn-sm" data-iresolve="${esc(it.key)}" data-pol="like">Keep “like”</button>
+          <button class="btn btn-ghost btn-sm" data-iresolve="${esc(it.key)}" data-pol="dislike">Make it a dislike</button></div>`
+            : ""
+        }
+        ${ev ? `<div class="ievidence">${ev}</div>` : ""}
+        <div class="iacts">
+          <select class="isel" data-icadence="${esc(it.key)}" aria-label="Cadence">
+            ${cadences.map((c) => `<option value="${c}" ${c === it.cadence ? "selected" : ""}>${c === "off" ? "Off" : "nudge " + c}</option>`).join("")}
+          </select>
+          <button class="btn btn-ghost btn-sm" data-ifbup="${esc(it.key)}">👍</button>
+          <button class="btn btn-ghost btn-sm" data-ifbdown="${esc(it.key)}">👎</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+function renderSelfInit(si) {
+  const box = $("#selfinitBox");
+  if (!box) return;
+  const c = (si && si.counts) || {};
+  const total = (c.create || 0) + (c.update || 0) + (c.retire || 0);
+  if (!si || !total) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const rows = [];
+  (si.create || []).forEach((j) =>
+    rows.push(
+      `<li>${I("plus")} Create watch <strong>${esc(j.name)}</strong> — every ${Math.round((j.every_minutes || 0) / 60)}h</li>`,
+    ),
+  );
+  (si.update || []).forEach((j) =>
+    rows.push(`<li>${I("edit")} Retune <strong>${esc(j.name)}</strong></li>`),
+  );
+  (si.retire || []).forEach((j) =>
+    rows.push(
+      `<li>${I("trash")} Retire <strong>${esc(j.name)}</strong> (interest cooled down)</li>`,
+    ),
+  );
+  box.innerHTML = `<div class="card selfinit-card"><div class="ac-row">
+      <div><strong>Mav proposes ${total} change${total > 1 ? "s" : ""} to its own watches</strong>
+      <p class="hint">${si.autonomy === "auto" ? "Applied automatically." : "Review and let Mav apply them."}</p></div>
+      <button class="btn btn-primary btn-sm" id="selfinitApply">${I("check")} Apply now</button>
+      </div><ul class="selfinit-list">${rows.join("")}</ul></div>`;
+}
+$$("#autonomySeg [data-autonomy]").forEach((btn) =>
+  btn.addEventListener("click", async () => {
+    if (!needLive()) return;
+    try {
+      await api.post("interests/autonomy", { level: btn.dataset.autonomy });
+      toast("Saved.");
+      loadInterests();
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  }),
+);
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("#selfinitApply")) {
+    if (!needLive()) return;
+    try {
+      const r = await api.post("interests/apply", {});
+      toast(
+        r.applied || (r.counts && r.counts.create)
+          ? "Mav updated its watches."
+          : "Nothing to apply.",
+      );
+      loadInterests();
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  }
+});
+$("#interestForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const label = $("#interestLabel").value.trim();
+  if (!label || !needLive()) return;
+  try {
+    await api.post("interests/add", {
+      label,
+      category: $("#interestCategory").value,
+      polarity: $("#interestPolarity").value,
+    });
+    $("#interestLabel").value = "";
+    toast("Noted.");
+    loadInterests();
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+});
+$("#interestList").addEventListener("click", async (e) => {
+  const pick = (a) => e.target.closest(`[data-${a}]`);
+  const open = pick("iopen");
+  const boost = pick("iboost");
+  const mute = pick("imute");
+  const pin = pick("ipin");
+  const del = pick("idel");
+  const resolve = pick("iresolve");
+  const up = pick("ifbup");
+  const down = pick("ifbdown");
+  const b = open || boost || mute || pin || del || resolve || up || down;
+  if (!b || !needLive()) return;
+  const key =
+    b.dataset.iopen ||
+    b.dataset.iboost ||
+    b.dataset.imute ||
+    b.dataset.ipin ||
+    b.dataset.idel ||
+    b.dataset.iresolve ||
+    b.dataset.ifbup ||
+    b.dataset.ifbdown;
+  try {
+    if (open) {
+      toast("Mav is opening a chat…");
+      const r = await api.post("interests/open", { key });
+      if (r.session) openChat(r.session);
+      return;
+    }
+    if (boost) await api.post("interests/feedback", { key, positive: true });
+    else if (up || down)
+      await api.post("interests/feedback", { key, positive: !!up });
+    else if (mute) {
+      const it = (state.interests.interests || []).find((x) => x.key === key);
+      await api.post("interests/update", { key, muted: !(it && it.muted) });
+    } else if (pin) {
+      const it = (state.interests.interests || []).find((x) => x.key === key);
+      await api.post("interests/update", { key, pinned: !(it && it.pinned) });
+    } else if (resolve) {
+      await api.post("interests/update", {
+        key,
+        polarity: b.dataset.pol,
+        resolve_conflict: true,
+      });
+    } else if (del) {
+      if (!(await confirmDialog("Forget this interest?", key, "Forget")))
+        return;
+      await api.post("interests/delete", { key });
+    }
+    loadInterests();
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+});
+$("#interestList").addEventListener("change", async (e) => {
+  const sel = e.target.closest("[data-icadence]");
+  if (!sel || !needLive()) return;
+  try {
+    await api.post("interests/update", {
+      key: sel.dataset.icadence,
+      cadence: sel.value,
+    });
+    toast("Cadence updated.");
+    loadInterests();
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
 });
 
 /* ================================================================
