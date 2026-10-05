@@ -133,6 +133,55 @@ try:
 except Exception:  # noqa: BLE001
     ocbriefing = None
 
+import mav_licence  # noqa: E402
+
+LICENCE = mav_licence.Licence(BOT_DIR / "licence.json")
+
+
+def active_routines(jobs: list | None = None, exclude: str = "") -> int:
+    """Routines that count towards the plan (the daily briefing is free)."""
+    jobs = read_json(JOBS_FILE, []) if jobs is None else jobs
+    return sum(
+        1 for j in jobs if isinstance(j, dict) and j.get("enabled", True)
+        and j.get("kind") != "briefing" and j.get("name") != exclude
+    )
+
+
+def watch_count() -> int:
+    try:
+        rows = pg_query("select count(*) as n from watch_items")
+        return int(rows[0]["n"]) if rows else 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def upgrade_error(what: str) -> dict:
+    lim = LICENCE.limit(what)
+    noun = {"routines": "active routines", "watch": "“keep an eye on” items"}[what]
+    return {
+        "ok": False, "upgrade": True,
+        "error": f"The Free plan includes {lim} {noun}. Go Pro for unlimited — or switch one off.",
+    }
+
+
+def get_plan() -> dict:
+    lic = LICENCE.current()
+    plan = lic["plan"]
+    return {
+        "plan": plan,
+        "label": mav_licence.PLANS[plan]["label"],
+        "limits": {k: v for k, v in mav_licence.PLANS[plan].items() if k != "label"},
+        "free_limits": {k: v for k, v in mav_licence.PLANS["free"].items() if k != "label"},
+        "used": {"routines": active_routines(), "watch": watch_count()},
+        "email": lic.get("email", ""),
+        "expires": lic.get("expires"),
+        "reason": lic.get("reason", ""),
+        "has_key": bool(LICENCE.key()),
+        "checkout_url": mav_licence.CHECKOUT_URL,
+        "perks": mav_licence.PRO_PERKS,
+    }
+
+
 try:
     import ocusage  # noqa: E402
 
@@ -1459,6 +1508,11 @@ def save_job(payload: dict) -> dict:
     original = str(payload.get("original") or "").strip()
     if name != original and any(j.get("name") == name for j in jobs):
         return {"ok": False, "error": f"An automation named \"{name}\" already exists."}
+    prev = next((j for j in jobs if j.get("name") == (original or name)), None)
+    was_counted = bool(prev and prev.get("enabled", True) and prev.get("kind") != "briefing")
+    if job["enabled"] and not was_counted and not (prev and prev.get("kind") == "briefing"):
+        if not LICENCE.allows("routines", active_routines(jobs)):
+            return upgrade_error("routines")
     replaced = False
     for i, j in enumerate(jobs):
         if j.get("name") == (original or name):
@@ -1763,8 +1817,13 @@ def start_action(prompt: str, name: str = "", agent: str = "") -> dict:
     return {"ok": True, "id": aid, "session": sid}
 
 
-def set_job_enabled(name: str, enabled: bool) -> bool:
+def set_job_enabled(name: str, enabled: bool) -> bool | dict:
     jobs = read_json(JOBS_FILE, [])
+    target = next((j for j in jobs if j.get("name") == name), None)
+    if (enabled and target and not target.get("enabled", True)
+            and target.get("kind") != "briefing"
+            and not LICENCE.allows("routines", active_routines(jobs))):
+        return upgrade_error("routines")
     found = False
     for j in jobs:
         if j.get("name") == name:
@@ -4170,6 +4229,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/briefing":
                 return self._send(200, get_briefing())
+            if path == "/api/plan":
+                return self._send(200, get_plan())
             if path == "/api/usage":
                 if USAGE is None:
                     return self._send(200, {"available": False})
@@ -4390,6 +4451,12 @@ class Handler(BaseHTTPRequestHandler):
                                                     str(payload.get("time") or "")))
             if path == "/api/briefing/run":
                 return self._send(200, run_briefing_now())
+            if path == "/api/plan/licence":
+                res = LICENCE.save(str(payload.get("key") or ""))
+                return self._send(200 if res.get("ok") else 400, {**res, "plan_info": get_plan()})
+            if path == "/api/plan/remove":
+                LICENCE.remove()
+                return self._send(200, {"ok": True, "plan_info": get_plan()})
             if path == "/api/usage/budget":
                 if USAGE is None:
                     return self._send(400, {"error": "Usage tracking unavailable."})
@@ -4441,13 +4508,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"summary": s})
             if path == "/api/job/toggle":
                 ok = set_job_enabled(payload.get("name", ""), bool(payload.get("enabled")))
+                if isinstance(ok, dict):
+                    return self._send(402, ok)
                 return self._send(200 if ok else 404, {"ok": ok})
             if path == "/api/job/run":
                 res = run_job_now(payload.get("name", ""))
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/job/save":
                 res = save_job(payload)
-                return self._send(200 if res.get("ok") else 400, res)
+                return self._send(200 if res.get("ok") else 402 if res.get("upgrade") else 400, res)
             if path == "/api/job/template":
                 res = template_to_job(payload.get("id", ""), name=payload.get("name", ""))
                 return self._send(200 if res.get("ok") else 400, res)
@@ -4552,6 +4621,8 @@ class Handler(BaseHTTPRequestHandler):
                 res = selfinit_apply()
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/watch/add":
+                if not LICENCE.allows("watch", watch_count()):
+                    return self._send(402, upgrade_error("watch"))
                 ok = watch_add(payload.get("kind", ""), payload.get("target", ""))
                 return self._send(200 if ok else 400, {"ok": ok})
             if path == "/api/watch/remove":

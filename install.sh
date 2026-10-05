@@ -878,7 +878,7 @@ task "Copying Mav files" copy_files
 task "Preparing the background worker" sh -c \
   "python3 -m venv '$BOT_DIR/venv' && '$BOT_DIR/venv/bin/pip' install -q --upgrade pip && '$BOT_DIR/venv/bin/pip' install -q -r '$BOT_DIR/requirements.txt'"
 task "Preparing the web app" sh -c \
-  "python3 -m venv '$DASH_DIR/server/venv' && '$DASH_DIR/server/venv/bin/pip' install -q --upgrade pip && '$DASH_DIR/server/venv/bin/pip' install -q psycopg2-binary pywebpush py-vapid"
+  "python3 -m venv '$DASH_DIR/server/venv' && '$DASH_DIR/server/venv/bin/pip' install -q --upgrade pip && '$DASH_DIR/server/venv/bin/pip' install -q psycopg2-binary pywebpush py-vapid cryptography"
 
 write_compose() {
   cat >"$COMPOSE_FILE" <<EOF

@@ -3838,3 +3838,82 @@ button.memory-updated:hover {
     flex-wrap: wrap;
   }
 }
+
+/* ---------- Plan ---------- */
+.plan-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
+    var(--bg-elev);
+}
+.plan-hero h3 {
+  margin: 6px 0 4px;
+  font-size: 1.25rem;
+}
+.plan-hero p {
+  margin: 0;
+  color: var(--ink-2);
+}
+.plan-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--bg-sunk);
+  color: var(--ink-2);
+}
+.plan-badge.is-pro {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.plan-usage {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.plan-usage .usage-meter {
+  margin: 4px 0 0;
+}
+.plan-usage-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+.plan-perks {
+  margin: 8px 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.licence-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.licence-row .num-input.wide {
+  flex: 1;
+  min-width: 200px;
+  width: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+.brand-pro {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+@media (max-width: 640px) {
+  .plan-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+.plan-hero .btn {
+  text-decoration: none;
+  white-space: nowrap;
+}

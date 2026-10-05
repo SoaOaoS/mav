@@ -206,6 +206,10 @@ function agentAvatar(name, cls = "") {
 /* Toasts (with an optional action button). */
 function toast(msg, opts = {}) {
   const box = $("#toasts");
+  // The same message twice in a row (e.g. a caller re-reporting an error that
+  // was already shown with its action) is shown once.
+  if ([...box.children].some((t) => t.firstChild && t.firstChild.textContent === msg))
+    return () => {};
   const el = document.createElement("div");
   el.className = "toast" + (opts.error ? " is-err" : "");
   el.innerHTML = `<span>${esc(msg)}</span>`;
@@ -330,6 +334,12 @@ const api = {
       data = await r.json();
     } catch (_) {}
     if (r.status === 401 && data && data.auth && LIVE) showAuthGate("login");
+    // A Free-plan limit: offer the upgrade right where it happened.
+    if (r.status === 402 && data && data.upgrade)
+      toast(data.error, {
+        action: { label: "See Pro", run: () => go("settings", "plan") },
+        duration: 9000,
+      });
     if (!r.ok) {
       const err = new Error((data && data.error) || `HTTP ${r.status}`);
       err.data = data;
@@ -3865,6 +3875,7 @@ function openSettingsTab(tab) {
         loadMail();
       },
       usage: loadUsage,
+      plan: loadPlan,
       general: () => {
         loadAdvanced();
         checkVersion();
@@ -3878,6 +3889,67 @@ $$("[data-stab]").forEach((t) =>
     history.replaceState(null, "", `#settings/${t.dataset.stab}`);
   }),
 );
+/* ---------- Plan (Free / Pro) ---------- */
+function renderPlan(p) {
+  const pro = p.plan === "pro";
+  $("#planBadge").textContent = p.label || (pro ? "Pro" : "Free");
+  $("#planBadge").classList.toggle("is-pro", pro);
+  $("#planTitle").textContent = pro ? "You're on Mav Pro — thank you" : "You're on Mav Free";
+  const fl = p.free_limits || {};
+  $("#planLead").textContent = pro
+    ? `No limits${p.email ? ` · ${p.email}` : ""}${p.expires ? ` · renews by ${new Date(p.expires * 1000).toLocaleDateString()}` : ""}.`
+    : `Everything Mav does, with room for ${fl.routines} routines and ${fl.watch} “keep an eye on” items. The daily briefing is always included.`;
+  $("#planUpgrade").hidden = pro;
+  $("#planUpgrade").href = p.checkout_url || "#";
+  const rows = [
+    ["Active routines", p.used.routines, p.limits.routines],
+    ["Keep an eye on", p.used.watch, p.limits.watch],
+  ];
+  $("#planUsage").innerHTML = rows
+    .map(([label, used, lim]) => {
+      const pct = lim ? Math.min(100, (100 * used) / lim) : 0;
+      return `<div><div class="plan-usage-row"><span>${esc(label)}</span><strong>${used}${lim ? ` / ${lim}` : " · unlimited"}</strong></div>
+        ${lim ? `<div class="usage-meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-high" : ""}"><i style="width:${pct}%"></i></div>` : ""}</div>`;
+    })
+    .join("");
+  $("#planPerks").innerHTML = pro
+    ? ""
+    : (p.perks || []).map((x) => `<li>${esc(x)}</li>`).join("");
+  $("#licenceRemove").hidden = !p.has_key;
+  $("#licenceText").textContent = p.reason
+    ? p.reason
+    : p.has_key
+      ? "Licence active on this machine."
+      : "Paste the key from your purchase email. It is checked on this machine — Mav never calls home.";
+  const brand = $("#brandPro");
+  if (brand) brand.hidden = !pro;
+}
+async function loadPlan() {
+  if (!LIVE) return;
+  try {
+    renderPlan(await api.get("plan"));
+  } catch (_) {}
+}
+$("#licenceSave").addEventListener("click", async () => {
+  if (!needLive()) return;
+  const key = $("#licenceKey").value.trim();
+  if (!key) return toast("Paste your licence key first.");
+  try {
+    const r = await api.post("plan/licence", { key });
+    $("#licenceKey").value = "";
+    renderPlan(r.plan_info);
+    toast("Mav Pro is active. Thank you!");
+  } catch (ex) {
+    toast(ex.message, { error: true });
+  }
+});
+$("#licenceRemove").addEventListener("click", async () => {
+  if (!needLive()) return;
+  const r = await api.post("plan/remove").catch(() => null);
+  if (r) renderPlan(r.plan_info);
+  toast("Licence removed from this machine.");
+});
+
 /* ---------- Usage ---------- */
 const money = (v) =>
   v >= 100 ? `$${Math.round(v)}` : v >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(v ? 3 : 2)}`;
@@ -5798,6 +5870,7 @@ async function boot() {
     loadProactivity(),
     checkVersion(),
     loadBriefing(),
+    loadPlan(),
   ]);
   route();
   if (!state.chat.id) renderThread();
