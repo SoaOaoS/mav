@@ -4,8 +4,8 @@
 (function () {
   "use strict";
   const BUY_URL = {
-    year: "https://github.com/SoaOaoS/mav/issues/new?labels=connect&title=Mav%20Connect%20%E2%80%94%20yearly",
-    month: "https://github.com/SoaOaoS/mav/issues/new?labels=connect&title=Mav%20Connect%20%E2%80%94%20monthly",
+    year: "https://buy.stripe.com/4gM4gz4fM6nye67d7n28800",
+    month: "https://buy.stripe.com/00wfZh13A3bm1jlffv28801",
   };
   const BUSINESS_URL =
     "https://github.com/SoaOaoS/mav/issues/new?labels=business&title=Mav%20for%20Business";
@@ -23,9 +23,7 @@
       el.textContent = el.dataset[period === "year" ? "perYear" : "perMonth"];
     });
     document.querySelectorAll("[data-buy]").forEach((a) => {
-      a.href = BUY_URL[period];
-      a.target = "_blank";
-      a.rel = "noopener";
+      a.href = BUY_URL[period]; // Stripe Checkout, same tab: it returns to thanks.html
     });
   }
   document.querySelectorAll("[data-billing]").forEach((b) =>
