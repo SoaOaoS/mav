@@ -71,6 +71,7 @@ talks to the opencode engine, and reads/writes Postgres.
 
 | Method   | Route                                                                                | Purpose                                                                          |
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| GET/POST | `/api/auth/state` · `setup` · `login` · `logout` · `password` | sign-in |
 | GET      | `/api/status`                                                                        | assistant health, model, counters                                                |
 | GET      | `/api/stream?prompt=&session=&agent=`                                                | **SSE** answer (`start`, `delta`, `reset`, `tool`, `done`, `error`); `&from=N` resumes |
 | GET      | `/api/sessions`, `/api/session?id=`                                                  | chats, one chat's messages (one per turn; `running` = answer in progress) |
@@ -118,7 +119,15 @@ name containing `secret` / `credential` / `password` / `token` / `apikey`.
 Every answer also has a **Download** action in its toolbar that saves the
 message as a local `.md` file.
 
-> ⚠️ **No authentication**: keep it on your home network or behind a VPN.
+### Sign-in
+
+The first visit asks for a password that protects the app; from then on every
+`/api/*` call needs the session cookie (HttpOnly, SameSite=Lax, `Secure` over
+HTTPS, 30 days). Changing the password signs every other device out. Repeated
+wrong passwords are slowed down. Public routes: `/api/auth/*`, `/api/health`
+and `/api/hooks/*` (webhooks carry their own token). `sudo mav password` resets
+it from the machine; `MAV_AUTH=off` turns sign-in off (only behind your own
+authenticating proxy). Stored in `BOT_DIR/auth.json` (PBKDF2-SHA256).
 
 ## Install it on a phone (PWA)
 

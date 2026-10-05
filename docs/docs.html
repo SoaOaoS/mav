@@ -156,6 +156,7 @@ mav doctor            # check everything, with a hint for each problem
 mav restart [engine|worker|web]
 mav logs [engine|worker|web|install] [-n 50]
 mav backup            # memory, routines, settings → /var/backups/mav/
+mav password          # set or reset the web app password
 mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</code></pre>
             <p>
               Versions follow
@@ -232,8 +233,10 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
               <li>Turn on notifications (the bell, or Settings → General).</li>
             </ol>
             <p>
-              Mav has no login: keep it on your home network, or reach it
-              through a VPN such as Tailscale or WireGuard.
+              On your first visit Mav asks you to choose a password; every
+              device then signs in once (for 30 days). Forgot it? Run
+              <code>sudo mav password</code> on the machine. To reach Mav away
+              from home, prefer a VPN such as Tailscale or WireGuard.
             </p>
           </section>
 
@@ -705,8 +708,10 @@ Postgres (Docker, 127.0.0.1) ◀── mav-worker (routines, keep an eye on, pus
           <section id="api">
             <h2>Web app API</h2>
             <p>
-              The web app talks to a small JSON API on the same address (no
-              authentication — keep Mav private). Highlights:
+              The web app talks to a small JSON API on the same address. It
+              needs the session cookie set by <code>/api/auth/login</code>
+              (except <code>/api/auth/*</code>, <code>/api/health</code> and
+              webhooks). Highlights:
             </p>
             <table>
               <tr>

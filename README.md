@@ -92,6 +92,7 @@ mav version       # installed and latest version
 mav restart [engine|worker|web]
 mav logs [engine|worker|web|install] [-n 50]
 mav backup        # memory, routines and settings → /var/backups/mav/
+mav password      # set or reset the password of the web app
 mav reconfigure   # change the model, or re-run the setup
 mav uninstall     # remove the services (your data is kept)
 ```
@@ -129,6 +130,7 @@ Unattended install: `sudo ./install.sh --yes` with `MAV_PROVIDER`
 | `mav-server`    | the agent engine ([opencode](https://opencode.ai))      |
 | `mav-worker`    | runs routines and "keep an eye on", sends notifications |
 
+The web app is protected by a password you choose on your first visit.
 Everything runs on your machine. The only thing that leaves it is what you send
 to the model provider you chose — or nothing at all with a local Ollama.
 
