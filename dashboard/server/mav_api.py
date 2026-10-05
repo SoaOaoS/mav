@@ -132,6 +132,42 @@ try:
     import ocbriefing  # noqa: E402
 except Exception:  # noqa: BLE001
     ocbriefing = None
+
+try:
+    import ocusage  # noqa: E402
+
+    USAGE = ocusage.Usage(BOT_DIR / "usage.json")
+except Exception:  # noqa: BLE001
+    ocusage = None
+    USAGE = None
+
+
+def record_usage(source: str, entries: list) -> None:
+    """Add an answer's tokens/cost, and warn once at 80 % / 100 % of budget."""
+    if USAGE is None:
+        return
+    try:
+        USAGE.record_entries(source, entries)
+        level = USAGE.alert_due()
+    except Exception:  # noqa: BLE001
+        return
+    if level:
+        b = USAGE.budget()
+        title = "💸 Budget reached" if level >= 100 else "💸 80 % of your budget used"
+        body = (f"${USAGE.month_cost():.2f} of ${b['monthly_usd']:.2f} this month."
+                + (" New answers are paused until you raise it." if level >= 100 and b["action"] == "stop" else ""))
+        try:
+            record_notification("usage", title, body, "./#settings/usage")
+            send_push(title, body, "./#settings/usage")
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def budget_blocked() -> bool:
+    try:
+        return bool(USAGE and USAGE.blocked())
+    except Exception:  # noqa: BLE001
+        return False
 import mav_provider  # noqa: E402
 
 # Sign-in (one owner password). MAV_AUTH=off disables it, e.g. behind your own
@@ -2413,13 +2449,16 @@ def _clean_title(raw: str) -> str:
 
 def quick_completion(instruction: str, agent: str = "", timeout: float = 90) -> str:
     """One-shot model call in a throwaway session (titles, fact extraction)."""
+    if budget_blocked():
+        return ""
     tmp = None
     try:
         tmp = http_json(f"{OPENCODE_URL}/session", method="POST", body={"title": "mav-internal"}, timeout=10)["id"]
-        body = {"parts": [{"type": "text", "text": instruction}], **_model_body()}
+        body = {"parts": [{"type": "text", "text": instruction}], **_model_body(small=True)}
         if agent and agent in valid_agents():
             body["agent"] = agent
         res = http_json(f"{OPENCODE_URL}/session/{tmp}/message", method="POST", body=body, timeout=timeout)
+        record_usage("background", [res or {}])
         return _part_text((res or {}).get("parts") or [])
     except Exception:  # noqa: BLE001
         return ""
@@ -2507,10 +2546,13 @@ def generate_title(sid: str, prompt: str, answer: str) -> None:
             "quotes, no punctuation at the end, no explanation.\n\n"
             f"User: {prompt.strip()[:800]}\n\nAssistant: {answer.strip()[:800]}"
         )
-        body = {"parts": [{"type": "text", "text": instruction}], **_model_body()}
+        body = {"parts": [{"type": "text", "text": instruction}], **_model_body(small=True)}
         if "title" in valid_agents():
             body["agent"] = "title"
+        if budget_blocked():
+            return
         res = http_json(f"{OPENCODE_URL}/session/{tmp}/message", method="POST", body=body, timeout=90)
+        record_usage("background", [res or {}])
         title = _clean_title(_part_text((res or {}).get("parts") or []))
         if title and session_meta(sid).get("title_locked") is not True:
             rename_session(sid, title)
@@ -2741,9 +2783,17 @@ def _ts(ms) -> str:
         return ""
 
 
-def _model_body() -> dict:
-    if DEFAULT_MODEL and "/" in DEFAULT_MODEL:
-        provider, model = DEFAULT_MODEL.split("/", 1)
+def _model_body(small: bool = False) -> dict:
+    """The model to use; `small` = background work (titles, facts, summaries),
+    which goes to the cheaper model chosen in Settings → Usage, if any."""
+    ref = DEFAULT_MODEL
+    if small and USAGE is not None:
+        try:
+            ref = USAGE.small_model() or ref
+        except Exception:  # noqa: BLE001
+            pass
+    if ref and "/" in ref:
+        provider, model = ref.split("/", 1)
         return {"model": {"providerID": provider, "modelID": model}}
     return {}
 
@@ -3639,6 +3689,13 @@ def stream_answer(
         body["agent"] = ag
     body.update(_model_body())
 
+    if budget_blocked():
+        b = USAGE.budget()
+        yield sse("error", {"message": (
+            f"Your monthly budget (${b['monthly_usd']:.2f}) is used up. Raise it in "
+            "Settings → Usage, or wait until next month."), "session": sid})
+        return
+
     # Instant keyword title while the real one is generated after the answer.
     needs_title = False
     if not raw_session and prompt.strip():
@@ -3694,6 +3751,7 @@ def stream_answer(
     # Text of every assistant entry of this turn, by id, in order: a window of
     # the newest messages can scroll an early step out, its text stays here.
     texts: dict[str, str] = {}
+    turn_info: dict[str, dict] = {}  # tokens and cost of every step
     url = _messages_url(sid, before)
     ENGINE_EVENTS.start()
     mark = ENGINE_EVENTS.mark(sid)
@@ -3742,6 +3800,8 @@ def stream_answer(
         if not new_assistant:
             continue
         accepted = True
+        for e in new_assistant:
+            turn_info[(e.get("info") or {}).get("id") or ""] = e.get("info") or {}
 
         # Visible answer only: "text" parts, never reasoning.
         for e in new_assistant:
@@ -3805,6 +3865,9 @@ def stream_answer(
         # Terminal error with no usable answer.
         if engine_error and finish is not None and not last_has_text:
             break
+
+    if turn_info:
+        record_usage("routine" if raw_session else "chat", list(turn_info.values()))
 
     # Interrupted on purpose: whatever text was shown stays, but this is not a
     # finished exchange, so it is not remembered as the answer.
@@ -4107,6 +4170,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/briefing":
                 return self._send(200, get_briefing())
+            if path == "/api/usage":
+                if USAGE is None:
+                    return self._send(200, {"available": False})
+                return self._send(200, {"available": True, **USAGE.summary(int(p.get("days") or 30))})
             if path == "/api/status":
                 return self._send(200, get_status())
             if path == "/api/jobs":
@@ -4323,6 +4390,23 @@ class Handler(BaseHTTPRequestHandler):
                                                     str(payload.get("time") or "")))
             if path == "/api/briefing/run":
                 return self._send(200, run_briefing_now())
+            if path == "/api/usage/budget":
+                if USAGE is None:
+                    return self._send(400, {"error": "Usage tracking unavailable."})
+                try:
+                    b = USAGE.set_budget(float(payload.get("monthly_usd") or 0),
+                                         str(payload.get("action") or "warn"))
+                except (TypeError, ValueError) as exc:
+                    return self._send(400, {"error": str(exc)})
+                return self._send(200, {"ok": True, "budget": b})
+            if path == "/api/usage/small-model":
+                if USAGE is None:
+                    return self._send(400, {"error": "Usage tracking unavailable."})
+                ref = str(payload.get("model") or "").strip()
+                if ref and "/" not in ref:
+                    return self._send(400, {"error": "Use provider/model, e.g. anthropic/claude-haiku-4-5."})
+                USAGE.set_small_model(ref)
+                return self._send(200, {"ok": True, "small_model": ref})
             if path == "/api/ask":
                 prompt = (payload.get("prompt") or "").strip()
                 if not prompt:

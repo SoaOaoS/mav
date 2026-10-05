@@ -605,6 +605,7 @@
               </button>
               <button class="tab" data-stab="helpers">Helpers</button>
               <button class="tab" data-stab="connections">Connections</button>
+              <button class="tab" data-stab="usage">Usage</button>
               <button class="tab" data-stab="general">General</button>
             </div>
 
@@ -784,6 +785,49 @@
             </div>
 
             <!-- General -->
+            <!-- Usage: what Mav costs, budget, background model -->
+            <div class="spanel" id="spanel-usage">
+              <div class="usage-head">
+                <div class="usage-stat"><span>This month</span><strong id="usageCost">—</strong></div>
+                <div class="usage-stat"><span>Answers</span><strong id="usageAnswers">—</strong></div>
+                <div class="usage-stat"><span>Tokens</span><strong id="usageTokens">—</strong></div>
+              </div>
+              <div class="card">
+                <div class="usage-meter" id="usageMeter" hidden><i></i></div>
+                <p class="hint" id="usageMeterText"></p>
+                <div class="usage-bars" id="usageBars" aria-label="Cost per day, last 30 days"></div>
+                <div class="usage-split" id="usageSplit"></div>
+              </div>
+              <div class="card">
+                <div class="setting-row">
+                  <div>
+                    <strong>Monthly budget</strong>
+                    <span>In US dollars, as your provider bills it. 0 = no budget.</span>
+                  </div>
+                  <div class="row">
+                    <input type="number" min="0" step="1" id="budgetAmount" class="num-input" aria-label="Monthly budget in USD" />
+                    <div class="segmented" id="budgetAction">
+                      <button data-v="warn" title="Notify me at 80 % and 100 %">Warn</button>
+                      <button data-v="stop" title="Also pause new answers once it is reached">Stop</button>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="budgetSave">Save</button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Model for background work</strong>
+                    <span>Titles, memory and summaries — a small, cheap model is plenty (e.g. a "mini" or "haiku" model). Empty = your main model.</span>
+                  </div>
+                  <div class="row">
+                    <input type="text" id="smallModel" class="num-input wide" placeholder="provider/model" list="smallModelList" />
+                    <datalist id="smallModelList"></datalist>
+                    <button class="btn btn-ghost btn-sm" id="smallModelSave">Save</button>
+                  </div>
+                </div>
+              </div>
+              <p class="hint">Costs come from your model provider's prices as reported by the engine; a local model (Ollama) costs nothing here.</p>
+            </div>
+
             <div class="spanel" id="spanel-general">
               <div class="card">
                 <div class="setting-row">
