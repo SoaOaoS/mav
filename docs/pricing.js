@@ -4,9 +4,11 @@
 (function () {
   "use strict";
   const BUY_URL = {
-    year: "https://github.com/SoaOaoS/mav/issues/new?labels=pro&title=Mav%20Pro%20%E2%80%94%20yearly%20licence",
-    month: "https://github.com/SoaOaoS/mav/issues/new?labels=pro&title=Mav%20Pro%20%E2%80%94%20monthly%20licence",
+    year: "https://github.com/SoaOaoS/mav/issues/new?labels=connect&title=Mav%20Connect%20%E2%80%94%20yearly",
+    month: "https://github.com/SoaOaoS/mav/issues/new?labels=connect&title=Mav%20Connect%20%E2%80%94%20monthly",
   };
+  const BUSINESS_URL =
+    "https://github.com/SoaOaoS/mav/issues/new?labels=business&title=Mav%20for%20Business";
   const WAITLIST_URL =
     "https://github.com/SoaOaoS/mav/issues/new?labels=cloud&title=Mav%20Cloud%20waitlist";
 
@@ -31,6 +33,11 @@
   );
   document.querySelectorAll("[data-waitlist]").forEach((a) => {
     a.href = WAITLIST_URL;
+    a.target = "_blank";
+    a.rel = "noopener";
+  });
+  document.querySelectorAll("[data-business]").forEach((a) => {
+    a.href = BUSINESS_URL;
     a.target = "_blank";
     a.rel = "noopener";
   });

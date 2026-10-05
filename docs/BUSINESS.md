@@ -63,43 +63,57 @@ community and a catalog of routines/connections (distribution); trust
 
 ## Business model
 
-Open core, with nothing ever switched off:
+**Rule: never sell what a user can delete from their own copy.** Mav is open
+source and runs on the user's machine, so any limit enforced *there* is one
+`git revert` away. We tried it (Free limited to 5 routines) and dropped it:
+it protected nothing and annoyed exactly the community that markets Mav for
+free. Mav sells what only we can run — services, hosting, and a licence that
+businesses respect.
 
-| Plan | Price | For |
+| Plan | Price | What it is |
 | --- | --- | --- |
-| **Free** (self-hosted) | $0 | Everything; 5 active routines, 5 watches |
-| **Pro** (self-hosted) | $8/month or **$79/year** | Unlimited routines and watches, priority support, early features |
-| **Cloud** (hosted) | $15/month or $149/year *(waitlist)* | Pro, hosted for you: private instance, updates, backups |
-| **Team** *(later)* | ~$20/user/month | Shared spaces, roles, SSO, audit — on their server or EU cloud |
+| **Mav** (self-hosted) | $0, no limits | Everything Mav does, on your machine. The funnel and the trust engine. |
+| **Mav Connect** | $6/month or **$59/year** (founding price, locked for life) | Services on our infrastructure: encrypted cloud backup (live), secure remote access and native mobile app (next), priority support. |
+| **Mav Cloud** | $15/month or $149/year *(waitlist)* | Mav hosted for you: a private instance, updates and backups handled. |
+| **Mav for Business** | ~$20/user/month *(talk to us)* | Team spaces, roles, SSO, audit log, EU hosting, commercial licence and support agreement. |
 
-Why these limits: routines and watches are what *runs on its own* — the
-proactive core. Free users get the full experience and hit the limit exactly
-when Mav has proven its value (their sixth routine). The briefing, memory and
-chat stay free: they create the habit.
+Why it holds:
+- **Connect can't be patched away**: the backup store, the relay and the app
+  stores are ours; they check the licence server-side.
+- **Backups are the right first service**: near-zero cost (object storage,
+  cents per GB), high perceived value ("never lose my assistant's memory"),
+  and encrypted on the user's machine — we never hold readable data.
+- **The founding price** pre-sells the Connect roadmap: revenue before
+  infrastructure, and a clear signal of demand for remote access and mobile.
+- **Business pays for the licence**: companies don't run unlicensed software
+  for $20/seat. Team features ship under a commercial licence; the core stays
+  MIT.
 
-Licence keys are signed (Ed25519) and verified offline
-(`dashboard/server/mav_licence.py`): no account server, no call home — the
-privacy promise holds for paying users too.
+### Infrastructure (no server to run)
+
+Connect runs on Cloudflare Workers + R2 (`connect/`): free tier at launch,
+then cents per user. Deploying is one command (`wrangler deploy`). Cloud and
+Business are the only offers that need real hosting — they start when the
+waitlist and the inbound requests prove the demand.
 
 ### The path to $10M ARR *(assumptions)*
 
 | Lever | Year 1 | Year 2 | Year 3 |
 | --- | --- | --- | --- |
-| Active installs | 15k | 60k | 150k |
-| Free → Pro conversion | 3 % | 4 % | 5 % |
-| Pro subscribers × $79 | 450 → $36k | 2.4k → $190k | 7.5k → $590k |
+| Active self-hosted installs | 20k | 80k | 200k |
+| Connect (3 % → 4 % of installs) × $59 | 600 → $35k | 3.2k → $190k | 8k → $470k |
 | Cloud subscribers × $149 | — | 4k → $600k | 25k → $3.7M |
-| Team seats × $240 | — | 500 → $120k | 24k → $5.8M |
-| **ARR** | **~$36k** | **~$0.9M** | **~$10M** |
+| Business seats × $240 | — | 500 → $120k | 24k → $5.8M |
+| **ARR** | **~$35k** | **~$0.9M** | **~$10M** |
 
-The self-hosted plans fund the project and build the community; **Cloud and
-Team are where $10M comes from**. Self-hosting is the trust engine and the
-top of the funnel for both.
+Self-hosting is free and unlimited because it is the top of the funnel:
+every Cloud and Business customer starts as someone who tried Mav for free.
 
 ### Unit economics *(assumptions)*
 
-- Pro: near-100 % gross margin (no hosting; the user's own model key).
-- Cloud: ~$2–4/month hosting per user (a small isolated instance + Postgres)
+- Connect: storage ~1 GB/user at ~$0.015/GB-month + requests → < $0.05 per
+  user per month; ~99 % gross margin.
+- Cloud: ~$2–4/month hosting per user (small isolated instance + Postgres)
   → ~75 % gross margin at $15; model costs stay on the user's key, or are
   resold with a margin as an option.
 - Acquisition: open source + content (routines gallery, "what Mav did for me
@@ -130,10 +144,10 @@ top of the funnel for both.
 - Habit: % of users opening a briefing 5 days out of 7 (week 4).
 - Proactive depth: routines + watches per active user; % hitting the Free
   limit.
-- Conversion: limit-hit → "See Pro" click → licence activated.
+- Conversion: install → "Get Mav Connect" click → licence activated; Cloud waitlist sign-ups.
 - Cost: median monthly model spend per user (Settings → Usage) — the lower,
   the easier the yes.
-- Retention: monthly churn of Pro and Cloud.
+- Retention: monthly churn of Connect and Cloud.
 
 Mav itself sends no telemetry. These are measured through opt-in surveys,
 download/release stats, the store, and Cloud (where the instance is ours).
@@ -143,20 +157,20 @@ download/release stats, the store, and Cloud (where the instance is ours).
 ## Product roadmap
 
 **Shipped (this cycle).** Password sign-in; daily briefing; usage, cost and
-budget with a cheap background model; Free/Pro plans with offline licence
-keys; pricing page.
+budget with a cheap background model; licence keys; Mav Connect with
+encrypted cloud backup; pricing page; brand v2.
 
 **Next 3 months.**
 - Mail + calendar connectors with drafts for approval (the "needs you"
   section of the briefing gets real).
 - Routines gallery: share and install routines in one click.
-- Secure remote access built in (tunnel), so the phone app works anywhere.
-- Encrypted automatic backups (Pro).
+- **Connect: secure remote access** — your Mav at your own address, from
+  anywhere, without opening a port.
 
 **3–6 months.**
 - **Mav Cloud** beta: one isolated instance per user, same open code.
 - Family: one Mav per person + a shared space (shopping, planning).
-- Native mobile app (notifications on iOS without the PWA limits).
+- **Connect: native mobile app** (real notifications on iOS, widgets, share to Mav).
 
 **6–12 months.**
 - **Team**: shared workspaces, roles, SSO, audit log; EU hosting.
@@ -167,7 +181,7 @@ keys; pricing page.
 ## Taking payments (operations)
 
 1. Create a store on a merchant of record (Lemon Squeezy or Paddle handle VAT
-   worldwide) with two products: *Mav Pro — yearly* ($79) and *monthly* ($8).
+   worldwide) with two products: *Mav Connect — yearly* ($59) and *monthly* ($6).
 2. Generate the signing key once and keep it secret (password manager +
    offline copy):
 
@@ -181,13 +195,13 @@ keys; pricing page.
 
    ```bash
    scripts/licence-tool.py issue --key mav-licence-private.key \
-     --email customer@example.com --plan pro --days 365
+     --email customer@example.com --plan connect --days 365
    ```
 
    then automatically from the store's webhook (a tiny serverless function
    calling the same `mav_licence.sign`).
 4. Point the buttons at the store: `BUY_URL` in `docs/pricing.js` and
-   `MAV_CHECKOUT_URL` (default: the pricing page) for the app's *Go Pro*.
+   `MAV_CHECKOUT_URL` (default: the pricing page) for the app's *Get Mav Connect*.
 
 Until then, the buttons open a GitHub issue so early supporters can still
 reach you.
@@ -202,5 +216,6 @@ reach you.
   command and a model key.
 - **Model costs for always-on routines.** → Usage tab, budgets, cheap
   background model, local models.
-- **Open source cannibalises Pro.** → Price for goodwill ($79/year), keep the
-  limits on the proactive core, make Cloud the real product.
+- **Open source cannibalises paid plans.** → Never sell what can be deleted
+  locally: Connect services run on our side, Business buys a licence, Cloud
+  is the real product.
