@@ -847,5 +847,80 @@ class SelfInit(unittest.TestCase):
         self.assertEqual(len(diff["retire"]), 1)
 
 
+class RunRegistry(unittest.TestCase):
+    """The run buffer decouples generation from the HTTP request."""
+
+    def _make(self, events):
+        run = mav_api.Run("s1", "hi", "assistant", [])
+        # Replace the worker with a deterministic event emitter.
+        run._work = lambda: [run._emit(e, d) for (e, d) in events]
+        return run
+
+    def test_buffer_accumulates_text_and_tools(self):
+        run = self._make([
+            ("start", {"agent": "assistant", "recalled": 0}),
+            ("delta", {"delta": "Hello "}),
+            ("delta", {"delta": "world"}),
+            ("tool", {"name": "bash", "status": "running"}),
+            ("tool", {"name": "bash", "status": "completed"}),
+            ("done", {"text": "Hello world"}),
+        ])
+        run.start()
+        run._thread.join(timeout=3)
+        snap = run.snapshot()
+        self.assertEqual(snap["text"], "Hello world")
+        self.assertEqual(snap["status"], "done")
+        self.assertEqual(snap["tools"], [{"name": "bash", "status": "completed"}])
+        self.assertEqual(snap["seq"], 6)
+
+    def test_follow_replays_from_cursor(self):
+        run = self._make([
+            ("delta", {"delta": "a"}),
+            ("delta", {"delta": "b"}),
+            ("done", {"text": "ab"}),
+        ])
+        run.start()
+        run._thread.join(timeout=3)
+        replay = "".join(run.follow(from_seq=2))
+        self.assertIn("b", replay)
+        self.assertNotIn('"delta": "a"', replay)
+        self.assertIn("done", replay)
+
+    def test_interrupt_keeps_partial_text(self):
+        run = self._make([
+            ("delta", {"delta": "partial answer"}),
+            ("done", {"text": "partial answer", "interrupted": True}),
+        ])
+        run.start()
+        run._thread.join(timeout=3)
+        snap = run.snapshot()
+        self.assertTrue(snap["interrupted"])
+        self.assertEqual(snap["text"], "partial answer")  # nothing erased
+
+    def test_error_sets_status(self):
+        run = self._make([("error", {"message": "boom"})])
+        run.start()
+        run._thread.join(timeout=3)
+        snap = run.snapshot()
+        self.assertEqual(snap["status"], "error")
+        self.assertEqual(snap["error"], "boom")
+
+    def test_runs_view_lists_active(self):
+        mav_api.RUNS.clear()
+        run = self._make([("done", {"text": "x"})])
+        mav_api.RUNS["s1"] = run
+        run.start()
+        run._thread.join(timeout=3)
+        view = mav_api.runs_view()
+        self.assertTrue(any(v["session"] == "s1" for v in view))
+        mav_api.RUNS.clear()
+
+    def test_parse_sse_roundtrip(self):
+        block = mav_api._sse("delta", {"delta": "café"})
+        ev, d = mav_api._parse_sse(block)
+        self.assertEqual(ev, "delta")
+        self.assertEqual(d["delta"], "café")
+
+
 if __name__ == "__main__":
     unittest.main()
