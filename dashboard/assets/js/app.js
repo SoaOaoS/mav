@@ -616,9 +616,11 @@ function renderConvList() {
       group = g;
     }
     const active = state.view === "chat" && c.id === state.chat.id;
+    const busy = isStreaming(c.id) || c.running;
     html += `<div class="conv-item ${active ? "is-active" : ""} ${c._new ? "is-new" : ""}" data-id="${esc(c.id)}" role="button" tabindex="0" title="${esc(c.title)} · ${esc(agentDisplay(c.agent || state.defaultAgent))}">
       ${c.routine ? `<span class="agent-av sm routine-av">${I("bolt")}</span>` : agentAvatar(c.agent || state.defaultAgent, "sm")}
       <span class="ctitle">${esc(c.title)}</span>
+      ${busy ? `<span class="cbusy" title="Working…">${dots()}</span>` : ""}
       ${c.pinned ? I("pin").replace("data-i", 'class="cpin" data-i') : ""}
       <button class="cdel" data-del="${esc(c.id)}" title="Delete">${I("trash")}</button>
     </div>`;
@@ -675,7 +677,8 @@ function setChatTitle(t) {
 }
 
 function newChat(agent, { push = true } = {}) {
-  if (state.streaming) stopStreaming();
+  // Never abort a running answer — just move away from it.
+  if (state.chat.id) detachStream(state.chat.id);
   if (agent) {
     state.preferredAgent = agent;
     store.set("mav-agent", agent);
@@ -692,13 +695,26 @@ function newChat(agent, { push = true } = {}) {
   updateChatActions();
   renderAgentPills();
   renderThread();
+  refreshStreamingUI();
   go("chat", null, { push });
   setTimeout(() => $("#chatInput").focus(), 50);
 }
 
+// Detach the stream that belongs to the chat we are leaving: keep it in the
+// map (it keeps flowing), but drop its DOM so another chat can render.
+function detachStream(sid) {
+  const st = streamOf(sid);
+  if (!st) return;
+  if (st.raf) cancelAnimationFrame(st.raf);
+  st.raf = 0;
+  if (st.thinking) st.thinking.remove();
+  st.thinking = null;
+  st.el = null; // the bubble is recreated on reattach / when we come back
+}
+
 async function openChat(id, { push = true } = {}) {
   if (!id) return newChat();
-  if (state.streaming && id !== state.chat.id) stopStreaming();
+  if (state.chat.id && state.chat.id !== id) detachStream(state.chat.id);
   const c = state.convs.find((x) => x.id === id);
   state.chat = {
     id,
@@ -724,10 +740,21 @@ async function openChat(id, { push = true } = {}) {
     setChatTitle(state.chat.title);
     renderAgentPills();
     renderThread();
+    // If an answer is still running for this chat (we came back to it), show it
+    // again exactly where it is — or reattach if the tab had detached earlier.
+    const st = streamOf(id);
+    if (st && !st.done) {
+      st.el = null;
+      paintStream(st);
+      hydrateIcons();
+    } else {
+      reattach(id);
+    }
   } catch (_) {
     renderThread();
     toast("Could not load this chat.", { error: true });
   }
+  refreshStreamingUI();
 }
 
 function updateChatActions() {
@@ -745,6 +772,16 @@ function setEmpty(on) {
 const dots = () =>
   `<span class="thinking-dots"><span></span><span></span><span></span></span>`;
 
+/* Does this assistant message deserve a "Name · time" header? Yes only when it
+   directly follows a user message (a fresh turn), when it is proactive
+   (routine / interest / alert chats), or when it opens the thread. */
+function threadMessageMeta(m, i, msgs, proactive) {
+  if (m.role !== "mav") return false;
+  if (proactive || i === 0) return true;
+  const prev = msgs[i - 1];
+  return !!prev && prev.role === "me";
+}
+
 function renderThread() {
   const msgs = state.chat.messages;
   if (!msgs.length) {
@@ -760,8 +797,17 @@ function renderThread() {
   }
   setEmpty(false);
   messagesEl.innerHTML = `<div class="thread" id="thread"></div>`;
+  const proactive = /^(Routine|Intérêt|Alerte) ·/.test(state.chat.title || "");
   let lastAgent = null;
+  let lastDay = "";
   msgs.forEach((m, i) => {
+    const day = m.ts ? dayStamp(m.ts) : "";
+    if (day && day !== lastDay && i > 0) {
+      appendDivider(esc(day), null, false);
+      lastDay = day;
+    } else if (day) {
+      lastDay = day;
+    }
     if (m.role === "mav") {
       const ag = m.agent || "";
       if (lastAgent && ag && ag !== lastAgent)
@@ -772,9 +818,26 @@ function renderThread() {
         );
       if (ag) lastAgent = ag;
     }
-    appendMessage(m, { last: i === msgs.length - 1, scroll: false });
+    appendMessage(m, {
+      last: i === msgs.length - 1,
+      scroll: false,
+      meta: threadMessageMeta(m, i, msgs, proactive),
+    });
   });
   scrollToBottom(true);
+}
+function dayStamp(ts) {
+  const d = new Date(toMs(ts));
+  const now = new Date();
+  const same = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+  if (same(d, now)) return "Today";
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (same(d, y)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 function lowerFirst(s) {
   return s ? s[0].toLowerCase() + s.slice(1) : s;
@@ -802,7 +865,7 @@ function threadEl() {
 
 function appendMessage(
   m,
-  { last = false, scroll = true, streaming = false } = {},
+  { last = false, scroll = true, streaming = false, meta = null } = {},
 ) {
   const t = threadEl();
   t.querySelectorAll(".msg.is-last").forEach((x) =>
@@ -815,13 +878,18 @@ function appendMessage(
     el.querySelector(".bubble").textContent = m.text;
   } else {
     const ag = m.agent || currentAgent();
-    el.className = `msg mav ${last ? "is-last" : ""} ${m.error ? "is-error" : ""} ${streaming ? "is-streaming" : ""}`;
+    el.className = `msg mav ${last ? "is-last" : ""} ${m.error ? "is-error" : ""} ${streaming ? "is-streaming" : ""} ${m.interrupted ? "is-interrupted" : ""}`;
     el.style.setProperty("--agent", agentColor(ag));
+    // Name + time are shown only when they carry meaning: on the turn right
+    // after yours, on a proactive message, or on the first one. Otherwise a
+    // reloaded thread stays clean instead of stamping every bubble.
+    const showMeta = meta === null ? true : meta;
     el.innerHTML = `${agentAvatar(ag)}
       <div class="body">
-        <div class="msg-meta"><span class="who">${esc(agentDisplay(ag))}</span>${m.ts ? `<span>${esc(fmtClock(m.ts))}</span>` : ""}</div>
+        ${showMeta ? `<div class="msg-meta"><span class="who">${esc(agentDisplay(ag))}</span>${m.ts ? `<span>${esc(fmtClock(m.ts))}</span>` : ""}</div>` : ""}
         <div class="bubble"></div>
         ${m.recalled ? `<div class="recall-note">${I("brain")} Used ${m.recalled} thing${m.recalled > 1 ? "s" : ""} from memory</div>` : ""}
+        ${m.interrupted ? `<div class="recall-note interrupted-note">${I("square")} Stopped by you — the rest was kept.</div>` : ""}
         <div class="msg-tools"></div>
         <div class="msg-actions">
           <button class="icon-btn" data-act="copy" title="Copy">${I("copy")}</button>
@@ -1300,33 +1368,41 @@ document.addEventListener("paste", (e) => {
 });
 
 /* ---------- Sending (SSE streaming) ---------- */
-let streamCtl = null;
-// Messages typed while an answer is running: sent in order once it settles.
-let messageQueue = [];
-// Set when the queue must take over the current answer (a queued send while
-// streaming interrupts and reprocesses with the extra context).
-let takeOver = false;
+// Every running answer lives in here, keyed by session id — independent of
+// which chat is on screen. Leaving a chat detaches the DOM but the answer keeps
+// streaming server-side and we can reattach at any time. Several chats run at
+// once; the send/stop controls always reflect the *active* one.
+const streams = new Map(); // sid -> stream state
+const queues = new Map(); // sid -> [{text, files}]
 
-function setStreaming(on) {
-  state.streaming = on;
-  document.body.classList.toggle("is-thinking", on);
-  $("#sendBtn").hidden = on;
-  $("#stopBtn").hidden = !on;
-  renderQueue();
+function streamOf(sid) {
+  return sid ? streams.get(sid) : null;
 }
-
-function stopStreaming() {
-  if (streamCtl) streamCtl.abort();
-  streamCtl = null;
-  if (state.chat.id && LIVE)
-    api.post("session/abort", { id: state.chat.id }).catch(() => {});
-  setStreaming(false);
+function isStreaming(sid) {
+  const s = streamOf(sid);
+  return !!(s && !s.done);
+}
+function anyStreaming() {
+  for (const s of streams.values()) if (!s.done) return true;
+  return false;
+}
+function queueFor(sid) {
+  return sid ? queues.get(sid) || [] : [];
+}
+function refreshStreamingUI() {
+  const running = isStreaming(state.chat.id);
+  state.streaming = running;
+  document.body.classList.toggle("is-thinking", running);
+  $("#sendBtn").hidden = running;
+  $("#stopBtn").hidden = !running;
+  renderQueue();
 }
 
 function renderQueue() {
   const bar = $("#queueBar");
   if (!bar) return;
-  if (!messageQueue.length) {
+  const q = queueFor(state.chat.id);
+  if (!q.length) {
     bar.hidden = true;
     bar.innerHTML = "";
     return;
@@ -1334,11 +1410,11 @@ function renderQueue() {
   bar.hidden = false;
   bar.innerHTML =
     `<span class="queue-label">${I("arrow")} queued</span>` +
-    messageQueue
+    q
       .map(
-        (q, i) =>
+        (m, i) =>
           `<span class="queue-chip"><span class="queue-text">${esc(
-            q.text.slice(0, 60),
+            m.text.slice(0, 60),
           )}</span><button class="queue-x" data-qi="${i}" title="Remove">${I(
             "x",
           )}</button></span>`,
@@ -1349,22 +1425,34 @@ function renderQueue() {
     )} Send now</button>`;
 }
 
-function enqueueMessage(text, files) {
-  messageQueue.push({ text, files: files || [] });
+function enqueueMessage(sid, text, files) {
+  const q = queues.get(sid) || [];
+  q.push({ text, files: files || [] });
+  queues.set(sid, q);
   renderQueue();
   toast("Queued — “Send now” to interrupt and send.");
 }
 
-function clearQueue() {
-  messageQueue = [];
-  takeOver = false;
+// Kept for the offline demo only; live streaming uses the per-session map.
+function setStreaming(on) {
+  state.streaming = on;
+  document.body.classList.toggle("is-thinking", on);
+  $("#sendBtn").hidden = on;
+  $("#stopBtn").hidden = !on;
+}
+
+// Ask the server to stop the active answer. The partial text is deliberately
+// kept (server sends done{interrupted}) — nothing already written disappears.
+function stopActive() {
+  const sid = state.chat.id;
+  if (!sid) return;
+  if (LIVE) api.post("run/stop", { id: sid }).catch(() => {});
+  queues.set(sid, []);
   renderQueue();
-  setToolChips([]);
 }
 
 $("#stopBtn").addEventListener("click", () => {
-  stopStreaming();
-  clearQueue();
+  stopActive();
   toast("Stopped.");
 });
 
@@ -1372,15 +1460,15 @@ $("#stopBtn").addEventListener("click", () => {
 document.addEventListener("click", (e) => {
   const x = e.target.closest("[data-qi]");
   if (x) {
-    messageQueue.splice(Number(x.dataset.qi), 1);
+    const q = queueFor(state.chat.id);
+    q.splice(Number(x.dataset.qi), 1);
+    queues.set(state.chat.id, q);
     renderQueue();
     return;
   }
   if (e.target.closest("#queueInterrupt")) {
-    takeOver = true;
-    if (state.chat.id && LIVE)
-      api.post("session/interrupt", { id: state.chat.id }).catch(() => {});
-    if (streamCtl) streamCtl.abort();
+    const sid = state.chat.id;
+    if (sid && LIVE) api.post("run/stop", { id: sid }).catch(() => {});
   }
 });
 
@@ -1432,10 +1520,11 @@ async function send(raw, opts = {}) {
   if (!text && !hasFiles) return;
   if (state.view !== "chat") go("chat");
 
-  // A message typed while an answer runs joins the queue: it is sent once the
-  // current answer settles, unless the user hits "Send now" (interrupt).
-  if (state.streaming && !opts.force) {
-    enqueueMessage(text, opts.files || state.pendingFiles.slice());
+  // A message typed while THIS chat's answer runs joins the queue: it is sent
+  // once the current answer settles, unless the user hits "Send now".
+  const sidNow = state.chat.id;
+  if (sidNow && isStreaming(sidNow) && !opts.force) {
+    enqueueMessage(sidNow, text, opts.files || state.pendingFiles.slice());
     if (!opts.files) {
       state.pendingFiles = [];
       renderAttachments();
@@ -1466,15 +1555,6 @@ async function send(raw, opts = {}) {
 
   if (!LIVE) return demoReply(text, routineDraft);
 
-  setStreaming(true);
-  const thinking = document.createElement("div");
-  thinking.className = "msg mav";
-  thinking.style.setProperty("--agent", agentColor(agent));
-  thinking.innerHTML = `${agentAvatar(agent)}<div class="body"><div class="msg-meta"><span class="who">${esc(agentDisplay(agent))}</span></div>
-    <div class="thinking-row">${dots()} thinking…</div></div>`;
-  threadEl().appendChild(thinking);
-  scrollToBottom(true);
-
   // A brand-new chat: create it first so it is ours (with its helper) before
   // the first word arrives.
   const wasNew = !state.chat.id;
@@ -1486,17 +1566,31 @@ async function send(raw, opts = {}) {
       history.replaceState(null, "", `#chat/${s.id}`);
       updateChatActions();
     } catch (e) {
-      thinking.remove();
-      setStreaming(false);
       return addError(
         "I couldn't start the chat — is the assistant running? See Settings → General → Advanced.",
       );
     }
   }
+  const sid = state.chat.id;
+
+  // Register the stream and hand it to the detached engine. send() returns
+  // immediately; the answer keeps flowing even if this chat is left.
+  const st = {
+    sid,
+    reply: { role: "mav", text: "", agent, ts: Date.now() },
+    tools: [],
+    thinking: null,
+    el: null,
+    raf: 0,
+    seq: 0,
+    done: false,
+    error: null,
+  };
+  streams.set(sid, st);
 
   const qs = new URLSearchParams({
     prompt: text || "(see the attached files)",
-    session: state.chat.id,
+    session: sid,
     agent,
   });
   if (files.length)
@@ -1507,133 +1601,265 @@ async function send(raw, opts = {}) {
       ),
     );
 
-  const reply = { role: "mav", text: "", agent, ts: Date.now() };
-  let el = null;
-  let error = null;
-  let finished = false;
-  let raf = 0;
-  const tools = [];
-  streamCtl = new AbortController();
-  const sid = state.chat.id;
+  attachStream(st, qs, { wasNew, prompt: text, routineDraft });
+}
 
-  try {
-    const resp = await fetch(`/api/stream?${qs}`, {
-      headers: { Accept: "text/event-stream" },
-      signal: streamCtl.signal,
-    });
-    if (!resp.ok || !resp.body) throw new Error("stream unavailable");
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    const paint = () => {
-      raf = 0;
-      if (!el) {
-        thinking.remove();
-        el = appendMessage(reply, { last: true, streaming: true });
-        renderToolChips(el.querySelector(".msg-tools"), tools);
-      } else {
-        const stick = nearBottom();
-        el.querySelector(".bubble").innerHTML = mdToHtml(reply.text);
-        hydrateCharts(el);
-        renderToolChips(el.querySelector(".msg-tools"), tools);
-        if (stick) scrollToBottom(true);
-      }
-    };
-    while (!finished) {
-      let chunk;
-      try {
-        chunk = await reader.read();
-      } catch (_) {
-        break;
-      }
-      if (chunk.done) break;
-      buf += decoder.decode(chunk.value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) !== -1) {
-        const block = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        let ev = "message";
-        const data = [];
-        block.split("\n").forEach((l) => {
-          if (l.startsWith("event:")) ev = l.slice(6).trim();
-          else if (l.startsWith("data:")) data.push(l.slice(5).trim());
-        });
-        let d = {};
-        try {
-          d = JSON.parse(data.join("\n") || "{}");
-        } catch (_) {}
-        if (ev === "start") {
-          if (d.recalled) reply.recalled = d.recalled;
-          if (d.agent) reply.agent = d.agent;
-        } else if (ev === "delta") {
-          reply.text += d.delta || "";
-          if (!raf) raf = requestAnimationFrame(paint);
-        } else if (ev === "tool") {
-          const i = tools.findIndex((t) => t.name === d.name);
-          const entry = { name: d.name, status: d.status || "running" };
-          if (i >= 0) tools[i] = entry;
-          else tools.push(entry);
-          if (!raf) raf = requestAnimationFrame(paint);
-        } else if (ev === "done") {
-          if (!reply.text && d.text) reply.text = d.text;
-          if (d.interrupted) reply.interrupted = true;
-          finished = true;
-        } else if (ev === "error") {
-          error = d.message || "Something went wrong.";
-          finished = true;
-        }
-      }
+/* Render one buffered event into the stream's reply + DOM (if on screen). */
+function paintStream(st) {
+  if (st.raf) return;
+  st.raf = requestAnimationFrame(() => {
+    st.raf = 0;
+    if (state.chat.id !== st.sid) return; // shown elsewhere; buffer keeps it
+    const live = !!st.el && document.body.contains(st.el);
+    if (!live) {
+      st.thinking && st.thinking.remove();
+      st.thinking = null;
+      st.el = appendMessage(st.reply, { last: true, streaming: !st.done });
     }
+    if (st.el) {
+      const stick = nearBottom();
+      st.el.querySelector(".bubble").innerHTML = mdToHtml(st.reply.text || "");
+      hydrateCharts(st.el);
+      renderToolChips(st.el.querySelector(".msg-tools"), st.tools);
+      if (stick) scrollToBottom(true);
+    }
+  });
+}
+
+function applyEvent(st, ev, d) {
+  if (ev === "start") {
+    if (d.recalled) st.reply.recalled = d.recalled;
+    if (d.agent) {
+      st.reply.agent = d.agent;
+      st.agent = d.agent;
+    }
+  } else if (ev === "delta") {
+    st.reply.text += d.delta || "";
+    paintStream(st);
+  } else if (ev === "tool") {
+    const i = st.tools.findIndex((t) => t.name === d.name);
+    const entry = { name: d.name, status: d.status || "running" };
+    if (i >= 0) st.tools[i] = entry;
+    else st.tools.push(entry);
+    paintStream(st);
+  } else if (ev === "done") {
+    if (!st.reply.text && d.text) st.reply.text = d.text;
+    st.reply.interrupted = !!d.interrupted;
+    st.done = true;
+  } else if (ev === "error") {
+    st.error = d.message || "Something went wrong.";
+    st.done = true;
+  }
+}
+
+/* Consume an SSE response into `st` until it ends (or the tab leaves). */
+async function consume(st, url, ctl) {
+  const resp = await fetch(url, {
+    headers: { Accept: "text/event-stream" },
+    signal: ctl && ctl.signal,
+  });
+  if (!resp.ok || !resp.body) throw new Error("stream unavailable");
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    let chunk;
     try {
-      reader.cancel();
-    } catch (_) {}
+      chunk = await reader.read();
+    } catch (_) {
+      break; // detached or network hiccup: the server run continues
+    }
+    if (chunk.done) break;
+    buf += decoder.decode(chunk.value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) !== -1) {
+      const block = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let ev = "message";
+      const data = [];
+      block.split("\n").forEach((l) => {
+        if (l.startsWith("event:")) ev = l.slice(6).trim();
+        else if (l.startsWith("data:")) data.push(l.slice(5).trim());
+      });
+      let d = {};
+      try {
+        d = JSON.parse(data.join("\n") || "{}");
+      } catch (_) {}
+      st.seq += 1;
+      applyEvent(st, ev, d);
+      if (st.done) break;
+    }
+    if (st.done) break;
+  }
+  try {
+    reader.cancel();
+  } catch (_) {}
+}
+
+/* Run one answer to completion and settle its stream. */
+async function attachStream(st, qs, opts = {}) {
+  const url = `/api/stream?${qs.toString()}`;
+  const ctl = new AbortController();
+  st.ctl = ctl;
+  try {
+    await consume(st, url, ctl);
   } catch (e) {
-    if (e.name === "AbortError") {
-      // An interrupt with a queued message is not an error: drop any partial
-      // text and let the queued send take over.
-      error = takeOver ? null : reply.text ? null : "Stopped.";
-    } else {
-      error = "Connection lost.";
+    if (e && e.name === "AbortError") {
+      // We detached on purpose: the server run continues.
+      st.ctl = null;
+      return;
+    }
+    if (!st.done) st.error = st.error || "Connection lost.";
+    st.done = true;
+  }
+  st.ctl = null;
+  finalizeStream(st, opts);
+}
+
+// On returning to the tab (phone woke up, other app closed), make sure every
+// chat that is working server-side is reflected here again.
+async function syncRunning() {
+  if (!LIVE) return;
+  let runs = [];
+  try {
+    runs = (await api.get("runs")).runs || [];
+  } catch (_) {
+    return;
+  }
+  const active = new Set(
+    runs.filter((r) => r.status === "running").map((r) => r.session),
+  );
+  // A run we thought was live but the server already finished: settle it.
+  for (const [sid, st] of [...streams]) {
+    if (!st.done && !active.has(sid) && sid !== state.chat.id) {
+      st.done = true;
+      streams.delete(sid);
     }
   }
-  if (takeOver) reply.text = "";
+  const cur = state.chat.id;
+  if (cur && active.has(cur) && !isStreaming(cur)) reattach(cur);
+  refreshStreamingUI();
+  renderConvList();
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncRunning();
+});
+window.addEventListener("online", syncRunning);
 
-  if (state.chat.id !== sid) {
-    if (raf) cancelAnimationFrame(raf);
-    setStreaming(false);
-    clearQueue();
-    return; // the user moved to another chat meanwhile
+/* Reattach to a run already in progress on the server (tab came back). */
+async function reattach(sid) {
+  if (!LIVE || isStreaming(sid)) return;
+  let runs = [];
+  try {
+    runs = (await api.get("runs")).runs || [];
+  } catch (_) {
+    return;
   }
-  // A paint may still be queued (the whole answer can arrive in one chunk).
-  if (raf) cancelAnimationFrame(raf);
-  raf = 0;
-  thinking.remove();
-  if (el) el.remove();
-  if (takeOver && !reply.text) {
-    // Interrupted with nothing worth keeping: no bubble, the queue takes over.
-  } else if (error && !reply.text) {
-    addError(error);
+  const r = runs.find((x) => x.session === sid && x.status === "running");
+  if (!r) return;
+  const st = {
+    sid,
+    reply: { role: "mav", text: "", agent: r.agent || "", ts: Date.now() },
+    tools: [],
+    thinking: null,
+    el: null,
+    raf: 0,
+    seq: 0,
+    done: false,
+    error: null,
+  };
+  streams.set(sid, st);
+  refreshStreamingUI();
+  const url = `/api/stream?session=${encodeURIComponent(sid)}&from=0`;
+  try {
+    await consume(st, url, { signal: undefined });
+  } catch (_) {
+    // Could not reattach (run gone): drop it silently — the thread reloads.
+    streams.delete(sid);
+    refreshStreamingUI();
+    return;
+  }
+  finalizeStream(st, {});
+}
+
+async function finalizeStream(st, opts = {}) {
+  const { wasNew = false, prompt = "", routineDraft = null } = opts;
+  st.done = true;
+  if (st.raf) cancelAnimationFrame(st.raf);
+  st.raf = 0;
+  if (st.thinking) st.thinking.remove();
+  streams.delete(st.sid);
+  const onScreen = state.chat.id === st.sid;
+  if (onScreen && st.el) st.el.remove();
+  const reply = st.reply;
+  if (st.error && !reply.text) {
+    if (onScreen) addError(st.error);
   } else {
     if (!reply.text) reply.text = "_(no answer)_";
-    state.chat.messages.push(reply);
-    appendMessage(reply, { last: true });
-    if (S.speak) speak(reply.text);
-    if (routineDraft) offerRoutine(routineDraft);
+    // Push into the thread only if this chat is on screen; otherwise the thread
+    // is reloaded from the server next time it is opened (no duplicate).
+    const lastMsg = state.chat.messages[state.chat.messages.length - 1];
+    const already =
+      lastMsg && lastMsg.role === "mav" && lastMsg.text === reply.text;
+    if (onScreen && !already) {
+      state.chat.messages.push(reply);
+      appendMessage(reply, { last: true, meta: true });
+      if (S.speak) speak(reply.text);
+      if (routineDraft) offerRoutine(routineDraft);
+    }
   }
-  setStreaming(false);
-  streamCtl = null;
+  refreshStreamingUI();
+  renderConvList();
   await loadConvs();
-  if (wasNew && !error) watchForTitle(sid);
+  if (wasNew && !st.error) watchForTitle(st.sid);
 
-  // A queued message takes over: either because the user interrupted, or
-  // simply the next queued message once this answer has settled.
-  const next = messageQueue.shift();
-  takeOver = false;
+  // A queued message takes over: either after an interrupt, or simply the next
+  // queued message once this answer has settled.
+  const q = queueFor(st.sid);
+  const next = q.shift();
+  queues.set(st.sid, q);
   renderQueue();
-  if (next) send(next.text, { files: next.files, force: true });
-  if (!error && ABOUT_ME_RE.test(text)) watchForMemory(sid);
-  if (document.hidden && !error)
+  if (next) sendQueued(st.sid, next);
+  if (!st.error && prompt && ABOUT_ME_RE.test(prompt)) watchForMemory(st.sid);
+  if (document.hidden && !st.error && reply.text)
     notifyLocal(agentDisplay(reply.agent), reply.text);
+}
+
+/* Send a queued message as its own detached run, even if its chat is not on
+   screen. The message is stored server-side by starting the prompt directly. */
+function sendQueued(sid, item) {
+  if (state.chat.id === sid && state.view === "chat")
+    return send(item.text, { files: item.files, force: true });
+  const st = {
+    sid,
+    reply: { role: "mav", text: "", agent: "", ts: Date.now() },
+    tools: [],
+    thinking: null,
+    el: null,
+    raf: 0,
+    seq: 0,
+    done: false,
+    error: null,
+  };
+  streams.set(sid, st);
+  const agent = (state.convs.find((c) => c.id === sid) || {}).agent || "";
+  const qs = new URLSearchParams({
+    prompt: item.text || "(see the attached files)",
+    session: sid,
+    agent,
+  });
+  if (item.files && item.files.length)
+    qs.set(
+      "files",
+      JSON.stringify(
+        item.files.map((f) => ({
+          url: f.url,
+          mime: f.mime,
+          filename: f.filename,
+        })),
+      ),
+    );
+  attachStream(st, qs, { prompt: item.text });
 }
 
 function addError(msg) {
@@ -1706,7 +1932,7 @@ function demoReply(text, draft) {
       text: `This is the **demo**. On your own server, **${agentDisplay(a)}** would answer:\n\n> ${text || "(attachment)"}\n\nTip: type \`/\` for commands.`,
     };
     state.chat.messages.push(reply);
-    appendMessage(reply, { last: true });
+    appendMessage(reply, { last: true, meta: true });
     if (!state.chat.title)
       setChatTitle(text.split(/\s+/).slice(0, 4).join(" ") || "Demo chat");
     setStreaming(false);
@@ -5087,8 +5313,8 @@ window.addEventListener("keydown", (e) => {
     if (!$("#modal").hidden) return modal.close();
     if (!$("#agentMenu").hidden) return closeAgentMenu();
     if (document.body.classList.contains("drawer-open")) return closeDrawer();
-    if (state.streaming) {
-      stopStreaming();
+    if (isStreaming(state.chat.id)) {
+      stopActive();
       toast("Stopped.");
     }
     return;
@@ -5343,7 +5569,7 @@ if ("serviceWorker" in navigator) {
     let reloaded = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // Never reload in the middle of an answer.
-      if (reloaded || state.streaming) return;
+      if (reloaded || anyStreaming()) return;
       reloaded = true;
       location.reload();
     });

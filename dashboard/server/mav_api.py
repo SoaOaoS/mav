@@ -2236,6 +2236,7 @@ def list_sessions() -> list[dict]:
     _migrate_legacy()
     meta = read_json(SESSIONS_META, {}) or {}
     jobs = read_json(JOBS_FILE, []) or []
+    active = {r["session"] for r in runs_view() if r["status"] == "running"}
     out = []
     for s in _list_raw_sessions():
         title = str(s.get("title", ""))
@@ -2260,6 +2261,7 @@ def list_sessions() -> list[dict]:
             "agent": agent,
             "pinned": bool(m.get("pinned")),
             "routine": routine,
+            "running": s["id"] in active,
         })
     out.sort(key=lambda x: (x["pinned"], x.get("updated") or 0), reverse=True)
     return out
@@ -2563,6 +2565,195 @@ def save_upload(name: str, data_b64: str, mime: str = "") -> dict:
 # aborts the engine as soon as it notices. A session id stays here only while
 # its stream is winding down; the flag is consumed on the next answer.
 INTERRUPTED: set[str] = set()
+
+
+# --------------------------------------------------------------- run registry
+# A chat answer is no longer owned by the HTTP request that started it. Each
+# generation runs in its own thread, appends its events to a buffer, and any
+# client can attach to the buffer — replaying what it missed and following live.
+# That is what lets the tab be closed, the phone go to sleep, or several chats
+# stream at once without losing anything.
+
+RUN_TTL = int(os.environ.get("MAV_RUN_TTL", "180"))  # keep finished runs this long
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+class Run:
+    """One in-flight (or just-finished) answer, observable by any subscriber."""
+
+    def __init__(self, sid: str, prompt: str, agent: str, files: list, *,
+                 raw_session: bool = False, with_memory: bool = False):
+        self.sid = sid or ""
+        self.prompt = prompt
+        self.agent = agent
+        self.files = files or []
+        self.raw_session = raw_session
+        self.with_memory = with_memory
+        self.events: list[tuple[str, dict]] = []
+        self.text = ""
+        self.agent_out = agent
+        self.recalled = 0
+        self.tools: list[dict] = []
+        self.status = "running"  # running | done | error
+        self.interrupted = False
+        self.error: str | None = None
+        self.started = time.time()
+        self.updated = self.started
+        self._cv = threading.Condition()
+        self._thread: threading.Thread | None = None
+
+    # ---- producer side -------------------------------------------------
+    def start(self) -> None:
+        # Built here (not in __init__) so a caller/test can swap `_work`.
+        self._thread = threading.Thread(target=self._work, daemon=True)
+        self._thread.start()
+
+    def _emit(self, event: str, data: dict) -> None:
+        with self._cv:
+            self.events.append((event, data))
+            if event == "start":
+                self.agent_out = data.get("agent") or self.agent_out
+                self.recalled = int(data.get("recalled") or 0)
+            elif event == "delta":
+                self.text += data.get("delta") or ""
+            elif event == "tool":
+                name = data.get("name") or "tool"
+                status = data.get("status") or "running"
+                entry = next((t for t in self.tools if t.get("name") == name), None)
+                if entry:
+                    entry["status"] = status
+                else:
+                    self.tools.append({"name": name, "status": status})
+            elif event == "done":
+                if not self.text and data.get("text"):
+                    self.text = data.get("text") or ""
+                self.interrupted = bool(data.get("interrupted"))
+                self.status = "done"
+            elif event == "error":
+                self.error = data.get("message") or "engine error"
+                self.status = "error"
+            self.updated = time.time()
+            self._cv.notify_all()
+
+    def _work(self) -> None:
+        try:
+            for chunk in stream_answer(
+                self.prompt, self.sid, self.agent, self.files,
+                raw_session=self.raw_session, with_memory=self.with_memory,
+            ):
+                event, data = _parse_sse(chunk)
+                if event:
+                    self._emit(event, data)
+        except Exception as exc:  # noqa: BLE001
+            self._emit("error", {"message": str(exc)[:300], "session": self.sid})
+        finally:
+            with self._cv:
+                if self.status == "running":
+                    self.status = "done"
+                self.updated = time.time()
+                self._cv.notify_all()
+
+    # ---- consumer side -------------------------------------------------
+    def snapshot(self) -> dict:
+        with self._cv:
+            return {
+                "session": self.sid, "text": self.text, "tools": list(self.tools),
+                "status": self.status, "interrupted": self.interrupted,
+                "agent": self.agent_out, "recalled": self.recalled,
+                "error": self.error, "seq": len(self.events),
+            }
+
+    def follow(self, from_seq: int = 0):
+        """Yield the events a client has not seen, then live events until done."""
+        i = max(0, int(from_seq))
+        while True:
+            with self._cv:
+                if i >= len(self.events) and self.status == "running":
+                    self._cv.wait(timeout=20)
+                pending = self.events[i:]
+                i = len(self.events)
+                done = self.status != "running"
+            if pending:
+                for event, data in pending:
+                    yield _sse(event, data)
+                continue
+            if done:
+                return
+            yield ": ping\n\n"  # keep-alive so proxies do not drop the stream
+
+
+def _parse_sse(block: str) -> tuple[str, dict]:
+    event = ""
+    data: list[str] = []
+    for line in (block or "").split("\n"):
+        if line.startswith("event:"):
+            event = line[6:].strip()
+        elif line.startswith("data:"):
+            data.append(line[5:].strip())
+    if not event:
+        return "", {}
+    try:
+        return event, json.loads("\n".join(data) or "{}")
+    except Exception:  # noqa: BLE001
+        return event, {}
+
+
+RUNS: dict[str, Run] = {}
+_runs_lock = threading.Lock()
+
+
+def _run_cleanup() -> None:
+    now = time.time()
+    with _runs_lock:
+        for sid, run in list(RUNS.items()):
+            if run.status != "running" and now - run.updated > RUN_TTL:
+                RUNS.pop(sid, None)
+
+
+def start_run(prompt: str, sid: str, agent: str = "", files: list | None = None, *,
+              raw_session: bool = False, with_memory: bool = False) -> Run:
+    """Start (or restart) the answer for a session and return its Run."""
+    _run_cleanup()
+    run = Run(sid, prompt, agent, files or [], raw_session=raw_session,
+              with_memory=with_memory)
+    with _runs_lock:
+        RUNS[sid] = run
+    run.start()
+    return run
+
+
+def get_run(sid: str) -> Run | None:
+    _run_cleanup()
+    with _runs_lock:
+        return RUNS.get(sid)
+
+
+def runs_view() -> list[dict]:
+    _run_cleanup()
+    with _runs_lock:
+        runs = list(RUNS.values())
+    out = []
+    for r in runs:
+        out.append({
+            "session": r.sid, "status": r.status, "agent": r.agent_out,
+            "started": r.started, "updated": r.updated,
+            "interrupted": r.interrupted, "error": r.error,
+            "text_len": len(r.text), "tools": len(r.tools),
+        })
+    out.sort(key=lambda x: x["updated"], reverse=True)
+    return out
+
+
+def stop_run(sid: str) -> dict:
+    """Ask a run to stop; the partial answer is kept, not discarded."""
+    if not sid:
+        return {"ok": False, "error": "missing id"}
+    request_interrupt(sid)
+    abort_session(sid)
+    return {"ok": True}
 
 
 def request_interrupt(sid: str) -> bool:
@@ -3574,6 +3765,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, "media not found", "text/plain")
                 data, mime = res
                 return self._send(200, data, mime)
+            if path == "/api/runs":
+                return self._send(200, {"runs": runs_view()})
             if path == "/api/stream":
                 return self._stream(p)
             return self._static(path)
@@ -3581,30 +3774,49 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(500, {"error": str(exc)})
 
     def _stream(self, p: dict):
-        prompt = p.get("prompt", "").strip()
-        if not prompt:
+        """Start a new answer, or attach to the one already running.
+
+        A reconnect (the tab came back, the phone woke up) passes no prompt and
+        a `from` cursor: the events it missed are replayed from the run buffer,
+        then the live stream continues. Leaving never aborts the generation —
+        only an explicit stop does.
+        """
+        sid = p.get("session", "")
+        from_seq = int(p.get("from") or 0)
+        prompt = (p.get("prompt") or "").strip()
+        run = get_run(sid) if sid else None
+
+        if not prompt and not run:
             return self._send(400, {"error": "missing prompt"})
-        files = []
-        if p.get("files"):
-            try:
-                raw = json.loads(p["files"])
-                for item in raw:
-                    if isinstance(item, str):
-                        files.append(_guess_file({"url": item}))
-                    elif isinstance(item, dict):
-                        files.append(_guess_file(item))
-            except Exception:
-                pass
+        if prompt and (run is None or run.status != "running"):
+            files = []
+            if p.get("files"):
+                try:
+                    raw = json.loads(p["files"])
+                    for item in raw:
+                        if isinstance(item, str):
+                            files.append(_guess_file({"url": item}))
+                        elif isinstance(item, dict):
+                            files.append(_guess_file(item))
+                except Exception:
+                    pass
+            run = start_run(prompt, sid, p.get("agent", ""), files)
+        elif prompt and run.status == "running":
+            # A message while this session already runs is queued by the client;
+            # never silently replace a live generation.
+            return self._send(409, {"error": "already running", "session": sid})
+
         self._sse_open()
         try:
-            for chunk in stream_answer(prompt, p.get("session", ""), p.get("agent", ""), files):
+            for chunk in run.follow(from_seq):
                 self.wfile.write(chunk.encode())
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
+            # The client left: the run keeps going. It will be reattachable.
             pass
         except Exception as exc:  # noqa: BLE001
             try:
-                self.wfile.write(f"event: error\ndata: {json.dumps({'message': str(exc)})}\n\n".encode())
+                self.wfile.write(_sse("error", {"message": str(exc)}).encode())
             except Exception:
                 pass
 
@@ -3638,6 +3850,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/session/interrupt":
                 return self._send(200, interrupt_session(payload.get("id", "")))
+            if path == "/api/run/stop":
+                return self._send(200, stop_run(payload.get("id", "")))
             if path == "/api/session/summary":
                 sid = payload.get("id", "")
                 s = ask("Summarize this conversation in a few key points.", "summary", sid, raw_session=True)
