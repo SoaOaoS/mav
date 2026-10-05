@@ -1,10 +1,15 @@
 # Mav — backlog features (users)
 
+> Stratégie produit et business (modèle open core, prix, chemin vers 10 M$ ARR,
+> go-to-market, métriques) : voir [BUSINESS.md](BUSINESS.md).
+
 Ce qui est déjà là : chat style ChatGPT, Helpers, mémoire Postgres (+ extraction
 auto de faits), Routines, « Keep an eye on » (page / prix / actu), « For you »,
 push web, PWA, thème sombre, ⌘K, dictée + lecture vocale, pièces jointes,
 graphiques et téléchargements inline, débats multi-agents, catalogue MCP,
-bouton de mise à jour, backup CLI.
+bouton de mise à jour, backup CLI — et, depuis le cycle « produit » : connexion
+par mot de passe, briefing quotidien, usage/coût/budget avec modèle de fond
+bon marché, offres Free/Pro avec licences vérifiées hors ligne, page de tarifs.
 
 Ci-dessous, ce qui reste à construire. Effort : **S** ≈ quelques jours,
 **M** ≈ 1-2 semaines, **L** ≈ chantier.
@@ -13,7 +18,7 @@ Ci-dessous, ce qui reste à construire. Effort : **S** ≈ quelques jours,
 
 | #   | Feature                                            | Ce que ça apporte                                               | Effort |
 | --- | -------------------------------------------------- | --------------------------------------------------------------- | ------ |
-| 1.1 | Login (mot de passe unique + cookie signé)         | Ouvre Mav hors LAN/VPN sans l'exposer nu                        | S      |
+| 1.1 | ~~Login (mot de passe unique + cookie signé)~~ ✅ | Ouvre Mav hors LAN/VPN sans l'exposer nu                        | S      |
 | 1.2 | Comptes multi-utilisateurs + isolation des données | Plusieurs personnes sur une instance, mémoire/routines séparées | L      |
 | 1.3 | Foyer / espace partagé                             | Mémoire et routines communes au foyer, à côté des perso         | M      |
 | 1.4 | Tokens API personnels                              | Brancher des scripts/apps perso sur son Mav                     | S      |
