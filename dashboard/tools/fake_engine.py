@@ -66,11 +66,13 @@ def reply_for(body: dict) -> str:
         msg = prompt.split("Message:", 1)[-1].strip()
         return f"- User said: {msg[:80]}" if " I " in f" {msg} " else "NONE"
     memory = any("<memory>" in t for t in texts)
+    briefing = any("<daily-briefing>" in t for t in texts)
     agent = body.get("agent") or "default"
     return (
         f"**{agent}** here. You said: _{prompt[:200]}_\n\n"
         "- point one\n- point two\n\n```python\nprint('hello')\n```"
         + ("\n\n(I received your memory.)" if memory else "")
+        + ("\n\n(I received your briefing.)" if briefing else "")
     )
 
 

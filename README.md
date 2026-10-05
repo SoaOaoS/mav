@@ -42,6 +42,10 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   long and it runs in the background, then comes back with the result.
 - **Keep an eye on** — a web page, a product price (optionally only below a
   target), or a news topic. Alerts only when something actually changes.
+- **Daily briefing** — every morning (Settings → General, your time), one
+  short message: the weather where you live, what happened since yesterday
+  (alerts, routine reports), what needs you (drafts to approve), something
+  from your interests. Or anytime: *Brief me* on the new-chat screen, `/brief`.
 - **For you** — the new-chat screen shows your latest routine reports and
   alerts, each with _Tell me more_.
 - **Your model** — Anthropic, OpenAI, Ollama (local or cloud), OpenRouter or

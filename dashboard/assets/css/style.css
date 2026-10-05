@@ -3728,3 +3728,18 @@ button.memory-updated:hover {
 .auth-foot {
   font-size: 13px;
 }
+
+/* Briefing */
+.chip-accent {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: var(--accent);
+  font-weight: 600;
+}
+#briefingTime {
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+}

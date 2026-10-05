@@ -127,6 +127,11 @@ except Exception:  # noqa: BLE001
     ocselfinit = None
 
 import mav_auth  # noqa: E402
+
+try:
+    import ocbriefing  # noqa: E402
+except Exception:  # noqa: BLE001
+    ocbriefing = None
 import mav_provider  # noqa: E402
 
 # Sign-in (one owner password). MAV_AUTH=off disables it, e.g. behind your own
@@ -1555,7 +1560,10 @@ def record_notification(topic: str, title: str, body: str, link: str = "") -> in
 
 def run_job_now(name: str) -> dict:
     """Run a routine now, in the background, exactly like a scheduled run:
-    in the routine's chat, with memory, then a push + an inbox entry."""
+    in the routine's chat, with memory, then a push + an inbox entry.
+
+    It runs as a live answer (the run registry), so opening the routine's chat
+    shows it being written instead of an empty chat."""
     job = next((j for j in read_json(JOBS_FILE, []) if j.get("name") == name), None)
     if not job:
         return {"ok": False, "error": "Unknown routine."}
@@ -1563,18 +1571,25 @@ def run_job_now(name: str) -> dict:
         return {"ok": False, "error": "Already running."}
     agent = job.get("agent", "") or DEFAULT_AGENT
     sid = routine_session(name, agent)
+    briefing = ocbriefing is not None and ocbriefing.is_briefing(job)
+    context = briefing_context() if briefing else ""
+    run = start_run(job.get("prompt", ""), sid, agent, raw_session=True,
+                    with_memory=True, context=context)
 
     def work():
         _running_jobs.add(name)
         try:
-            text = ask(job.get("prompt", ""), agent, sid, raw_session=True, with_memory=True)
+            if run._thread:
+                run._thread.join(timeout=1000)
+            text = run.text
             summary = " ".join(re.sub(r"[*_`#>|]+", "", text or "").split())
             if len(summary) > 220:
                 summary = summary[:217] + "…"
-            if summary and not text.startswith("Error:"):
+            if summary and run.status == "done":
                 link = f"./#chat/{sid}"
-                record_notification("routine", f"🔁 {name}", summary, link)
-                send_push(f"🔁 {name}", summary, link)
+                title = "☀️ Your briefing" if briefing else f"🔁 {name}"
+                record_notification("briefing" if briefing else "routine", title, summary, link)
+                send_push(title, summary, link)
         except Exception:  # noqa: BLE001
             pass
         finally:
@@ -1582,6 +1597,94 @@ def run_job_now(name: str) -> dict:
 
     threading.Thread(target=work, daemon=True).start()
     return {"ok": True, "session": sid}
+
+
+# ------------------------------------------------------------ daily briefing
+
+
+def briefing_context() -> str:
+    """Everything the briefing should know, as hidden context."""
+    if ocbriefing is None:
+        return ""
+    facts, notes, drafts, interests = [], [], 0, []
+    if MEMORY and MEMORY_ENABLED:
+        try:
+            facts = MEMORY.facts(DEFAULT_CHAT_ID, limit=30)
+        except Exception:  # noqa: BLE001
+            facts = []
+    try:
+        notes = get_notifications(40).get("notifications") or []
+    except Exception:  # noqa: BLE001
+        notes = []
+    try:
+        rows = pg_query("select count(*) as n from drafts where status = 'pending'")
+        drafts = int(rows[0]["n"]) if rows else 0
+    except Exception:  # noqa: BLE001
+        drafts = 0
+    if INTERESTS is not None:
+        try:
+            interests = INTERESTS.list(include_muted=False)
+        except Exception:  # noqa: BLE001
+            interests = []
+    return ocbriefing.build_context(
+        facts=facts, notifications=notes, drafts=drafts, interests=interests,
+    )
+
+
+def briefing_job() -> dict | None:
+    jobs = read_json(JOBS_FILE, [])
+    return next((j for j in jobs if isinstance(j, dict) and j.get("kind") == "briefing"), None)
+
+
+def get_briefing() -> dict:
+    job = briefing_job()
+    return {
+        "available": ocbriefing is not None,
+        "exists": bool(job),
+        "enabled": bool(job and job.get("enabled", True)),
+        "time": (job or {}).get("time") or (ocbriefing.DEFAULT_TIME if ocbriefing else "07:30"),
+        "name": (job or {}).get("name") or (ocbriefing.NAME if ocbriefing else "Daily briefing"),
+    }
+
+
+def set_briefing(enabled: bool, time_hm: str = "") -> dict:
+    """Turn the daily briefing on/off and set its time (a regular routine)."""
+    if ocbriefing is None:
+        return {"ok": False, "error": "Briefing unavailable."}
+    if time_hm and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", time_hm):
+        return {"ok": False, "error": "Pick a time like 07:30."}
+    jobs = read_json(JOBS_FILE, [])
+    if not isinstance(jobs, list):
+        jobs = []
+    job = next((j for j in jobs if isinstance(j, dict) and j.get("kind") == "briefing"), None)
+    if job is None:
+        if not enabled:
+            return {"ok": True, **get_briefing()}
+        job = ocbriefing.default_job(time_hm or ocbriefing.DEFAULT_TIME, DEFAULT_AGENT)
+        jobs.append(job)
+    job["enabled"] = bool(enabled)
+    if time_hm:
+        job["time"] = time_hm
+    write_json(JOBS_FILE, jobs)
+    _chown_user(JOBS_FILE)
+    return {"ok": True, **get_briefing()}
+
+
+def run_briefing_now() -> dict:
+    """"Brief me now": runs the briefing routine (created switched off if the
+    daily schedule was never turned on, so it has its own chat)."""
+    if ocbriefing is None:
+        return {"ok": False, "error": "Briefing unavailable."}
+    job = briefing_job()
+    if job is None:
+        job = ocbriefing.default_job(agent=DEFAULT_AGENT)
+        job["enabled"] = False
+        jobs = read_json(JOBS_FILE, [])
+        jobs = jobs if isinstance(jobs, list) else []
+        jobs.append(job)
+        write_json(JOBS_FILE, jobs)
+        _chown_user(JOBS_FILE)
+    return run_job_now(job["name"])
 
 
 ACTION_PREFIX = "Action · "
@@ -2732,8 +2835,9 @@ class Run:
     """One in-flight (or just-finished) answer, observable by any subscriber."""
 
     def __init__(self, sid: str, prompt: str, agent: str, files: list, *,
-                 raw_session: bool = False, with_memory: bool = False):
+                 raw_session: bool = False, with_memory: bool = False, context: str = ""):
         self.sid = sid or ""
+        self.context = context
         self.prompt = prompt
         self.agent = agent
         self.files = files or []
@@ -2794,6 +2898,7 @@ class Run:
             for chunk in stream_answer(
                 self.prompt, self.sid, self.agent, self.files,
                 raw_session=self.raw_session, with_memory=self.with_memory,
+                context=self.context,
             ):
                 event, data = _parse_sse(chunk)
                 if event:
@@ -2865,11 +2970,12 @@ def _run_cleanup() -> None:
 
 
 def start_run(prompt: str, sid: str, agent: str = "", files: list | None = None, *,
-              raw_session: bool = False, with_memory: bool = False) -> Run:
+              raw_session: bool = False, with_memory: bool = False,
+              context: str = "") -> Run:
     """Start (or restart) the answer for a session and return its Run."""
     _run_cleanup()
     run = Run(sid, prompt, agent, files or [], raw_session=raw_session,
-              with_memory=with_memory)
+              with_memory=with_memory, context=context)
     with _runs_lock:
         RUNS[sid] = run
     run.start()
@@ -3498,6 +3604,7 @@ def stream_answer(
     files: list | None = None,
     raw_session: bool = False,
     with_memory: bool = False,
+    context: str = "",
 ):
     """SSE answer, collected server-side: reliable and reasoning-free.
 
@@ -3560,6 +3667,10 @@ def stream_answer(
         if ctx:
             recalled = ctx.count("] Q:") + ctx.count("\n- ")
             body["parts"].insert(0, {"type": "text", "text": ctx, "synthetic": True})
+
+    # Extra hidden context from the caller (e.g. the daily briefing's data).
+    if context:
+        body["parts"].insert(0, {"type": "text", "text": context, "synthetic": True})
 
     try:
         http_json(f"{OPENCODE_URL}/session/{sid}/prompt_async", method="POST", body=body)
@@ -3728,10 +3839,12 @@ def ask(
     files: list | None = None,
     raw_session: bool = False,
     with_memory: bool = False,
+    context: str = "",
 ) -> str:
     """Blocking version (routines, summaries, fallback)."""
     last = ""
-    for chunk in stream_answer(prompt, sid, agent, files, raw_session=raw_session, with_memory=with_memory):
+    for chunk in stream_answer(prompt, sid, agent, files, raw_session=raw_session,
+                               with_memory=with_memory, context=context):
         if chunk.startswith("event: reset"):
             try:
                 last = json.loads(chunk.split("data: ", 1)[1]).get("text") or ""
@@ -3992,6 +4105,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, AUTH.state(self.headers.get("Cookie", "")))
             if path == "/api/health":
                 return self._send(200, {"ok": True})
+            if path == "/api/briefing":
+                return self._send(200, get_briefing())
             if path == "/api/status":
                 return self._send(200, get_status())
             if path == "/api/jobs":
@@ -4203,6 +4318,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/api/auth/"):
                 return self._auth_post(path, payload)
+            if path == "/api/briefing":
+                return self._send(200, set_briefing(bool(payload.get("enabled")),
+                                                    str(payload.get("time") or "")))
+            if path == "/api/briefing/run":
+                return self._send(200, run_briefing_now())
             if path == "/api/ask":
                 prompt = (payload.get("prompt") or "").strip()
                 if not prompt:

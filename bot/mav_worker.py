@@ -23,13 +23,14 @@ from pathlib import Path
 
 import httpx
 
+import ocbriefing
 import ocevents
 from ocbus import EventBus
 from occonditions import should_run
 from ocinterests import Interests
 from ocjobs import DAYS, Scheduler, load_jobs, plain_summary
 from ocmemory import Memory
-from ocnotify import _pref, ensure_schema, flush_digest, notify
+from ocnotify import _pref, ensure_schema, flush_digest, notify, recent
 from ocprogress import ProgressTracker, follow
 from ocpursuit import headline_for, mark_pursued
 from ocselfinit import reconcile
@@ -135,11 +136,14 @@ async def last_assistant_text(session_id: str) -> str:
     return ""
 
 
-async def run_prompt(session_id: str, prompt: str, agent: str) -> tuple[str, ProgressTracker]:
+async def run_prompt(session_id: str, prompt: str, agent: str,
+                     context: str = "") -> tuple[str, ProgressTracker]:
     """Send the prompt, follow the session until idle, return the answer."""
     queue = bus.subscribe(session_id)
     tracker = ProgressTracker(agent)
     body: dict = {"parts": [{"type": "text", "text": prompt}]}
+    if context:
+        body["parts"].insert(0, {"type": "text", "text": context, "synthetic": True})
     # Routines know what Mav remembers about you (facts + related exchanges).
     try:
         ctx = memory.context_block(OWNER_ID, prompt)
@@ -254,7 +258,9 @@ async def run_job(job: dict) -> None:
     session_id = await routine_session(name)
     log.info("routine %s -> chat %s (helper %s)", name, session_id, agent or "default")
 
-    answer, tracker = await run_prompt(session_id, job["prompt"], agent)
+    briefing = ocbriefing.is_briefing(job)
+    context = await asyncio.to_thread(briefing_context) if briefing else ""
+    answer, tracker = await run_prompt(session_id, job["prompt"], agent, context)
 
     if tracker.error:
         retries = int(job.get("retries", JOB_RETRIES))
@@ -281,12 +287,36 @@ async def run_job(job: dict) -> None:
     # routine chat but cannot show in plain-text notifications: drop them.
     summary = plain_summary(answer)
     notify(
-        f"🔁 {name}",
+        "☀️ Your briefing" if briefing else f"🔁 {name}",
         summary,
         chat_id=OWNER_ID,
-        topic="routine",
+        topic="briefing" if briefing else "routine",
+        # The briefing is the point of the day: push it whatever the level.
+        level="important" if briefing else None,
         url=f"./#chat/{session_id}",
         dedup_key=f"routine:{name}:{time.strftime('%Y-%m-%d %H:%M')}",
+    )
+
+
+def briefing_context() -> str:
+    """What the daily briefing should know (blocking: run in a thread)."""
+    facts, drafts, items = [], 0, []
+    try:
+        facts = memory.facts(OWNER_ID, limit=30)
+    except Exception:  # noqa: BLE001
+        facts = []
+    try:
+        from ocdrafts import Drafts  # noqa: PLC0415
+
+        drafts = len(Drafts().list("pending"))
+    except Exception:  # noqa: BLE001
+        drafts = 0
+    try:
+        items = interests.list(include_muted=False)
+    except Exception:  # noqa: BLE001
+        items = []
+    return ocbriefing.build_context(
+        facts=facts, notifications=recent(40), drafts=drafts, interests=items,
     )
 
 
