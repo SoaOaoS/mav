@@ -1,11 +1,19 @@
 <div align="center">
 
-# Mav
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg" />
+  <img src="docs/assets/logo.svg" alt="Mav" width="196" height="64" />
+</picture>
 
 **Your everyday AI assistant — proactive, private, on your own machine, with your own model.**
 
 Chat like ChatGPT. Then let it work for you: routines that run on their own,
 pages and prices it keeps an eye on, and a memory of what matters to you.
+
+[![CI](https://img.shields.io/github/actions/workflow/status/SoaOaoS/mav/ci.yml?branch=main&label=CI&logo=github)](https://github.com/SoaOaoS/mav/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/SoaOaoS/mav?label=release&color=0f7a5c)](https://github.com/SoaOaoS/mav/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-E8962E)](LICENSE)
+[![Website](https://img.shields.io/badge/website-soaoaos.github.io%2Fmav-0F7A5C)](https://soaoaos.github.io/mav/)
 
 `curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
 
