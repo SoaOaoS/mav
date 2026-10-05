@@ -362,7 +362,7 @@ def engine_status() -> dict:
         "url": OPENCODE_URL,
         "checked": int(time.time()),
         "pending": pending_changes(),
-        "version": installed_version(),
+        "mav_version": installed_version(),
     }
 
 
@@ -535,7 +535,6 @@ def _chown_user(path: Path) -> None:
     """Give the file back to the install user (the engine runs as that user,
     the dashboard may run as root)."""
     try:
-        import grp  # noqa: PLC0415
         import pwd  # noqa: PLC0415
 
         user = os.environ.get("MAV_INSTALL_USER")
@@ -2585,6 +2584,33 @@ def _drop_open_turn(msgs: list[dict]) -> list[dict]:
     return out
 
 
+def summarize_session(sid: str) -> str:
+    """Key points of a chat, written in a throwaway session.
+
+    Asking inside the chat itself would leave the request and the summary in
+    the conversation (shown on reload, and fed back to the model).
+    """
+    msgs = session_messages(sid)
+    if not msgs:
+        return "Nothing to summarise yet."
+    lines, budget = [], 12000
+    for m in reversed(msgs):  # the most recent part matters most
+        who = "User" if m["role"] == "me" else "Assistant"
+        line = f"{who}: {m['text'].strip()[:2000]}"
+        budget -= len(line)
+        if budget < 0:
+            break
+        lines.append(line)
+    transcript = "\n\n".join(reversed(lines))
+    out = quick_completion(
+        "Summarize this conversation in a few key points (decisions, facts, "
+        "open questions), in the language it is written in. Reply with the "
+        "summary only.\n\n" + transcript,
+        timeout=120,
+    )
+    return out or "The summary could not be written — is the assistant running?"
+
+
 def export_session_markdown(sid: str) -> str:
     title = session_title(sid)[len(PREFIX):] or DEFAULT_TITLE
     lines = [f"# {title}", ""]
@@ -4134,7 +4160,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, stop_run(payload.get("id", "")))
             if path == "/api/session/summary":
                 sid = payload.get("id", "")
-                s = ask("Summarize this conversation in a few key points.", "summary", sid, raw_session=True)
+                s = summarize_session(sid)
                 return self._send(200, {"summary": s})
             if path == "/api/job/toggle":
                 ok = set_job_enabled(payload.get("name", ""), bool(payload.get("enabled")))
