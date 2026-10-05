@@ -54,6 +54,10 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
   Connections: pick one from the catalog (read web pages, web browser, Brave
   search, time zones, your files, Notion, Home Assistant, GitHub) and fill in
   its key, or add any MCP server yourself.
+- **Know what it costs** — Settings → Usage shows this month's spend, tokens
+  and a 30-day chart, split between chats, routines and background work. Set a
+  monthly budget (warn at 80 % / 100 %, or stop), and pick a cheap model for
+  background work (titles, memory, summaries).
 - **Always up to date** — a button tells you when a new version is out and
   installs it for you; changes that need a restart show a _Restart assistant_
   bar until you apply them.
