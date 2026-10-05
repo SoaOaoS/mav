@@ -64,6 +64,10 @@ talks to the opencode engine, and reads/writes Postgres.
   is shown as **one** message, exactly as it was streamed.
 - Titles and learned facts are produced after the answer, in one model call,
   queued until no answer is running — never competing with the next reply.
+- The daily briefing is a routine with `"kind": "briefing"`: when it runs (on
+  schedule in the worker, or *Brief me*), `bot/ocbriefing.py` gathers facts,
+  the last day's alerts and reports, pending drafts and interests into a
+  hidden context; the chat shows only "Brief me on my day.".
 - Memory (facts + exchanges) is injected as a hidden part when a chat starts,
   and each answer is stored (`bot/ocmemory.py`, shared with the worker).
 - The model provider is written by `server/mav_provider.py`, the same module
@@ -71,6 +75,7 @@ talks to the opencode engine, and reads/writes Postgres.
 
 | Method   | Route                                                                                | Purpose                                                                          |
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| GET/POST | `/api/briefing` (`{enabled, time}`), POST `/api/briefing/run` | daily briefing settings / brief me now (returns the chat to open) |
 | GET/POST | `/api/auth/state` · `setup` · `login` · `logout` · `password` | sign-in |
 | GET      | `/api/status`                                                                        | assistant health, model, counters                                                |
 | GET      | `/api/stream?prompt=&session=&agent=`                                                | **SSE** answer (`start`, `delta`, `reset`, `tool`, `done`, `error`); `&from=N` resumes |

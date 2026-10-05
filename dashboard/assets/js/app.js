@@ -969,6 +969,7 @@ messagesEl.addEventListener("click", async (e) => {
 
 /* Suggestions on the new-chat screen */
 $("#suggestions").addEventListener("click", (e) => {
+  if (e.target.closest("[data-brief]")) return briefMe();
   const b = e.target.closest("[data-prompt], [data-fill]");
   if (!b) return;
   if (b.dataset.prompt) return send(b.dataset.prompt);
@@ -976,6 +977,53 @@ $("#suggestions").addEventListener("click", (e) => {
   ta.value = b.dataset.fill;
   autoGrow(ta);
   ta.focus();
+});
+
+/* ---------- Daily briefing ----------
+   "Brief me" runs the briefing routine now and opens its chat, where the
+   answer streams in (the run is live server-side, openChat reattaches). */
+async function briefMe() {
+  if (!needLive()) return;
+  try {
+    const r = await api.post("briefing/run");
+    if (!r.ok) throw new Error(r.error || "Could not start the briefing.");
+    await loadConvs();
+    openChat(r.session);
+  } catch (ex) {
+    toast(ex.message, { error: true });
+  }
+}
+async function loadBriefing() {
+  if (!LIVE) return;
+  try {
+    const b = await api.get("briefing");
+    $("#briefingRow").hidden = !b.available;
+    $("#briefingToggle").setAttribute("aria-checked", String(!!b.enabled));
+    $("#briefingTime").value = b.time || "07:30";
+  } catch (_) {}
+}
+async function saveBriefing() {
+  if (!needLive()) return;
+  const enabled = $("#briefingToggle").getAttribute("aria-checked") === "true";
+  try {
+    const r = await api.post("briefing", {
+      enabled,
+      time: $("#briefingTime").value,
+    });
+    if (!r.ok) throw new Error(r.error);
+    toast(enabled ? `Briefing every day at ${r.time}.` : "Daily briefing off.");
+    loadRoutines();
+  } catch (ex) {
+    toast(ex.message || "Could not save.", { error: true });
+  }
+}
+$("#briefingToggle").addEventListener("click", () => {
+  const on = $("#briefingToggle").getAttribute("aria-checked") !== "true";
+  $("#briefingToggle").setAttribute("aria-checked", String(on));
+  saveBriefing();
+});
+$("#briefingTime").addEventListener("change", () => {
+  if ($("#briefingToggle").getAttribute("aria-checked") === "true") saveBriefing();
 });
 
 async function copyText(text) {
@@ -1218,6 +1266,11 @@ const SLASH = [
       setChatTitle(a.trim());
       loadConvs();
     },
+  },
+  {
+    cmd: "/brief",
+    desc: "Your briefing: weather, what happened, what needs you",
+    run: () => briefMe(),
   },
   {
     cmd: "/summary",
@@ -5645,6 +5698,7 @@ async function boot() {
     loadRoutines(),
     loadProactivity(),
     checkVersion(),
+    loadBriefing(),
   ]);
   route();
   if (!state.chat.id) renderThread();
