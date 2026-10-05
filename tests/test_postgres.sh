@@ -40,6 +40,13 @@ step "start Postgres on a new volume" pg_up
 step "wait, create, migrate (fresh volume)" pg_wait_and_schema
 step "tables exist" bash -c "docker exec $PG_CONTAINER psql -U mav -d mav -tAc \"select count(*) from information_schema.tables where table_name in ('conversations','facts','notifications')\" | grep -qx 3"
 
+# Mav Connect: database rows survive a cloud backup → wipe → restore.
+if python3 -c "import psycopg2, cryptography" 2>/dev/null; then
+  step "cloud backup restores the database" bash -c "cd '$ROOT' && \
+    MAV_TEST_PG_DSN='host=127.0.0.1 port=55433 user=mav password=first-Pass1 dbname=mav' \
+    python3 -m unittest tests.test_connect.DatabaseTest"
+fi
+
 # An interrupted install re-run with another password: the volume keeps the
 # first one, the installer must re-align it.
 A[PG_PASSWORD]="second-'Pass\"2"
