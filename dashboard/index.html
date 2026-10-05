@@ -326,6 +326,9 @@
             <!-- Shown only on the new-chat screen -->
             <div class="below" id="below">
               <div class="suggest" id="suggestions">
+                <button class="chip chip-accent" data-brief="1">
+                  <i data-i="sun"></i> Brief me
+                </button>
                 <button
                   class="chip"
                   data-prompt="Help me plan my day. Ask me what I have on, then build a simple schedule."
@@ -854,6 +857,17 @@
                   <button class="btn btn-ghost btn-sm" id="versionCheck">
                     Check for updates
                   </button>
+                </div>
+                <div class="setting-row" id="briefingRow">
+                  <div>
+                    <strong>Daily briefing</strong>
+                    <span>Weather, what happened, what needs you — every day at this time.</span>
+                  </div>
+                  <div class="row">
+                    <input type="time" id="briefingTime" value="07:30" aria-label="Briefing time" />
+                    <button class="switch" id="briefingToggle" role="switch" aria-checked="false"
+                      aria-label="Daily briefing"></button>
+                  </div>
                 </div>
                 <div class="setting-row" id="accountRow">
                   <div>
