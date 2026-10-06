@@ -25,6 +25,10 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 
 </div>
 
+<p align="center">
+  <img src="docs/assets/screenshots/home.png" alt="Mav's home screen: a greeting, the message box, quick suggestions and the latest routine reports" width="900" />
+</p>
+
 ## What it does
 
 - **Chat** — a clean, ChatGPT-style web app (installable on your phone).
@@ -72,6 +76,23 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 - **Always up to date** — a button tells you when a new version is out and
   installs it for you; changes that need a restart show a _Restart assistant_
   bar until you apply them.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="66%"><img src="docs/assets/screenshots/chat.png" alt="A chat: Mav lists your subscriptions in a table and suggests what to cancel" /></td>
+    <td rowspan="2" align="center"><img src="docs/assets/screenshots/mobile.png" alt="Mav on a phone: a plan for Saturday in Lyon" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screenshots/routines.png" alt="Routines: an umbrella check every morning, an inbox summary on weekdays, a flight price alert" /></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/screenshots/memory.png" alt="Memory: what Mav knows about you, editable" /></td>
+  </tr>
+</table>
+
+<sub>Chat · Mav on a phone · Routines · Memory. Shown with sample data.</sub>
 
 ## Install
 
@@ -204,7 +225,7 @@ mav/
 ├── scripts/            # database schema, version helper
 ├── tests/              # unit and script tests (run by CI)
 ├── systemd/            # service templates
-└── docs/               # website, docs, roadmap (PLAN.md), brand (BRAND.md)
+└── docs/               # website, docs, roadmap (PLAN.md), brand (BRAND.md), screenshots
 ```
 
 Hacking on the web app without a model: run
