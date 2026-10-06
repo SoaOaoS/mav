@@ -138,6 +138,7 @@ ${B}mav${R} — control your Mav assistant  ${DIM}($(installed_version))${R}
       --check                  only tell whether an update is available
       --local                  reinstall the local copy, no download
       --channel main           follow the main branch instead of releases
+      --to v2.1.0              install that version (also to go back)
       --force                  reinstall even if already up to date
   ${B}mav version${R}              installed and latest available version
   ${B}mav restart${R} [service]    restart the assistant (engine, worker, web or all)
@@ -272,8 +273,16 @@ cmd_update() {
       --local) local_copy=1 ;;
       --force) force=1 ;;
       --yes|-y) ;;
-      --channel) channel="${2:?--channel needs release or main}"; shift ;;
-      --to) target="${2:?--to needs a version, e.g. v1.2.0}"; shift ;;
+      --channel)
+        channel="${2:?--channel needs release or main}"; shift
+        case "$channel" in
+          release|main) ;;
+          v[0-9]*) target="$channel"; channel="release" ;;  # a version: same as --to
+          *) die "--channel takes release or main. To install one version: mav update --to v2.1.0" 2 ;;
+        esac ;;
+      --to)
+        target="${2:?--to needs a version, e.g. v1.2.0}"; shift
+        [[ "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "--to needs a version like v2.1.0 (got: $target)" 2 ;;
       *) die "Unknown option for update: $1" 2 ;;
     esac
     shift
