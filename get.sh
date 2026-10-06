@@ -65,6 +65,9 @@ else
       sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
   fi
   if [[ -n "$TAG" ]]; then
+    # The archive attached to the release (GitHub counts its downloads), with
+    # the tag's source archive as a fallback for older releases.
+    ASSET="https://github.com/${REPO}/releases/download/${TAG}/mav-${TAG}.tar.gz"
     TARBALL="https://codeload.github.com/${REPO}/tar.gz/refs/tags/${TAG}"
     VERSION="$TAG"; CHANNEL="release"
   else
@@ -74,7 +77,9 @@ else
 fi
 
 info "Downloading Mav ${VERSION} (${REPO})…"
-get "$TARBALL" "$TMP/mav.tar.gz" || die "Download failed."
+if [[ -z "${ASSET:-}" ]] || ! get "$ASSET" "$TMP/mav.tar.gz" 2>/dev/null; then
+  get "$TARBALL" "$TMP/mav.tar.gz" || die "Download failed."
+fi
 tar xzf "$TMP/mav.tar.gz" -C "$TMP" --strip-components=1 || die "Extraction failed."
 [[ -f "$TMP/install.sh" ]] || die "install.sh not found in the archive."
 ok "Repository ready."
