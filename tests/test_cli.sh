@@ -26,6 +26,8 @@ case "$url" in
     echo '<feed><entry><link rel="alternate" type="text/html" href="https://github.com/o/r/releases/tag/v1.2.0"/></entry></feed>' ;;
   # The anonymous API is rate-limited (403) by default: it must never be required.
   */releases/latest) [[ -n "${STUB_API_OK:-}" ]] && { echo '{"tag_name":"v1.5.0"}'; exit 0; }; exit 22 ;;
+  # The release asset only exists when STUB_ASSET is set (older releases have none).
+  */releases/download/*) [[ -z "${STUB_ASSET:-}" || -n "${STUB_DL_FAIL:-}" ]] && exit 22; cp "$STUB_TARBALL" "$out" ;;
   */tar.gz/*) [[ -n "${STUB_DL_FAIL:-}" ]] && exit 22; cp "$STUB_TARBALL" "$out" ;;
   *) exit 7 ;;
 esac
@@ -68,6 +70,9 @@ STUB_NO_ATOM=1 STUB_API_OK=1 check "atom unreachable → API fallback" "latest: 
 # version must still resolve via the Atom feed instead of "main@<date>".
 check "tag found despite API 403"  "tar.gz/refs/tags/v1.2.0" "$MAV" update --force
 check "--local"              "installer args=--update"      "$MAV" update --local
+STUB_ASSET=1 check "release asset first" "releases/download/v1.2.0/mav-v1.2.0.tar.gz" "$MAV" update --force
+STUB_ASSET=1 check "asset installs tag" "installer args=--update version=v1.2.0 channel=release" "$MAV" update --force
+check "no asset → source archive" "tar.gz/refs/tags/v1.2.0"  "$MAV" update --force
 check "--to a version"       "tar.gz/refs/tags/v1.1.0"      "$MAV" update --to v1.1.0
 # A version given to --channel is taken as --to, not as a channel name.
 check "--channel v1.1.0"     "tar.gz/refs/tags/v1.1.0"      "$MAV" update --channel v1.1.0

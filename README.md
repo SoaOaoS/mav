@@ -12,6 +12,7 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/SoaOaoS/mav/ci.yml?branch=main&label=CI&logo=github)](https://github.com/SoaOaoS/mav/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/SoaOaoS/mav?label=release&color=0f7a5c)](https://github.com/SoaOaoS/mav/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/SoaOaoS/mav/total?label=downloads&color=0f7a5c)](https://github.com/SoaOaoS/mav/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-E8962E)](LICENSE)
 [![Website](https://img.shields.io/badge/website-soaoaos.github.io%2Fmav-0F7A5C)](https://soaoaos.github.io/mav/)
 [![CodeQL](https://github.com/SoaOaoS/mav/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/SoaOaoS/mav/actions/workflows/codeql.yml)
@@ -208,7 +209,11 @@ comes from the commit messages, written as
 | `feat: …`                                          | minor — `v1.4.2` → `v1.5.0` |
 | anything else (`fix:`, `docs:`, `chore:`, merges…) | patch — `v1.4.2` → `v1.4.3` |
 
-`get.sh`, `mav update` and the update button install the latest release. CI
+`get.sh`, `mav update` and the update button install the latest release,
+from the `mav-vX.Y.Z.tar.gz` archive attached to it. GitHub counts how many
+times these archives are downloaded (installs and updates, anonymously), and
+the **downloads** badge above shows the total. Nothing is sent from your
+machine: this is GitHub's own download count. CI
 (`.github/workflows/ci.yml`) runs shellcheck, syntax checks and the tests in
 `tests/` on every pull request.
 

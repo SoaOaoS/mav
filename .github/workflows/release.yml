@@ -49,5 +49,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Mav $TAG"
           git push origin "$TAG"
-          gh release create "$TAG" --title "Mav $TAG" --generate-notes --verify-tag
+          # The archive installs and updates download: GitHub counts its
+          # downloads, which the README badge shows.
+          git archive --format=tar.gz --prefix="mav-$TAG/" -o "mav-$TAG.tar.gz" "$TAG"
+          gh release create "$TAG" "mav-$TAG.tar.gz" --title "Mav $TAG" --generate-notes --verify-tag
           echo "### Released $TAG" >> "$GITHUB_STEP_SUMMARY"

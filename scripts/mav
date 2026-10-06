@@ -27,6 +27,7 @@ MAV_BACKUP_DIR="${MAV_BACKUP_DIR:-/var/backups/mav}"
 MAV_OPENCODE_PORT="${MAV_OPENCODE_PORT:-4096}"
 MAV_GITHUB_API="${MAV_GITHUB_API:-https://api.github.com}"
 MAV_CODELOAD="${MAV_CODELOAD:-https://codeload.github.com}"
+MAV_GITHUB="${MAV_GITHUB:-https://github.com}"
 LOCK_FILE="${MAV_LOCK_FILE:-/run/mav-update.lock}"
 
 # Local copy of the installer (for offline updates and reconfiguration).
@@ -87,7 +88,7 @@ fetch() {  # fetch URL [curl args…] — retries, timeouts, fails on HTTP error
 # release existed. The Atom feed has no such limit; the API stays as fallback.
 latest_version() {
   local tag
-  tag="$(fetch "https://github.com/$MAV_REPO/releases.atom" 2>/dev/null |
+  tag="$(fetch "$MAV_GITHUB/$MAV_REPO/releases.atom" 2>/dev/null |
     sed -n 's#.*/releases/tag/\([^"]*\)".*#\1#p' | head -1 || true)"
   if [[ -z "$tag" ]]; then
     tag="$(fetch "$MAV_GITHUB_API/repos/$MAV_REPO/releases/latest" -H "Accept: application/vnd.github+json" 2>/dev/null |
@@ -319,21 +320,34 @@ cmd_update() {
 
   tmp="$(mktemp -d /tmp/mav-update.XXXXXX)"
   trap 'rm -rf "$tmp"' EXIT
-  local ref url version
+  local version url got=0
+  local -a urls
   if [[ "$channel" == "main" && -z "$target" ]]; then
-    ref="refs/heads/main"; version="main@$(date +%Y-%m-%d)"
+    version="main@$(date +%Y-%m-%d)"
+    urls=("$MAV_CODELOAD/$MAV_REPO/tar.gz/refs/heads/main")
   else
-    ref="refs/tags/$target"; version="$target"
+    version="$target"
+    # The archive attached to the release first: GitHub counts its downloads
+    # (the README badge). The source archive of the tag is the fallback.
+    urls=("$MAV_GITHUB/$MAV_REPO/releases/download/$target/mav-$target.tar.gz"
+          "$MAV_CODELOAD/$MAV_REPO/tar.gz/refs/tags/$target")
   fi
-  url="$MAV_CODELOAD/$MAV_REPO/tar.gz/$ref"
   echo "Downloading Mav $version…"
-  if ! fetch "$url" -o "$tmp/mav.tar.gz" || ! tar xzf "$tmp/mav.tar.gz" -C "$tmp" --strip-components=1 || [[ ! -f "$tmp/install.sh" ]]; then
+  for url in "${urls[@]}"; do
+    rm -rf "$tmp/src"; mkdir -p "$tmp/src"
+    if fetch "$url" -o "$tmp/mav.tar.gz" 2>/dev/null &&
+      tar xzf "$tmp/mav.tar.gz" -C "$tmp/src" --strip-components=1 2>/dev/null &&
+      [[ -f "$tmp/src/install.sh" ]]; then
+      got=1; break
+    fi
+  done
+  if [[ $got -eq 0 ]]; then
     warn "Could not download $version — reinstalling the local copy instead."
     [[ -f "$MAV_SRC/install.sh" ]] || die "Local copy not found ($MAV_SRC)."
     MAV_VERSION="$cur" bash "$MAV_SRC/install.sh" --update
     return
   fi
-  MAV_VERSION="$version" MAV_REPO="$MAV_REPO" MAV_CHANNEL="$channel" bash "$tmp/install.sh" --update || rc=$?
+  MAV_VERSION="$version" MAV_REPO="$MAV_REPO" MAV_CHANNEL="$channel" bash "$tmp/src/install.sh" --update || rc=$?
   [[ $rc -eq 0 ]] && echo "Mav is now at $version." || echo "The update failed — see $MAV_INSTALL_LOG" >&2
   return $rc
 }
