@@ -230,7 +230,7 @@ mav/
 ├── scripts/            # database schema, version helper
 ├── tests/              # unit and script tests (run by CI)
 ├── systemd/            # service templates
-└── docs/               # website, docs, roadmap (PLAN.md), brand (BRAND.md), screenshots
+└── docs/               # website, docs, roadmap (ROADMAP.md, PLAN.md), brand (BRAND.md), screenshots
 ```
 
 Hacking on the web app without a model: run
