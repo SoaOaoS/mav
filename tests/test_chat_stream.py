@@ -49,6 +49,25 @@ class GroupingTest(unittest.TestCase):
         self.assertEqual([m["role"] for m in msgs], ["me", "mav", "me", "mav"])
         self.assertEqual(msgs[1]["text"], "Let me check.\n\nHere is the plan.")
         self.assertEqual(msgs[1]["agent"], "assistant")
+        # The turn keeps its tool calls, in the order they happened.
+        self.assertEqual([t["name"] for t in msgs[1]["tools"]], ["task", "webfetch"])
+        self.assertNotIn("tools", msgs[3])
+
+    def test_tool_info_has_the_details(self):
+        part = {"type": "tool", "callID": "c1", "tool": "bash", "state": {
+            "status": "completed", "title": "List files",
+            "input": {"command": "ls -la"}, "output": "x" * 5000,
+            "time": {"start": 1000, "end": 2500}}}
+        info = mav_api._tool_info(part)
+        self.assertEqual((info["id"], info["name"], info["status"]), ("c1", "bash", "completed"))
+        self.assertEqual((info["start"], info["end"]), (1000, 2500))
+        self.assertIn('"command": "ls -la"', info["input"])
+        self.assertLess(len(info["output"]), 4100)
+        self.assertIn("more characters", info["output"])
+        self.assertNotIn("error", info)
+        # A step that has only just started stays small.
+        self.assertEqual(set(mav_api._tool_info({"tool": "read", "state": {}})),
+                         {"id", "name", "status", "detail"})
 
     def test_hidden_user_parts_do_not_split_a_turn(self):
         entries = [
@@ -131,6 +150,11 @@ class StreamTest(unittest.TestCase):
         self.assertEqual(streamed, done)
         tools = [d for e, d in events if e == "tool"]
         self.assertEqual(tools[0]["detail"], "researcher")
+        done_tools = [d for d in tools if d["status"] == "completed"]
+        self.assertEqual([d["name"] for d in done_tools], ["task", "webfetch"])
+        self.assertIn("researcher", done_tools[0]["input"])
+        self.assertTrue(done_tools[1]["output"].startswith("# Answer"))
+        self.assertEqual(done_tools[1]["end"] - done_tools[1]["start"], 420)
 
         # A second turn: the page shows exactly what was streamed, once each.
         events2 = self.run_turn(sid, "research again")
