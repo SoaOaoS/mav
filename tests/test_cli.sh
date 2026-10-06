@@ -68,6 +68,11 @@ STUB_NO_ATOM=1 STUB_API_OK=1 check "atom unreachable → API fallback" "latest: 
 # version must still resolve via the Atom feed instead of "main@<date>".
 check "tag found despite API 403"  "tar.gz/refs/tags/v1.2.0" "$MAV" update --force
 check "--local"              "installer args=--update"      "$MAV" update --local
+check "--to a version"       "tar.gz/refs/tags/v1.1.0"      "$MAV" update --to v1.1.0
+# A version given to --channel is taken as --to, not as a channel name.
+check "--channel v1.1.0"     "tar.gz/refs/tags/v1.1.0"      "$MAV" update --channel v1.1.0
+check "--channel bad"        "--channel takes release or main" "$MAV" update --channel beta
+check "--to bad"             "needs a version like"         "$MAV" update --to latest
 check "restart worker"       "systemctl restart mav-worker" "$MAV" restart worker
 check "restart bad service"  "Unknown service"              "$MAV" restart toaster
 check "logs engine -n 5"     "journalctl -u mav-server -n 5 --no-pager" "$MAV" logs engine -n 5
