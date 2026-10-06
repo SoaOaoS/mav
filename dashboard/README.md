@@ -62,6 +62,11 @@ talks to the opencode engine, and reads/writes Postgres.
   The server follows the engine's `/event` stream (polling only as a
   fallback), and a turn the engine stored as several steps — tools, helpers —
   is shown as **one** message, exactly as it was streamed.
+- Tool calls are listed above the answer, one per row, in the order they
+  happened. Click a row to see the tool, its status, when it started, how
+  long it took, and what went in and came out (`input`, `output`, `error`,
+  cut to 4,000 characters). The `tool` SSE event carries these fields, and a
+  reloaded chat gets them back in each message's `tools` list.
 - Titles and learned facts are produced after the answer, in one model call,
   queued until no answer is running — never competing with the next reply.
 - The daily briefing is a routine with `"kind": "briefing"`: when it runs (on

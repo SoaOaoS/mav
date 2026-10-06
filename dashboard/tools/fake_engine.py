@@ -110,7 +110,10 @@ def add_multi_step(sid: str, body: dict) -> None:
         "parts": [
             {"type": "text", "text": "Let me look into that."},
             {"type": "tool", "id": uuid.uuid4().hex, "callID": "call_1", "tool": "task",
-             "state": {"status": "running", "input": {"subagent_type": "researcher"}}},
+             "state": {"status": "running", "time": {"start": now_ms()},
+                       "input": {"subagent_type": "researcher",
+                                 "description": "Look it up",
+                                 "prompt": "Find what the person asked about."}}},
         ],
     }
     with LOCK:
@@ -118,7 +121,17 @@ def add_multi_step(sid: str, body: dict) -> None:
     _touch(sid, step)
     time.sleep(0.6)
     with LOCK:
-        step["parts"][1]["state"]["status"] = "completed"
+        task_state = step["parts"][1]["state"]
+        task_state.update(status="completed", title="Look it up",
+                          output="Found three sources; the short answer is below.")
+        task_state["time"]["end"] = now_ms()
+        start = now_ms()
+        step["parts"].append(
+            {"type": "tool", "id": uuid.uuid4().hex, "callID": "call_2", "tool": "webfetch",
+             "state": {"status": "completed", "title": "https://example.org/answer",
+                       "input": {"url": "https://example.org/answer", "format": "markdown"},
+                       "output": "# Answer\n\nThe page says hello.",
+                       "time": {"start": start, "end": start + 420}}})
         step["info"]["finish"] = "tool-calls"
     _touch(sid, step)
     final = {

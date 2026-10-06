@@ -2711,8 +2711,10 @@ def session_messages(sid: str, entries: list | None = None) -> list[dict]:
         role = info.get("role")
         if role not in ("user", "assistant"):
             continue
-        text = _part_text(e.get("parts") or [])
-        if not text:
+        parts = e.get("parts") or []
+        text = _part_text(parts)
+        tools = [_tool_info(p) for p in parts if p.get("type") == "tool"] if role == "assistant" else []
+        if not text and not tools:
             continue
         ts = (info.get("time") or {}).get("created")
         if role == "user":
@@ -2722,10 +2724,16 @@ def session_messages(sid: str, entries: list | None = None) -> list[dict]:
         agent = info.get("agent") or info.get("mode") or ""
         prev = msgs[-1] if msgs else None
         if prev and prev["role"] == "mav":
-            prev["text"] = f"{prev['text']}\n\n{text}"
+            if text:
+                prev["text"] = f"{prev['text']}\n\n{text}" if prev["text"] else text
             prev["agent"] = prev.get("agent") or agent
+            if tools:
+                prev.setdefault("tools", []).extend(tools)
             continue
-        msgs.append({"role": "mav", "text": text, "ts": ts, "agent": agent})
+        msg = {"role": "mav", "text": text, "ts": ts, "agent": agent}
+        if tools:
+            msg["tools"] = tools
+        msgs.append(msg)
     return msgs
 
 
@@ -2927,11 +2935,14 @@ class Run:
                 key = data.get("id") or name
                 status = data.get("status") or "running"
                 entry = next((t for t in self.tools if t.get("id", t.get("name")) == key), None)
-                if entry:
-                    entry["status"] = status
-                else:
-                    self.tools.append({"id": key, "name": name, "status": status,
-                                       "detail": data.get("detail") or ""})
+                if not entry:
+                    entry = {"id": key, "name": name, "status": status,
+                             "detail": data.get("detail") or ""}
+                    self.tools.append(entry)
+                entry["status"] = status
+                for k in ("title", "input", "output", "error", "start", "end"):
+                    if data.get(k):
+                        entry[k] = data[k]
             elif event == "done":
                 if not self.text and data.get("text"):
                     self.text = data.get("text") or ""
@@ -3647,6 +3658,54 @@ def _tool_detail(part: dict) -> str:
     return ""
 
 
+TOOL_TEXT_MAX = 4000
+
+
+def _clip(value, limit: int = TOOL_TEXT_MAX) -> str:
+    """A tool input/output as readable text, cut to a sane size."""
+    if value in (None, "", {}, []):
+        return ""
+    if not isinstance(value, str):
+        try:
+            value = json.dumps(value, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            value = str(value)
+    value = value.strip()
+    if len(value) > limit:
+        value = value[:limit].rstrip() + f"\n… ({len(value) - limit} more characters)"
+    return value
+
+
+def _tool_info(part: dict) -> dict:
+    """Everything the web app shows about one tool call, in one dict.
+
+    Optional keys (input, output, error, title, start, end) are only set when
+    the engine reported them, so a step that has just started stays small.
+    """
+    state = part.get("state") or {}
+    info = {
+        "id": part.get("callID") or part.get("id") or part.get("tool") or "tool",
+        "name": part.get("tool") or "tool",
+        "status": state.get("status") or "running",
+        "detail": _tool_detail(part),
+    }
+    extra = {
+        "title": str(state.get("title") or "")[:200],
+        "input": _clip(state.get("input")),
+        "output": _clip(state.get("output")),
+        "error": _clip(state.get("error"), 1500),
+    }
+    times = state.get("time") or {}
+    for k in ("start", "end"):
+        try:
+            if times.get(k):
+                extra[k] = int(times[k])
+        except (TypeError, ValueError):
+            pass
+    info.update({k: v for k, v in extra.items() if v})
+    return info
+
+
 def stream_answer(
     prompt: str,
     sid: str,
@@ -3831,13 +3890,14 @@ def stream_answer(
                 if part.get("type") != "tool":
                     continue
                 key = part.get("callID") or part.get("id")
-                status = (part.get("state") or {}).get("status") or "running"
-                if key and tools_state.get(key) != status:
-                    tools_state[key] = status
-                    yield sse("tool", {
-                        "id": key, "name": part.get("tool") or "tool",
-                        "status": status, "detail": _tool_detail(part),
-                    })
+                if not key:
+                    continue
+                tool = _tool_info(part)
+                sig_ = (tool["status"], len(tool.get("input", "")),
+                        len(tool.get("output", "")), tool.get("end"))
+                if tools_state.get(key) != sig_:
+                    tools_state[key] = sig_
+                    yield sse("tool", tool)
 
         if text != last_text:
             last_text = text

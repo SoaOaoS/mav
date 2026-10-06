@@ -892,10 +892,10 @@ function appendMessage(
     el.innerHTML = `${agentAvatar(ag)}
       <div class="body">
         ${showMeta ? `<div class="msg-meta"><span class="who">${esc(agentDisplay(ag))}</span>${m.ts ? `<span>${esc(fmtClock(m.ts))}</span>` : ""}</div>` : ""}
+        <div class="msg-tools"></div>
         <div class="bubble"></div>
         ${m.recalled ? `<div class="recall-note">${I("brain")} Used ${m.recalled} thing${m.recalled > 1 ? "s" : ""} from memory</div>` : ""}
         ${m.interrupted ? `<div class="recall-note interrupted-note">${I("square")} Stopped by you — the rest was kept.</div>` : ""}
-        <div class="msg-tools"></div>
         <div class="msg-actions">
           <button class="icon-btn" data-act="copy" title="Copy">${I("copy")}</button>
           <button class="icon-btn" data-act="download" title="Download as Markdown">${I("download")}</button>
@@ -905,6 +905,8 @@ function appendMessage(
       </div>`;
     el.querySelector(".bubble").innerHTML = mdToHtml(m.text || "");
     hydrateCharts(el);
+    if (m.tools && m.tools.length)
+      renderToolSteps(el.querySelector(".msg-tools"), m.tools);
   }
   el._msg = m;
   t.appendChild(el);
@@ -1553,20 +1555,103 @@ function toolLabel(name, detail) {
   if (m) return `${m[2].replace(/[_-]/g, " ")} · ${m[1]}`;
   return name || "tool";
 }
-function renderToolChips(host, tools) {
+/* Tool calls, one per row in the order they happened. Each row opens to
+   show what was sent, what came back, when and how long it took. Rows are
+   updated in place, so an open one stays open while the answer streams. */
+function fmtSeconds(ms) {
+  if (!(ms >= 0)) return "";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
+  return `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`;
+}
+function fmtClockSec(ms) {
+  return ms
+    ? new Date(ms).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "";
+}
+const TOOL_STATUS = {
+  pending: "Waiting",
+  running: "Running",
+  completed: "Done",
+  error: "Failed",
+};
+function toolCommand(t) {
+  // A shell command reads better as one line than inside JSON.
+  try {
+    const inp = JSON.parse(t.input || "");
+    if (inp && typeof inp.command === "string") return `$ ${inp.command}`;
+  } catch {}
+  return "";
+}
+function toolStepBody(t) {
+  const dur = t.start && t.end ? fmtSeconds(t.end - t.start) : "";
+  const rows = [
+    ["Tool", `<code>${esc(t.name)}</code>`],
+    ["Status", esc(TOOL_STATUS[t.status] || t.status || "")],
+    t.start ? ["Started", esc(fmtClockSec(t.start))] : null,
+    dur ? ["Took", esc(dur)] : null,
+    t.title ? ["Summary", esc(t.title)] : null,
+  ].filter(Boolean);
+  const cmd = toolCommand(t);
+  const block = (label, text, cls = "") =>
+    text
+      ? `<div class="tool-sec"><div class="tool-sec-h">${label}</div><pre class="tool-pre ${cls}">${esc(text)}</pre></div>`
+      : "";
+  return `<dl class="tool-facts">${rows
+    .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+    .join("")}</dl>
+    ${cmd ? block("Command", cmd, "is-cmd") : ""}
+    ${block("Input", t.input)}
+    ${block("Output", t.output)}
+    ${block("Error", t.error, "is-err")}
+    ${!t.input && !t.output && !t.error ? `<p class="tool-empty">${t.status === "completed" ? "No details were reported for this step." : "Details appear as soon as the step reports them."}</p>` : ""}`;
+}
+function renderToolSteps(host, tools) {
   if (!host) return;
-  if (!tools.length) {
+  if (!tools || !tools.length) {
     host.innerHTML = "";
     return;
   }
-  host.innerHTML = tools
-    .map(
-      (t) =>
-        `<span class="tool-chip ${t.status === "running" ? "is-run" : ""}">${I(
-          "tool",
-        )}<span>${esc(toolLabel(t.name, t.detail))}</span></span>`,
-    )
-    .join("");
+  const seen = new Set();
+  tools.forEach((t, i) => {
+    const id = String(t.id || t.name || i);
+    seen.add(id);
+    let row = [...host.children].find((c) => c.dataset.id === id);
+    if (!row) {
+      row = document.createElement("details");
+      row.className = "tool-step";
+      row.dataset.id = id;
+      row.innerHTML = `<summary></summary><div class="tool-body"></div>`;
+    }
+    if (host.children[i] !== row) host.insertBefore(row, host.children[i] || null);
+    const status = t.status || "running";
+    const live = status === "running" || status === "pending";
+    row.classList.toggle("is-run", live);
+    row.classList.toggle("is-err", status === "error");
+    row.classList.toggle("is-done", status === "completed");
+    const took =
+      t.start && t.end
+        ? fmtSeconds(t.end - t.start)
+        : live && t.start
+          ? fmtSeconds(Date.now() - t.start)
+          : "";
+    const sig = JSON.stringify([t, took]);
+    if (row._sig === sig) return;
+    row._sig = sig;
+    row.querySelector("summary").innerHTML = `<span class="tool-n">${i + 1}</span>
+      <span class="tool-ico">${I(status === "error" ? "x" : status === "completed" ? "check" : "tool")}</span>
+      <span class="tool-label">${esc(toolLabel(t.name, t.detail))}</span>
+      <span class="tool-meta">${esc(took || TOOL_STATUS[status] || "")}</span>
+      ${I("chevron").replace("data-i", 'class="tool-caret" data-i')}`;
+    row.querySelector(".tool-body").innerHTML = toolStepBody(t);
+  });
+  [...host.children].forEach((c) => {
+    if (!seen.has(c.dataset.id)) c.remove();
+  });
 }
 
 async function send(raw, opts = {}) {
@@ -1679,7 +1764,7 @@ function paintStream(st) {
       const stick = nearBottom();
       st.el.querySelector(".bubble").innerHTML = mdToHtml(st.reply.text || "");
       hydrateCharts(st.el);
-      renderToolChips(st.el.querySelector(".msg-tools"), st.tools);
+      renderToolSteps(st.el.querySelector(".msg-tools"), st.tools);
       if (stick) scrollToBottom(true);
     }
   });
@@ -1703,13 +1788,15 @@ function applyEvent(st, ev, d) {
     const key = d.id || d.name;
     const i = st.tools.findIndex((t) => (t.id || t.name) === key);
     const entry = {
+      ...(i >= 0 ? st.tools[i] : {}),
+      ...d,
       id: key,
-      name: d.name,
       detail: d.detail || "",
       status: d.status || "running",
     };
     if (i >= 0) st.tools[i] = entry;
     else st.tools.push(entry);
+    st.reply.tools = st.tools; // kept on the message once the answer ends
     paintStream(st);
   } else if (ev === "done") {
     if (!st.reply.text && d.text) st.reply.text = d.text;

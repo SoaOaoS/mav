@@ -3677,38 +3677,157 @@ button.memory-updated:hover {
 }
 
 /* ---------- Live tool/MCP activity under a streaming answer ---------- */
+/* Tool calls: one row per step, in order; a row opens to show details. */
 .msg-tools {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.35rem;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0.1rem 0 0.55rem;
+  max-width: 640px;
 }
 .msg-tools:empty {
   display: none;
 }
-.tool-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.76rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  color: var(--ink-2);
-  background: var(--bg-sunk);
+.tool-step {
   border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-sunk);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  animation: tool-in 0.18s ease-out;
 }
-.tool-chip i[data-i] {
+@keyframes tool-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.tool-step > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.38rem 0.6rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tool-step > summary::-webkit-details-marker {
+  display: none;
+}
+.tool-step > summary:hover {
+  color: var(--ink);
+}
+.tool-n {
+  flex: none;
+  min-width: 1.1rem;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  text-align: right;
+}
+.tool-ico i[data-i] {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+.tool-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-meta {
+  flex: none;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  color: var(--ink-3);
+}
+.tool-caret {
   width: 13px;
   height: 13px;
   flex: none;
+  color: var(--ink-3);
+  transition: transform 0.15s ease-out;
 }
-.tool-chip.is-run {
-  color: var(--accent-ink);
+.tool-step[open] .tool-caret {
+  transform: rotate(180deg);
+}
+.tool-step.is-run {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
   background: var(--accent-soft);
-  border-color: transparent;
+  color: var(--accent-ink);
 }
-.tool-chip.is-run i[data-i] {
+.tool-step.is-run .tool-ico i[data-i] {
   animation: blink 1s infinite;
+}
+.tool-step.is-done .tool-ico {
+  color: var(--accent);
+}
+.tool-step.is-err {
+  border-color: color-mix(in srgb, var(--danger, #c2412d) 40%, var(--line));
+}
+.tool-step.is-err .tool-ico {
+  color: var(--danger, #c2412d);
+}
+.tool-body {
+  padding: 0.2rem 0.75rem 0.7rem 2.2rem;
+  display: grid;
+  gap: 0.55rem;
+  color: var(--ink-2);
+}
+.tool-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.9rem;
+  margin: 0;
+}
+.tool-facts dt {
+  color: var(--ink-3);
+}
+.tool-facts dd {
+  margin: 0;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tool-sec-h {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.2rem;
+}
+.tool-pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-pre.is-cmd {
+  color: var(--accent-ink);
+}
+.tool-pre.is-err {
+  color: var(--danger, #c2412d);
+}
+.tool-empty {
+  margin: 0;
+  color: var(--ink-3);
+}
+@media (max-width: 640px) {
+  .tool-body {
+    padding-left: 0.75rem;
+  }
 }
 
 /* ---------- Sign-in gate ---------- */
