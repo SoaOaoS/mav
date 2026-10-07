@@ -5038,6 +5038,15 @@ $("#updatePill").addEventListener("click", () => openUpdate());
 function openUpdate() {
   const v = state.version || {};
   if (v.updating) return followUpdate();
+  if (v.runtime === "docker")
+    return modal.open({
+      title: `Update to ${v.latest}`,
+      body: `<p>You have <strong>${esc(v.installed)}</strong>. Mav runs in Docker: update it from the machine that runs it, in the folder with <code>docker-compose.yml</code>. Your chats, memory, routines and settings are kept.</p>
+        <pre class="code-block"><code>docker compose pull && docker compose up -d</code></pre>
+        ${v.notes ? `<h3 class="sub">What's new</h3><div class="bubble release-notes">${mdToHtml(v.notes)}</div>` : ""}
+        ${v.release_url ? `<small><a href="${esc(v.release_url)}" target="_blank" rel="noopener">Release page ↗</a></small>` : ""}`,
+      actions: [{ label: "OK", kind: "btn-primary" }],
+    });
   modal.open({
     title: `Update to ${v.latest}`,
     body: `<p>You have <strong>${esc(v.installed)}</strong>. The update keeps your chats, memory, routines and settings; Mav is unavailable for a minute or two while it installs.</p>

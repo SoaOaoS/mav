@@ -367,8 +367,22 @@ def _run(cmd: list[str], timeout: float = 20) -> tuple[int, str]:
         return 1, str(exc)
 
 
+# In Docker (docker/entrypoint.sh) there is no systemd: the engine and worker
+# containers restart their process when the web app touches a flag file.
+RUNTIME = os.environ.get("MAV_RUNTIME", "").strip().lower()
+IN_DOCKER = RUNTIME == "docker"
+RESTART_FLAG = Path(os.environ.get("MAV_RESTART_FLAG", "/data/run/engine.restart"))
+ENGINE_STARTED = Path(os.environ.get("MAV_ENGINE_STARTED", "/data/run/engine.started"))
+DOCKER_UPDATE_HINT = (
+    "Mav runs in Docker: update it from the machine with "
+    "`docker compose pull && docker compose up -d`."
+)
+
+
 def server_unit() -> str:
     """Name of the systemd unit running the opencode engine."""
+    if IN_DOCKER:
+        return "engine (Docker)"
     if SERVER_UNIT_EXPLICIT:
         return SERVER_UNIT_EXPLICIT
     for u in DEFAULT_SERVER_UNITS:
@@ -386,7 +400,7 @@ def _unit_active(unit: str) -> bool:
 def engine_status() -> dict:
     """Live status of the agent engine + the services around it."""
     unit = server_unit()
-    active = _unit_active(unit)
+    active = True if IN_DOCKER else _unit_active(unit)
     health = {}
     try:
         health = http_json(f"{OPENCODE_URL}/global/health", timeout=4) or {}
@@ -413,6 +427,7 @@ def engine_status() -> dict:
         "checked": int(time.time()),
         "pending": pending_changes(),
         "mav_version": installed_version(),
+        "runtime": RUNTIME or "systemd",
     }
 
 
@@ -776,6 +791,15 @@ def restart_engine() -> dict:
 
     `systemctl` alone can take minutes because the bot holds a long-lived SSE
     connection, so the graceful stop waits. `--no-block` returns at once."""
+    if IN_DOCKER:
+        try:
+            RESTART_FLAG.parent.mkdir(parents=True, exist_ok=True)
+            RESTART_FLAG.write_text(str(time.time()))
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc), "unit": server_unit()}
+        _agents_cache["at"] = 0.0
+        _pending.clear()
+        return {"ok": True, "restarting": True, "unit": server_unit()}
     unit = server_unit()
     code, out = _run(["systemctl", "restart", "--no-block", unit], timeout=15)
     if code != 0:
@@ -802,6 +826,11 @@ def mark_pending(label: str) -> None:
 
 def engine_started_at() -> float | None:
     """Unix time the engine service last (re)started, or None."""
+    if IN_DOCKER:
+        try:
+            return float(ENGINE_STARTED.read_text().strip())
+        except Exception:  # noqa: BLE001
+            return None
     code, out = _run(
         ["systemctl", "show", server_unit(), "-p", "ActiveEnterTimestampMonotonic", "--value"], timeout=6
     )
@@ -906,10 +935,13 @@ def version_info(force: bool = False) -> dict:
         "release_url": (rel or {}).get("url", ""),
         "notes": (rel or {}).get("notes", "") if available else "",
         "updating": update_running(),
+        "runtime": RUNTIME or "systemd",
     }
 
 
 def update_running() -> bool:
+    if IN_DOCKER:
+        return False
     code, out = _run(["systemctl", "is-active", "mav-update"], timeout=6)
     return out.strip() in ("active", "activating")
 
@@ -917,6 +949,8 @@ def update_running() -> bool:
 def start_update() -> dict:
     """Run `mav update` outside the web app's own service: the update restarts
     the web app, and must survive that."""
+    if IN_DOCKER:
+        return {"ok": False, "docker": True, "error": DOCKER_UPDATE_HINT}
     if update_running():
         return {"ok": True, "already": True}
     if not Path(MAV_CLI).exists():

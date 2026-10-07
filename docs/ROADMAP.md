@@ -12,12 +12,14 @@ Effort: **S** ≈ a few days · **M** ≈ 1–2 weeks · **L** ≈ a bigger proj
 
 ---
 
-## Phase 1 — Remove adoption blockers (weeks 1–2)
+## Phase 1 — Remove adoption blockers (weeks 1–2) · ✅ done
 
 The product is feature-complete. What stops new users today is getting it
 running, and seeing its value in the first minutes.
 
-### 1.1 Docker Compose install · M
+### 1.1 Docker Compose install · M · ✅ done
+
+> **Shipped:** `Dockerfile`, `docker-compose.yml`, `.env.example` and `docker/entrypoint.sh`. The image is built and pushed to GHCR with each release, and CI runs the whole stack. Restarts from the web app go through a flag file the engine and worker containers watch. The update button explains `docker compose pull`.
 
 **Why.** Self-hosters expect `docker compose up`. Today the installer targets
 Debian/Ubuntu and Arch with systemd. Docker only runs Postgres.
@@ -42,7 +44,9 @@ Debian/Ubuntu and Arch with systemd. Docker only runs Postgres.
 - CI builds the images and runs the test suite against the Compose stack.
 - README: "Install with Docker" comes first, the one-line installer second.
 
-### 1.2 Mav can send you files in the chat · S
+### 1.2 Mav can send you files in the chat · S · ✅ done
+
+> **Shipped:** helpers can write in `mav-files/` only (`permission.edit`), and their answers carry `[[file:name]]` download cards. Shared files are also archived in the media index.
 
 **Why.** Users want Mav to hand them documents: a CSV budget, a Markdown
 plan, a letter. The app already renders `[[file:name]]` as a download card,
@@ -64,7 +68,9 @@ write files, and don't know about the card.
 - A test proves that a path outside the allowed folders is refused, so a
   helper can't write or expose anything elsewhere.
 
-### 1.3 First-run onboarding · M
+### 1.3 First-run onboarding · M · ✅ done
+
+> **Shipped:** a 3-step welcome (model, about you, routines) that ends on *Brief me now*. Routine templates are now in English, with French kept. Browser test: `tests/test_e2e_onboarding.py`.
 
 **Why.** A fresh install opens on an empty chat. People should feel Mav's
 value within 5 minutes.
@@ -85,7 +91,9 @@ value within 5 minutes.
   under 5 minutes, without opening Settings.
 - A Playwright test walks through the flow against the fake engine.
 
-### 1.4 Public live demo · S
+### 1.4 Public live demo · S · ✅ done
+
+> **Shipped:** <https://soaoaos.github.io/mav/demo/>, a copy built by `scripts/build-demo.sh` and checked by CI.
 
 **Why.** Let people try Mav before they install it.
 

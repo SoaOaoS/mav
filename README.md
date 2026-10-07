@@ -98,8 +98,34 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 
 ## Install
 
-On a Linux machine with systemd — Debian, Ubuntu, Arch (Omarchy, Manjaro…)
-or Fedora — a home server, a mini PC, a VPS:
+### With Docker (any machine with Docker Compose)
+
+```bash
+git clone https://github.com/SoaOaoS/mav.git && cd mav
+cp .env.example .env          # optional: port, database password, time zone, model
+docker compose up -d
+```
+
+Open `http://<your machine>:8787`. You choose a password, then a short
+welcome connects your model and sets up your first routines. Everything Mav
+keeps lives in two volumes (`mav-data`, `pgdata`) and survives restarts and
+updates.
+
+- **Update:** `docker compose pull && docker compose up -d`.
+- **Logs:** `docker compose logs -f`.
+- **Ollama on the same machine:** use `http://host.docker.internal:11434/v1`
+  as its address.
+- **Images:** published for every release at `ghcr.io/soaoaos/mav` (amd64
+  and arm64, so a Raspberry Pi 4/5 works too). Without a published image,
+  Compose builds one locally.
+- **From your phone:** push notifications need HTTPS. Put Mav behind your
+  usual reverse proxy (Caddy, Traefik, Nginx Proxy Manager), or reach it
+  through Tailscale.
+
+### With the installer (Linux with systemd)
+
+On Debian, Ubuntu, Arch (Omarchy, Manjaro…) or Fedora — a home server, a mini
+PC, a VPS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash
@@ -224,6 +250,7 @@ machine: this is GitHub's own download count. CI
 mav/
 ├── get.sh              # "curl | bash" bootstrap
 ├── install.sh          # the setup wizard
+├── docker-compose.yml  # the Docker install (Dockerfile, docker/entrypoint.sh)
 ├── agents/             # the everyday helpers (Assistant, Researcher, …)
 ├── bot/                # mav-worker: routines, watching, memory, notifications
 ├── dashboard/          # the web app (front-end + server/)

@@ -23,7 +23,7 @@ jobs:
       - name: Shell scripts (shellcheck)
         run: |
           shellcheck -S warning install.sh get.sh run-opencode.sh scripts/mav \
-            scripts/next-version.sh scripts/agent-hashes.sh scripts/build-demo.sh dashboard/tools/make_certs.sh tests/*.sh
+            scripts/next-version.sh scripts/agent-hashes.sh scripts/build-demo.sh docker/entrypoint.sh dashboard/tools/make_certs.sh tests/*.sh
 
       - name: Python (compile)
         run: python3 -m py_compile bot/*.py dashboard/server/*.py dashboard/tools/*.py
@@ -57,3 +57,43 @@ jobs:
           bash tests/test_install.sh
           bash tests/test_postgres.sh
           python3 -m unittest discover -s tests -v
+
+  # The Docker install, end to end: build the image, start the whole stack
+  # (Postgres, engine, web, worker) and check that it answers.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the stack
+        run: |
+          cp .env.example .env
+          docker compose build
+          docker compose up -d --wait --wait-timeout 240
+
+      - name: Smoke test
+        run: |
+          set -x
+          curl -fsS http://127.0.0.1:8787/api/health
+          curl -fsS http://127.0.0.1:8787/api/auth/state | grep -q setup_needed
+          curl -fsS http://127.0.0.1:8787/ | grep -q '<title>Mav</title>'
+          docker compose exec -T web python3 -c "import urllib.request; print(urllib.request.urlopen('http://engine:4096/global/health').read())"
+          docker compose exec -T web test -f /data/home/.config/opencode/agent/assistant.md
+          docker compose exec -T web test -d /data/home/workspace/mav-files
+          docker compose ps
+          docker compose logs worker | grep -q "worker ready"
+
+      - name: Restart from the web app reaches the engine
+        run: |
+          before="$(docker compose exec -T engine cat /data/run/engine.started)"
+          docker compose exec -T web python3 -c "import pathlib, time; pathlib.Path('/data/run/engine.restart').write_text(str(time.time()))"
+          for i in $(seq 30); do
+            sleep 2
+            now="$(docker compose exec -T engine cat /data/run/engine.started)"
+            [ "$now" != "$before" ] && break
+          done
+          [ "$now" != "$before" ] || { echo "::error::the engine did not restart"; exit 1; }
+
+      - name: Logs
+        if: always()
+        run: docker compose logs --no-color | tail -n 200
