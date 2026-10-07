@@ -152,6 +152,11 @@ class AuthHttpTest(unittest.TestCase):
         st, _, cleared = self.req("POST", "/api/auth/logout", cookie=cookie3)
         self.assertEqual((st, cleared), (200, "mav_session="))
 
+    def test_static_files_stay_in_their_folder(self):
+        for path in ("/../server/mav_auth.py", "/%2e%2e/server/mav_auth.py", "/certs/server.key", "/server/mav_auth.py", "/README.md", "/.gitignore"):
+            self.assertEqual(self.req("GET", path)[0], 404, path)
+        self.assertEqual(self.req("GET", "/manifest.webmanifest")[0], 200)
+
     def test_no_wildcard_cors(self):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         c.request("GET", "/api/health")

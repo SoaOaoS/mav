@@ -71,7 +71,7 @@ def archive_media(src: Path, name: str, mime: str, source: str = "", size: int =
         MEDIA_DIR.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", name or "fichier")[:120] or "fichier"
         media_id = f"{int(time.time() * 1000)}-{safe}"
-        dest = MEDIA_DIR / media_id
+        dest = mav_core.inside(MEDIA_DIR, media_id)
         if Path(src).resolve() != dest.resolve():
             dest.write_bytes(Path(src).read_bytes())
         try:

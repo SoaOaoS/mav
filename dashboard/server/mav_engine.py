@@ -864,8 +864,8 @@ def write_agent_file(name: str, text: str) -> dict:
     if not isinstance(text, str):
         return {"ok": False, "error": "text required"}
     d = agents_dir()
-    p = d / f"{name}.md"
     try:
+        p = mav_core.inside(d, f"{name}.md")
         d.mkdir(parents=True, exist_ok=True)
         if p.is_file():
             try:
@@ -887,8 +887,8 @@ def write_agent_file(name: str, text: str) -> dict:
 def delete_agent_file(name: str) -> dict:
     if not AGENT_NAME_RE.match(name or ""):
         return {"ok": False, "error": "invalid name"}
-    p = agents_dir() / f"{name}.md"
     try:
+        p = mav_core.inside(agents_dir(), f"{name}.md")
         if p.is_file():
             p.unlink()
         _agents_cache["at"] = 0.0

@@ -276,6 +276,16 @@ def pg_exec(sql: str, params: tuple = ()) -> None:
         conn.close()
 
 
+def inside(root: Path, name: str) -> Path:
+    """`root/name`, refusing any name that would land outside `root` (a
+    "..", an absolute path, a symlink pointing away)."""
+    base = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(base, name))
+    if not full.startswith(base + os.sep):
+        raise ValueError("path outside its folder")
+    return Path(full)
+
+
 def read_json(path: Path, default):
     try:
         return json.loads(Path(path).read_text())
@@ -408,4 +418,4 @@ def _chown_user(path: Path) -> None:
         pass
 
 
-__all__ = ['ACTIONS', 'ATTACH_DIR', 'AUTH', 'Actions', 'BIND', 'BOT_DIR', 'CADENCES', 'CADENCE_DAYS', 'CATALOG_FILE', 'CATEGORIES', 'DEFAULT_AGENT', 'DEFAULT_CHAT_ID', 'DEFAULT_MODEL', 'DOCKER_UPDATE_HINT', 'DRAFTS', 'Drafts', 'ENGINE_STARTED', 'ENV_FILES', 'ENV_SERVER', 'INSTALL_LOG', 'INTERESTS', 'IN_DOCKER', 'Interests', 'JOBS_FILE', 'JOBS_STATE', 'MAV_CLI', 'MAV_REPO', 'MEMORY', 'MEMORY_ENABLED', 'MEMORY_FILE', 'MEMORY_TOP', 'Memory', 'OPENCODE_URL', 'PG_DSN', 'POLARITIES', 'PORT', 'PRIMARY_AGENTS', 'PUSH_FILE', 'RAG', 'RESTART_FLAG', 'ROUTINE_TEMPLATES', 'RUNTIME', 'SESSIONS_META', 'STATIC_DIR', 'TLS_CERT', 'TLS_KEY', 'TLS_PORT', 'USAGE', 'VERSION_FILE', 'WORKER_UNIT', '_RAG', '_chown_user', '_config_dir', '_json_default', '_opencode_config_path', '_p', '_run', 'agents_path', 'http_json', 'mav_auth', 'mav_backup', 'mav_provider', 'ocbriefing', 'occalendar', 'occhannels', 'ocroutine_nl', 'ocroutine_templates', 'ocselfinit', 'ocusage', 'pg_exec', 'pg_query', 'read_json', 'write_json']
+__all__ = ['inside', 'ACTIONS', 'ATTACH_DIR', 'AUTH', 'Actions', 'BIND', 'BOT_DIR', 'CADENCES', 'CADENCE_DAYS', 'CATALOG_FILE', 'CATEGORIES', 'DEFAULT_AGENT', 'DEFAULT_CHAT_ID', 'DEFAULT_MODEL', 'DOCKER_UPDATE_HINT', 'DRAFTS', 'Drafts', 'ENGINE_STARTED', 'ENV_FILES', 'ENV_SERVER', 'INSTALL_LOG', 'INTERESTS', 'IN_DOCKER', 'Interests', 'JOBS_FILE', 'JOBS_STATE', 'MAV_CLI', 'MAV_REPO', 'MEMORY', 'MEMORY_ENABLED', 'MEMORY_FILE', 'MEMORY_TOP', 'Memory', 'OPENCODE_URL', 'PG_DSN', 'POLARITIES', 'PORT', 'PRIMARY_AGENTS', 'PUSH_FILE', 'RAG', 'RESTART_FLAG', 'ROUTINE_TEMPLATES', 'RUNTIME', 'SESSIONS_META', 'STATIC_DIR', 'TLS_CERT', 'TLS_KEY', 'TLS_PORT', 'USAGE', 'VERSION_FILE', 'WORKER_UNIT', '_RAG', '_chown_user', '_config_dir', '_json_default', '_opencode_config_path', '_p', '_run', 'agents_path', 'http_json', 'mav_auth', 'mav_backup', 'mav_provider', 'ocbriefing', 'occalendar', 'occhannels', 'ocroutine_nl', 'ocroutine_templates', 'ocselfinit', 'ocusage', 'pg_exec', 'pg_query', 'read_json', 'write_json']

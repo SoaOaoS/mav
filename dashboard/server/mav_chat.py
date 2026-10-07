@@ -543,7 +543,7 @@ def remember_exchange(prompt: str, answer: str, sid: str, agent: str) -> None:
 def save_upload(name: str, data_b64: str, mime: str = "") -> dict:
     mav_core.ATTACH_DIR.mkdir(parents=True, exist_ok=True)
     safe = re.sub(r"[^A-Za-z0-9._-]", "_", name or "fichier")[:120] or "fichier"
-    dest = mav_core.ATTACH_DIR / f"{int(time.time())}-{safe}"
+    dest = mav_core.inside(mav_core.ATTACH_DIR, f"{int(time.time())}-{safe}")
     dest.write_bytes(base64.b64decode(data_b64))
     mt = mime or mimetypes.guess_type(safe)[0] or "application/octet-stream"
     if mt == "application/octet-stream":

@@ -718,30 +718,38 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             return self._send(500, {"error": str(exc)})
 
+    # What the web app is made of; nothing else in its folder is served
+    # (the server's code, tools, keys, dotfiles).
+    STATIC_TYPES = {
+        ".html": "text/html; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".js": "application/javascript; charset=utf-8",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".webmanifest": "application/manifest+json",
+        ".json": "application/json",
+        ".ico": "image/x-icon",
+        ".crt": "application/x-x509-ca-cert",
+        ".cer": "application/x-x509-ca-cert",
+        ".pem": "application/x-pem-file",
+    }
+
     def _static(self, path: str):
         if path == "/":
             path = "/index.html"
-        rel = path.lstrip("/").replace("..", "")
-        if rel.endswith((".key", ".csr", ".srl")):
+        rel = urllib.parse.unquote(path).lstrip("/")
+        parts = rel.split("/")
+        if parts[0] in ("server", "tools") or any(x.startswith(".") for x in parts):
             return self._send(404, "not found", "text/plain")
-        if rel.startswith("certs/") and rel not in ("certs/ca.crt", "certs/ca.cer"):
+        if parts[0] == "certs" and rel not in ("certs/ca.crt", "certs/ca.cer"):
             return self._send(404, "not found", "text/plain")
-        target = (mav_core.STATIC_DIR / rel).resolve()
-        if not str(target).startswith(str(mav_core.STATIC_DIR.resolve())) or not target.is_file():
+        try:
+            target = mav_core.inside(mav_core.STATIC_DIR, rel)
+        except ValueError:
             return self._send(404, "not found", "text/plain")
-        ctype = {
-            ".html": "text/html; charset=utf-8",
-            ".css": "text/css; charset=utf-8",
-            ".js": "application/javascript; charset=utf-8",
-            ".svg": "image/svg+xml",
-            ".png": "image/png",
-            ".webmanifest": "application/manifest+json",
-            ".json": "application/json",
-            ".ico": "image/x-icon",
-            ".crt": "application/x-x509-ca-cert",
-            ".cer": "application/x-x509-ca-cert",
-            ".pem": "application/x-pem-file",
-        }.get(target.suffix, "application/octet-stream")
+        ctype = self.STATIC_TYPES.get(target.suffix)
+        if not ctype or not target.is_file():
+            return self._send(404, "not found", "text/plain")
         return self._send(200, target.read_bytes(), ctype)
 
 
@@ -758,6 +766,7 @@ def main():
             tsrv = ThreadedHTTPServer((mav_core.BIND, mav_core.TLS_PORT), Handler)
             tsrv.is_tls = True  # session cookies get the Secure flag
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
             ctx.load_cert_chain(mav_core.TLS_CERT, mav_core.TLS_KEY)
             tsrv.socket = ctx.wrap_socket(tsrv.socket, server_side=True)
             threading.Thread(target=tsrv.serve_forever, daemon=True).start()
