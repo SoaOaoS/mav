@@ -2501,6 +2501,10 @@ h6.md-h {
   font-size: 0.84rem;
   color: var(--ink-3);
 }
+a.btn,
+a.btn:hover {
+  text-decoration: none;
+}
 /* Other notification channels (ntfy, Gotify, Discord, Slack). */
 .chan-list {
   display: flex;

@@ -883,6 +883,17 @@
                 <div class="chan-list" id="chanList" hidden></div>
                 <div class="setting-row">
                   <div>
+                    <strong>Backup</strong>
+                    <span>Memory, routines, chats, helpers and settings in one file. Restoring replaces everything.</span>
+                  </div>
+                  <div class="row">
+                    <a class="btn btn-ghost btn-sm" id="backupDownload" href="/api/backup" download>Download</a>
+                    <button class="btn btn-ghost btn-sm" id="backupRestore">Restore…</button>
+                    <input type="file" id="backupFile" accept=".gz,.tgz,application/gzip" hidden />
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div>
                     <strong>How proactive is Mav?</strong>
                     <span
                       >Quiet only interrupts for what's critical. Chatty also

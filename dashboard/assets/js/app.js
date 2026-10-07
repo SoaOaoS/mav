@@ -5448,6 +5448,60 @@ $("#pushTest").addEventListener("click", async () => {
   }
 });
 
+/* Backup and restore (dashboard/server/mav_backup.py). A restore asks for
+   the password again: it rewrites keys, helpers and the password itself. */
+$("#backupDownload").addEventListener("click", (e) => {
+  if (!LIVE) {
+    e.preventDefault();
+    needLive();
+  } else toast("Preparing your backup…");
+});
+$("#backupRestore").addEventListener("click", () => {
+  if (needLive()) $("#backupFile").click();
+});
+$("#backupFile").addEventListener("change", () => {
+  const file = $("#backupFile").files[0];
+  $("#backupFile").value = "";
+  if (!file) return;
+  const body = document.createElement("div");
+  body.innerHTML = `<p>Everything in Mav will be replaced by <strong>${esc(file.name)}</strong>:
+      memory, routines, chats, helpers, settings and keys. A copy of the current state is kept on the server first.</p>
+    <div class="field"><label>Your password</label><input type="password" id="restorePw" autocomplete="current-password"></div>`;
+  modal.open({
+    title: "Restore this backup?",
+    size: "small",
+    body,
+    actions: [
+      { label: "Cancel" },
+      {
+        label: "Restore",
+        kind: "btn-danger",
+        run: async (btn) => {
+          btn.disabled = true;
+          btn.textContent = "Restoring…";
+          try {
+            const r = await fetch("/api/backup/restore", {
+              method: "POST",
+              headers: { "Content-Type": "application/gzip", "X-Mav-Password": $("#restorePw").value },
+              body: file,
+            });
+            const res = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(res.error || `Restore failed (${r.status}).`);
+            const n = Object.values(res.tables || {}).reduce((a, b) => a + b, 0);
+            toast(`Restored: ${res.files} files, ${n} memory entries. Reloading…`);
+            setTimeout(() => location.reload(), 2500);
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = "Restore";
+            toast(err.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+});
+
 /* Other channels: ntfy, Gotify, Discord, Slack (bot/occhannels.py). Secrets
    come back masked; leaving one masked keeps the stored value. */
 const CHAN_FIELDS = {

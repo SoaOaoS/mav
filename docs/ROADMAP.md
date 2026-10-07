@@ -225,7 +225,9 @@ A Playwright suite against the fake engine on every pull request:
   included.
 - Document which models run well locally on that hardware.
 
-### 3.4 Backup and restore in the app · S
+### 3.4 Backup and restore in the app · S · ✅ done
+
+> **Shipped:** `dashboard/server/mav_backup.py`, under Settings → General → Backup. It covers the database (through psycopg2, so Docker and the installer work the same), files and chats. A restore asks for the password again, checks every entry and keeps a safety copy. Tests: `tests/test_backup.py`, with a real Postgres in CI.
 
 The `mav backup` command already exists. Add an in-app screen to download a
 backup and restore one, with a confirmation step.
