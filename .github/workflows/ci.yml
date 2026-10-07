@@ -34,6 +34,13 @@ jobs:
       - name: Python dependencies (worker)
         run: python -m pip install -q -r bot/requirements.txt
 
+      # The browser tests (tests/test_e2e_*.py) drive the real web app in
+      # Chromium against the fake engine.
+      - name: Playwright and Chromium
+        run: |
+          python -m pip install -q playwright
+          python -m playwright install --with-deps chromium
+
       - name: Shell scripts (shellcheck)
         run: |
           shellcheck -S warning install.sh get.sh run-opencode.sh scripts/mav \
