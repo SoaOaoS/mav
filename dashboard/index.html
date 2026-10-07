@@ -833,6 +833,13 @@
               <div class="card">
                 <div class="setting-row">
                   <div>
+                    <strong>Welcome setup</strong>
+                    <span>Run the three-step setup again: model, a few facts about you, starter routines.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="obReopen">Open</button>
+                </div>
+                <div class="setting-row">
+                  <div>
                     <strong>Notifications</strong>
                     <span
                       >Routine reports and alerts on this device, even when Mav
@@ -999,6 +1006,80 @@
           <kbd>Esc</kbd>
         </div>
         <div class="palette-results" id="paletteResults"></div>
+      </div>
+    </div>
+
+    <!-- First-run welcome: model → about you → routines → first briefing -->
+    <div class="welcome" id="welcome" hidden>
+      <div class="welcome-card" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+        <header class="welcome-head">
+          <span class="welcome-steps" id="obSteps"></span>
+          <button class="btn btn-ghost btn-sm" id="obSkip">Skip for now</button>
+        </header>
+
+        <section class="ob-step" data-ob="1">
+          <span class="splash-orb welcome-orb" aria-hidden="true"></span>
+          <h2 class="serif" id="obTitle">Welcome to Mav</h2>
+          <p class="ob-lead">Three quick steps and Mav is yours. First, the model it thinks with — local or in the cloud.</p>
+          <div class="ob-ready" id="obModelReady" hidden></div>
+          <div id="obModelForm">
+            <div class="ob-providers" id="obProviders"></div>
+            <div class="field" id="obFBase" hidden>
+              <label for="obBase">Address</label>
+              <input id="obBase" placeholder="https://…/v1" autocomplete="off" />
+            </div>
+            <div class="field" id="obFKey" hidden>
+              <label for="obKey">API key</label>
+              <input id="obKey" type="password" autocomplete="new-password" placeholder="paste your API key" />
+              <small>Kept on your server only.</small>
+            </div>
+            <div class="field" id="obFModel" hidden>
+              <label for="obModel">Model</label>
+              <div class="row">
+                <input id="obModel" list="obModelList" placeholder="model name" autocomplete="off" />
+                <datalist id="obModelList"></datalist>
+                <button class="btn btn-ghost" type="button" id="obTest"><i data-i="plug"></i> Check</button>
+              </div>
+              <small id="obTestResult"></small>
+            </div>
+          </div>
+        </section>
+
+        <section class="ob-step" data-ob="2" hidden>
+          <h2 class="serif">A little about you</h2>
+          <p class="ob-lead">So Mav can tailor the weather, suggestions and briefing. All optional, all editable later in Memory.</p>
+          <div class="ob-grid">
+            <div class="field"><label for="obName">Your first name</label><input id="obName" autocomplete="given-name" placeholder="e.g. Alex" /></div>
+            <div class="field"><label for="obCity">Where you live</label><input id="obCity" autocomplete="address-level2" placeholder="e.g. Toulouse" /></div>
+          </div>
+          <div class="field"><label for="obLang">Mav answers in</label><select id="obLang"></select></div>
+          <div class="field"><label for="obInterests">Things you care about</label><input id="obInterests" placeholder="e.g. running, tech news, Formula 1, cooking" /><small>Separate them with commas. Mav uses them for the "something for you" part of the briefing.</small></div>
+        </section>
+
+        <section class="ob-step" data-ob="3" hidden>
+          <h2 class="serif">What should Mav do for you?</h2>
+          <p class="ob-lead">Pick a few routines to start with. Each one runs on its own and has its own chat. You can change them anytime.</p>
+          <label class="ob-routine is-on" id="obBriefRow">
+            <input type="checkbox" id="obBrief" checked />
+            <span class="ob-ico">☀️</span>
+            <span class="ob-txt"><strong>Daily briefing</strong><span>Weather, what happened, what needs you.</span></span>
+            <input type="time" id="obBriefTime" value="07:30" aria-label="Briefing time" />
+          </label>
+          <div class="ob-routines" id="obRoutines"></div>
+        </section>
+
+        <section class="ob-step" data-ob="4" hidden>
+          <span class="splash-orb welcome-orb" aria-hidden="true"></span>
+          <h2 class="serif">You're all set.</h2>
+          <p class="ob-lead" id="obSummary">Mav is ready.</p>
+        </section>
+
+        <footer class="welcome-foot">
+          <button class="btn btn-ghost" id="obBack">Back</button>
+          <span class="ob-msg" id="obMsg"></span>
+          <button class="btn btn-ghost" id="obAlt" hidden>Start chatting</button>
+          <button class="btn btn-primary" id="obNext">Continue</button>
+        </footer>
       </div>
     </div>
 

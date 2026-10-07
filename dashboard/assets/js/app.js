@@ -987,6 +987,11 @@ $("#suggestions").addEventListener("click", (e) => {
   ta.focus();
 });
 
+/* The language of ready-made content (routine templates): the browser's. */
+function uiLang() {
+  return (navigator.language || "en").slice(0, 2).toLowerCase();
+}
+
 /* ---------- Daily briefing ----------
    "Brief me" runs the briefing routine now and opens its chat, where the
    answer streams in (the run is live server-side, openChat reattaches). */
@@ -2908,7 +2913,7 @@ async function openTemplatePicker() {
   if (!needLive()) return;
   let templates = [];
   try {
-    templates = (await api.get("job-templates")).templates || [];
+    templates = (await api.get(`job-templates?lang=${uiLang()}`)).templates || [];
   } catch (_) {}
   const body = templates.length
     ? `<div class="tpl-grid">${templates
@@ -2944,7 +2949,7 @@ async function openTemplatePicker() {
       return;
     }
     try {
-      const r = await api.post("job/template", { id: b.dataset.tpl });
+      const r = await api.post("job/template", { id: b.dataset.tpl, lang: uiLang() });
       if (!r.job) return toast("Unknown template.", { error: true });
       modal.close();
       editRoutine(r.job);
@@ -5861,6 +5866,239 @@ $("#passwordChange").addEventListener("click", () => {
   });
 });
 
+/* ================================================================
+   First-run welcome: model → about you → routines → first briefing.
+   Shown once on a fresh install (the server says when); reopen it from
+   Settings → General. Every step can be skipped.
+   ================================================================ */
+const OB = { step: 1, presets: [], sel: null, connected: false, templates: [], picked: new Set(), created: [] };
+const OB_STEPS = 4;
+
+async function maybeOnboard() {
+  if (!LIVE) return;
+  try {
+    const o = await api.get("onboarding");
+    if (!o.done) openOnboarding(o);
+  } catch (_) {}
+}
+
+async function openOnboarding(info) {
+  if (!needLive()) return;
+  try {
+    info = info || (await api.get("onboarding"));
+  } catch (_) {
+    info = {};
+  }
+  const langs = info.languages || { en: "English" };
+  const guess = (navigator.language || "en").slice(0, 2).toLowerCase();
+  $("#obLang").innerHTML = Object.entries(langs)
+    .map(([k, v]) => `<option value="${esc(k)}" ${k === guess ? "selected" : ""}>${esc(v)}</option>`)
+    .join("");
+  if (info.briefing && info.briefing.time) $("#obBriefTime").value = info.briefing.time;
+  await obLoadModel();
+  try {
+    OB.templates = ((await api.get(`job-templates?lang=${uiLang()}`)).templates || []).filter(
+      (t) => t.id !== "morning-brief", // the daily briefing covers it
+    );
+  } catch (_) {
+    OB.templates = [];
+  }
+  obRenderRoutines();
+  $("#welcome").hidden = false;
+  document.body.classList.add("has-welcome");
+  hydrateIcons($("#welcome"));
+  obGo(1);
+}
+
+function obClose() {
+  $("#welcome").hidden = true;
+  document.body.classList.remove("has-welcome");
+}
+
+async function obFinish() {
+  try {
+    await api.post("onboarding", { done: true });
+  } catch (_) {}
+  obClose();
+}
+
+function obGo(n) {
+  OB.step = n;
+  $$("#welcome .ob-step").forEach((s) => (s.hidden = Number(s.dataset.ob) !== n));
+  $("#obSteps").innerHTML = Array.from({ length: OB_STEPS }, (_, i) =>
+    `<i class="${i + 1 < n ? "is-done" : i + 1 === n ? "is-on" : ""}"></i>`,
+  ).join("");
+  $("#obBack").hidden = n === 1 || n === OB_STEPS;
+  $("#obSkip").hidden = n === OB_STEPS;
+  $("#obAlt").hidden = n !== OB_STEPS;
+  $("#obMsg").textContent = "";
+  $("#obMsg").className = "ob-msg";
+  $("#obNext").disabled = false;
+  $("#obNext").textContent =
+    n === 1 ? (OB.connected ? "Continue" : "Connect") : n === OB_STEPS ? "Brief me now" : "Continue";
+  const focus = $(`#welcome .ob-step[data-ob="${n}"]`).querySelector("input:not([type=checkbox]):not([type=time]), select");
+  if (focus && n !== 1) setTimeout(() => focus.focus(), 30);
+}
+
+/* Step 1 — model */
+async function obLoadModel() {
+  try {
+    const d = await api.get("config/provider");
+    // A custom endpoint needs more fields: that stays in Settings → Model.
+    OB.presets = (d.presets || []).filter((p) => p.id !== "custom");
+    const c = d.current || {};
+    OB.connected = !!c.configured;
+    OB.sel = OB.sel || c.preset || (OB.presets[0] || {}).id;
+    $("#obModelReady").hidden = !OB.connected;
+    $("#obModelReady").innerHTML = OB.connected
+      ? `${I("check")}<span>Mav is connected to <strong>${esc(c.model || "")}</strong>. You can change it later in Settings.</span>`
+      : "";
+    $("#obModelForm").hidden = OB.connected;
+  } catch (_) {
+    OB.presets = [];
+  }
+  obRenderProviders();
+}
+function obRenderProviders() {
+  $("#obProviders").innerHTML = OB.presets
+    .map(
+      (p) => `<button type="button" class="ob-prov ${p.id === OB.sel ? "is-sel" : ""}" data-obprov="${esc(p.id)}">
+        <strong>${esc(p.label)}</strong><span>${esc(p.hint)}</span></button>`,
+    )
+    .join("");
+  const p = OB.presets.find((x) => x.id === OB.sel);
+  ["#obFBase", "#obFKey", "#obFModel"].forEach((id) => ($(id).hidden = !p));
+  if (!p) return;
+  $("#obFBase").hidden = p.native;
+  $("#obBase").value = p.base || "";
+  $("#obFKey").hidden = p.key === "none";
+  $("#obKey").placeholder = p.key === "optional" ? "optional" : "paste your API key";
+  $("#obModel").value = p.model || "";
+  $("#obTestResult").textContent = "";
+}
+$("#obProviders").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-obprov]");
+  if (!b) return;
+  OB.sel = b.dataset.obprov;
+  obRenderProviders();
+});
+function obProviderPayload() {
+  return {
+    provider: OB.sel,
+    base_url: $("#obFBase").hidden ? "" : $("#obBase").value.trim(),
+    api_key: $("#obKey").value.trim(),
+    model: $("#obModel").value.trim(),
+  };
+}
+$("#obTest").addEventListener("click", async () => {
+  const out = $("#obTestResult");
+  out.className = "";
+  out.textContent = "Checking…";
+  try {
+    const r = await api.post("config/provider/test", obProviderPayload());
+    if (r.ok) {
+      $("#obModelList").innerHTML = r.models.map((m) => `<option value="${esc(m)}">`).join("");
+      if (!$("#obModel").value && r.models.length) $("#obModel").value = r.models[0];
+      out.className = "is-ok";
+      out.textContent = `Connected — ${r.models.length} model${r.models.length === 1 ? "" : "s"} available.`;
+    } else {
+      out.className = "is-err";
+      out.textContent = r.error || "Connection failed.";
+    }
+  } catch (e) {
+    out.className = "is-err";
+    out.textContent = e.message;
+  }
+});
+
+/* Step 3 — routines */
+function obRenderRoutines() {
+  $("#obRoutines").innerHTML = OB.templates
+    .map(
+      (t) => `<label class="ob-routine ${OB.picked.has(t.id) ? "is-on" : ""}">
+        <input type="checkbox" data-obtpl="${esc(t.id)}" ${OB.picked.has(t.id) ? "checked" : ""} />
+        <span class="ob-ico">${esc(t.icon || "⚡")}</span>
+        <span class="ob-txt"><strong>${esc(t.label)}</strong><span>${esc(t.description || "")}</span></span>
+      </label>`,
+    )
+    .join("");
+}
+$("#welcome").addEventListener("change", (e) => {
+  const cb = e.target.closest('input[type="checkbox"]');
+  if (!cb) return;
+  if (cb.dataset.obtpl) cb.checked ? OB.picked.add(cb.dataset.obtpl) : OB.picked.delete(cb.dataset.obtpl);
+  cb.closest(".ob-routine").classList.toggle("is-on", cb.checked);
+});
+
+/* Navigation */
+async function obNext() {
+  const btn = $("#obNext");
+  const msg = $("#obMsg");
+  msg.textContent = "";
+  btn.disabled = true;
+  try {
+    if (OB.step === 1 && !OB.connected) {
+      const p = obProviderPayload();
+      if (!p.provider) throw new Error("Pick a provider.");
+      if (!p.model) throw new Error("Choose a model (Check lists them).");
+      msg.textContent = "Connecting…";
+      const r = await api.post("config/provider", p);
+      if (!r.ok) throw new Error(r.error || "Could not save the model.");
+      if (r.restart && r.restart.ok) await waitForAssistant("Applying…");
+      OB.connected = true;
+      refreshStatus();
+    } else if (OB.step === 2) {
+      OB.lang = $("#obLang").value;
+      try {
+        OB.templates = ((await api.get(`job-templates?lang=${OB.lang}`)).templates || []).filter(
+          (t) => t.id !== "morning-brief",
+        );
+        obRenderRoutines();
+      } catch (_) {}
+      const body = {
+        name: $("#obName").value,
+        city: $("#obCity").value,
+        language: $("#obLang").value,
+        interests: $("#obInterests").value,
+      };
+      if (body.name.trim() || body.city.trim() || body.interests.trim() || body.language !== "en")
+        await api.post("onboarding/profile", body);
+    } else if (OB.step === 3) {
+      const r = await api.post("onboarding/routines", {
+        templates: [...OB.picked],
+        language: $("#obLang").value,
+        briefing: { enabled: $("#obBrief").checked, time: $("#obBriefTime").value },
+      });
+      OB.created = r.created || [];
+      const n = OB.created.length + ($("#obBrief").checked ? 1 : 0);
+      $("#obSummary").textContent = n
+        ? `${n} routine${n > 1 ? "s" : ""} set up${$("#obBrief").checked ? `, including your briefing at ${$("#obBriefTime").value}` : ""}. Want your first briefing right now?`
+        : "Mav is ready. Ask it anything, or set up routines later from the Routines page.";
+      $("#obNext").hidden = !$("#obBrief").checked;
+      loadRoutines();
+      loadBriefing();
+    } else if (OB.step === OB_STEPS) {
+      await obFinish();
+      return briefMe();
+    }
+    obGo(OB.step + 1);
+    if (OB.step === OB_STEPS) $("#obNext").hidden = !$("#obBrief").checked;
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.className = "ob-msg is-err";
+  } finally {
+    btn.disabled = false;
+  }
+}
+$("#obNext").addEventListener("click", obNext);
+$("#obBack").addEventListener("click", () => obGo(Math.max(1, OB.step - 1)));
+$("#obSkip").addEventListener("click", obFinish);
+$("#obAlt").addEventListener("click", async () => {
+  await obFinish();
+  newChat();
+});
+$("#obReopen").addEventListener("click", () => openOnboarding());
+
 async function boot() {
   hydrateIcons();
   // The splash only stays for the real first load; a safety net dismisses it
@@ -5899,6 +6137,7 @@ async function boot() {
   ]);
   route();
   if (!state.chat.id) renderThread();
+  maybeOnboard();
   const notif = new URLSearchParams(location.search).get("notif");
   if (notif) {
     history.replaceState(null, "", location.pathname + location.hash);

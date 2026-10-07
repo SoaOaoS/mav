@@ -20,6 +20,7 @@ import shutil
 import sys
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1477,16 +1478,18 @@ def save_job(payload: dict) -> dict:
     return {"ok": True, "job": job}
 
 
-def job_templates() -> dict:
+def job_templates(lang: str = "en") -> dict:
     """Ready-made routines for the dashboard's two-click creation."""
-    return {"templates": ROUTINE_TEMPLATES}
+    if not ocroutine_templates:
+        return {"templates": []}
+    return {"templates": [ocroutine_templates.localized(t, lang) for t in ROUTINE_TEMPLATES]}
 
 
-def template_to_job(template_id: str, *, name: str = "") -> dict:
+def template_to_job(template_id: str, *, name: str = "", lang: str = "en") -> dict:
     """Expand a template into a concrete job (not saved here)."""
     if not ocroutine_templates:
         return {"ok": False, "error": "Templates unavailable."}
-    tpl = ocroutine_templates.get(template_id)
+    tpl = ocroutine_templates.get(template_id, lang)
     if not tpl:
         return {"ok": False, "error": "Unknown template."}
     when = dict(tpl.get("when") or {})
@@ -1670,6 +1673,108 @@ def briefing_context() -> str:
 def briefing_job() -> dict | None:
     jobs = read_json(JOBS_FILE, [])
     return next((j for j in jobs if isinstance(j, dict) and j.get("kind") == "briefing"), None)
+
+
+# --------------------------------------------------------------- onboarding
+# A 3-step welcome on the first visit: connect a model, a few facts about
+# you, a couple of routines — then a first briefing. Existing installs (with
+# routines or memory already) are never asked.
+ONBOARDING_FILE = BOT_DIR / "onboarding.json"
+LANGUAGES = {"en": "English", "fr": "French", "es": "Spanish", "de": "German",
+             "it": "Italian", "pt": "Portuguese", "nl": "Dutch"}
+
+
+def _has_history() -> bool:
+    jobs = read_json(JOBS_FILE, [])
+    if isinstance(jobs, list) and any(isinstance(j, dict) and j.get("kind") != "briefing" for j in jobs):
+        return True
+    try:
+        return pg_query("select count(*) c from facts")[0]["c"] > 0
+    except Exception:
+        return False
+
+
+def get_onboarding() -> dict:
+    data = read_json(ONBOARDING_FILE, {})
+    if not isinstance(data, dict):
+        data = {}
+    done = data.get("done")
+    if done is None:
+        done = _has_history()
+    return {"done": bool(done), "languages": LANGUAGES, "briefing": get_briefing()}
+
+
+def set_onboarding(done: bool) -> dict:
+    write_json(ONBOARDING_FILE, {"done": bool(done), "ts": int(time.time())})
+    _chown_user(ONBOARDING_FILE)
+    return {"ok": True, "done": bool(done)}
+
+
+def onboarding_profile(payload: dict) -> dict:
+    """Turn the "About you" step into memory facts and interests."""
+    name = str(payload.get("name") or "").strip()[:60]
+    city = str(payload.get("city") or "").strip()[:80]
+    lang = str(payload.get("language") or "").strip().lower()
+    raw = payload.get("interests") or []
+    if isinstance(raw, str):
+        raw = re.split(r"[,;\n]+", raw)
+    interests = [str(i).strip()[:60] for i in raw if str(i).strip()][:12]
+    facts = []
+    if name:
+        facts.append(f"Their name is {name}.")
+    if city:
+        facts.append(f"Lives in {city} (use it for the weather and local suggestions).")
+    if lang in LANGUAGES:
+        facts.append(f"Prefers answers in {LANGUAGES[lang]}.")
+    saved = 0
+    for f in facts:
+        try:
+            if memory_action("fact/add", {"fact": f}).get("ok"):
+                saved += 1
+        except Exception:
+            pass
+    added = 0
+    for label in interests:
+        try:
+            if add_interest({"label": label}).get("ok"):
+                added += 1
+        except Exception:
+            pass
+    return {"ok": True, "facts": saved, "interests": added}
+
+
+def _job_name(label: str) -> str:
+    """A routine name the scheduler accepts, from any template label."""
+    ascii_ = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode()
+    name = re.sub(r"[^A-Za-z0-9 _.-]", "", ascii_).strip()[:61] or "Routine"
+    return name if name[0].isalnum() else "Routine " + name
+
+
+def onboarding_routines(payload: dict) -> dict:
+    """Create the routines picked in the welcome flow (skipping duplicates)."""
+    ids = [str(i) for i in (payload.get("templates") or []) if str(i)][:8]
+    existing = {j.get("name") for j in read_json(JOBS_FILE, []) if isinstance(j, dict)}
+    created, errors = [], []
+    for tid in ids:
+        res = template_to_job(tid, lang=str(payload.get("language") or "en"))
+        if not res.get("ok"):
+            errors.append(res.get("error") or tid)
+            continue
+        job = res["job"]
+        job["name"] = _job_name(job["name"])
+        if job["name"] in existing:
+            continue
+        saved = save_job(job)
+        if saved.get("ok"):
+            created.append(job["name"])
+            existing.add(job["name"])
+        else:
+            errors.append(saved.get("error") or tid)
+    brief = payload.get("briefing")
+    briefing = None
+    if isinstance(brief, dict):
+        briefing = set_briefing(bool(brief.get("enabled")), str(brief.get("time") or ""))
+    return {"ok": not errors, "created": created, "errors": errors, "briefing": briefing}
 
 
 def get_briefing() -> dict:
@@ -4283,6 +4388,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/briefing":
                 return self._send(200, get_briefing())
+            if path == "/api/onboarding":
+                return self._send(200, get_onboarding())
             if path == "/api/usage":
                 if USAGE is None:
                     return self._send(200, {"available": False})
@@ -4292,7 +4399,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/jobs":
                 return self._send(200, get_jobs())
             if path == "/api/job-templates":
-                return self._send(200, job_templates())
+                return self._send(200, job_templates(p.get("lang", "en")))
             if path == "/api/job-results":
                 return self._send(200, get_job_results())
             if path == "/api/proactivity":
@@ -4499,6 +4606,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/api/auth/"):
                 return self._auth_post(path, payload)
+            if path == "/api/onboarding":
+                return self._send(200, set_onboarding(bool(payload.get("done", True))))
+            if path == "/api/onboarding/profile":
+                return self._send(200, onboarding_profile(payload))
+            if path == "/api/onboarding/routines":
+                res = onboarding_routines(payload)
+                return self._send(200 if res.get("created") or res.get("ok") else 400, res)
             if path == "/api/briefing":
                 return self._send(200, set_briefing(bool(payload.get("enabled")),
                                                     str(payload.get("time") or "")))
@@ -4563,7 +4677,8 @@ class Handler(BaseHTTPRequestHandler):
                 res = save_job(payload)
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/job/template":
-                res = template_to_job(payload.get("id", ""), name=payload.get("name", ""))
+                res = template_to_job(payload.get("id", ""), name=payload.get("name", ""),
+                                      lang=str(payload.get("lang") or "en"))
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/job/snooze":
                 try:

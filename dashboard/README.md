@@ -27,6 +27,12 @@ Opened without the server (e.g. from GitHub Pages), the app falls back to a
 
 ## Screens
 
+- **Welcome** (first visit on a fresh install): connect a model, a few facts
+  about you (name, city, language, interests, saved as memory), and starter
+  routines with the daily briefing. It ends on *Brief me now*. Every step can
+  be skipped, and Settings → General → *Welcome setup* reopens it. Installs
+  that already have routines or memory are never asked
+  (`/api/onboarding`).
 - **Chat** (the main screen). A new chat shows a greeting, a centred message
   box, four everyday suggestions and **For you**: the latest routine reports
   and alerts, each with _Tell me more_. Chats are titled automatically after

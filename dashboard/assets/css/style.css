@@ -4128,3 +4128,237 @@ kbd {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+
+/* ============================================================
+   First-run welcome (model → about you → routines → briefing)
+   ============================================================ */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+.welcome[hidden] {
+  display: none;
+}
+.welcome-card {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg, 0 30px 80px rgba(0, 0, 0, 0.35));
+  animation: splashIn 0.4s var(--ease-out, ease-out) both;
+}
+.welcome-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 0 26px;
+}
+.welcome-steps {
+  display: flex;
+  gap: 6px;
+}
+.welcome-steps i {
+  width: 22px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 0.2s;
+}
+.welcome-steps i.is-done {
+  background: color-mix(in srgb, var(--brand-1) 55%, var(--line));
+}
+.welcome-steps i.is-on {
+  background: var(--brand-1);
+}
+.ob-step {
+  padding: 18px 26px 6px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.ob-step[hidden] {
+  display: none;
+}
+.ob-step h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  font-size: 38px;
+  line-height: 1.05;
+  margin: 0;
+}
+.ob-lead {
+  margin: 0;
+  color: var(--ink-2);
+}
+.welcome-orb {
+  width: 56px;
+  height: 56px;
+}
+.ob-ready {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.ob-ready i[data-i] {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.ob-providers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+.ob-prov {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+}
+.ob-prov span {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+.ob-prov.is-sel {
+  border-color: var(--brand-1);
+  box-shadow: 0 0 0 1px var(--brand-1) inset;
+}
+.ob-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.welcome .field {
+  display: grid;
+  gap: 6px;
+}
+.welcome .field input,
+.welcome .field select {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.welcome .field .row {
+  display: flex;
+  gap: 8px;
+}
+.welcome .field small {
+  color: var(--ink-3);
+}
+.welcome .field small.is-ok {
+  color: var(--brand-1);
+}
+.welcome .field small.is-err {
+  color: var(--danger);
+}
+.ob-routines {
+  display: grid;
+  gap: 8px;
+}
+.ob-routine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+}
+.ob-routine.is-on {
+  border-color: color-mix(in srgb, var(--brand-1) 60%, var(--line));
+  background: var(--accent-soft);
+}
+.ob-routine input[type="checkbox"] {
+  accent-color: var(--brand-1);
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.ob-routine input[type="time"] {
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink);
+  font: inherit;
+}
+.ob-ico {
+  font-size: 1.3rem;
+  width: 28px;
+  text-align: center;
+}
+.ob-txt {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ob-txt span {
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.welcome-foot {
+  flex: none;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 26px 22px;
+}
+.ob-msg {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+.ob-msg.is-err {
+  color: var(--danger);
+}
+body.has-welcome {
+  overflow: hidden;
+}
+@media (max-width: 560px) {
+  .ob-grid {
+    grid-template-columns: 1fr;
+  }
+  .ob-step h2 {
+    font-size: 28px;
+  }
+}
+@media (max-width: 560px) {
+  #obBriefRow {
+    flex-wrap: wrap;
+  }
+  #obBriefRow input[type="time"] {
+    margin-left: 70px;
+  }
+}

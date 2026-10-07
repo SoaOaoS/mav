@@ -619,8 +619,18 @@ class ProactivityAPI(unittest.TestCase):
     def test_template_to_job(self):
         r = mav_api.template_to_job("morning-brief")
         self.assertTrue(r["ok"])
-        self.assertEqual(r["job"]["name"], "Brief du matin")
+        self.assertEqual(r["job"]["name"], "Morning brief")  # English by default
         self.assertIn("time", r["job"])
+        fr = mav_api.template_to_job("morning-brief", lang="fr")
+        self.assertEqual(fr["job"]["name"], "Brief du matin")
+        self.assertIn("météo", fr["job"]["prompt"])
+
+    def test_every_template_has_an_english_wording(self):
+        for t in ocroutine_templates.TEMPLATES:
+            en = ocroutine_templates.localized(t, "en")
+            self.assertIn(t["id"], ocroutine_templates.EN, t["id"])
+            self.assertTrue(en["label"] and en["description"] and en["prompt"])
+            self.assertEqual(en["when"], t["when"])
 
     def test_detect_endpoint_shape(self):
         r = mav_api.detect_routine("tous les lundis à 8h envoie le rapport")
