@@ -2263,7 +2263,6 @@ def get_debate(thread_id: str) -> dict:
 
 
 VALID_WATCH_KINDS = ["web", "price", "news", "rss", "github"]
-_GITHUB_REPO = re.compile(r"^(?:https?://github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:releases.*)?$")
 
 
 def watch_target(kind: str, target: str) -> str | None:
@@ -2281,10 +2280,11 @@ def watch_target(kind: str, target: str) -> str | None:
         if u.scheme not in ("http", "https") or not u.netloc:
             return None
     if kind == "github":
-        m = _GITHUB_REPO.match(base)
-        if not m:
+        from ocwatch import github_repo  # noqa: PLC0415
+
+        base = github_repo(base)
+        if not base:
             return None
-        base = f"{m.group(1)}/{m.group(2)}"
     extra = re.sub(r"\s+", " ", extra).strip()[:120]
     return (f"{base}|{extra}" if sep and extra else base)[:500]
 

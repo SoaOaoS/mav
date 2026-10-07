@@ -49,7 +49,7 @@ UA = (
 KINDS = ("web", "price", "news", "rss", "github")
 FEED_KINDS = ("news", "rss", "github")
 FEED_LIMIT = 30  # newest items considered per pass (the state remembers 40)
-GITHUB_REPO = re.compile(r"^(?:https?://github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:releases.*)?$")
+_REPO_PART = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 
 
 # ------------------------------------------------------------------ parsing
@@ -202,13 +202,29 @@ def mentions(item: dict, words: list[str]) -> bool:
     return any(w in text for w in words)
 
 
+def github_repo(target: str) -> str | None:
+    """'owner/repo', or a github.com address of it → 'owner/repo'.
+
+    Plain string handling, no backtracking regex on what the user typed.
+    """
+    s = target.strip()
+    for prefix in ("https://github.com/", "http://github.com/", "https://www.github.com/", "github.com/"):
+        if s.lower().startswith(prefix):
+            s = s[len(prefix):]
+            break
+    parts = [p for p in s.split("/") if p]
+    if len(parts) < 2 or (len(parts) > 2 and parts[2] != "releases"):
+        return None
+    owner, repo = parts[0], parts[1].removesuffix(".git")
+    if not (_REPO_PART.fullmatch(owner) and _REPO_PART.fullmatch(repo)):
+        return None
+    return f"{owner}/{repo}"
+
+
 def github_feed(target: str) -> tuple[str, str] | None:
     """'owner/repo' (or its URL) → (releases feed URL, 'owner/repo')."""
-    m = GITHUB_REPO.match(target.strip())
-    if not m:
-        return None
-    repo = f"{m.group(1)}/{m.group(2)}"
-    return f"https://github.com/{repo}/releases.atom", repo
+    repo = github_repo(target)
+    return (f"https://github.com/{repo}/releases.atom", repo) if repo else None
 
 
 # ------------------------------------------------------------------ watcher
@@ -402,4 +418,4 @@ class Watch:
 
 
 __all__ = ["Watch", "KINDS", "FEED_KINDS", "find_price", "visible_text", "news_items",
-           "feed_items", "split_condition", "mentions", "github_feed"]
+           "feed_items", "split_condition", "mentions", "github_feed", "github_repo"]
