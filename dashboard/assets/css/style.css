@@ -1273,6 +1273,16 @@ h3.sub {
 .msg.is-last .msg-actions {
   opacity: 1;
 }
+.msg-speed {
+  align-self: center;
+  margin-left: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .msg-actions .icon-btn {
   width: 28px;
   height: 28px;
@@ -3954,6 +3964,15 @@ button.memory-updated:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
+}
+.speed-head {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0.5rem 0 0.25rem;
+}
+@media (max-width: 640px) {
+  .speed-head {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .usage-stat {
   background: var(--bg-elev);

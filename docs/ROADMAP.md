@@ -112,7 +112,14 @@ value within 5 minutes.
 
 ## Phase 2 — Faster and stickier (weeks 3–6)
 
-### 2.1 Speed: measure, then trim · M
+### 2.1 Speed: measure, then trim · M · ✅ done
+
+> **Shipped:**
+> - **Measured:** each answer shows its time to first word, total time, steps and prompt size (with the cached share), and *Settings → Usage → Speed* shows the medians.
+> - **Trimmed:** each helper only receives the tools it uses. The prompt sent per turn, measured against the real engine with `dashboard/tools/fake_openai.py`, went from 25.3 KB to 13.6 KB for the Assistant (−47 %) and from 23.3 KB to 7.4 KB for the four helpers (−68 to −69 %). Tool definitions were 85 % of it.
+> - **Cached:** memory is added after the system prompt and the tools, so that start of the prompt stays stable for provider caching.
+>
+> Time to first word on a local model scales with the prompt size. The Speed card is how to check the 40 % target on real hardware.
 
 **Why.** Most of the waiting is the model reading a long prompt (instructions
 and tool definitions) and taking extra steps. This is very visible on local

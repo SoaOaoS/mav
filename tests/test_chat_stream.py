@@ -155,6 +155,16 @@ class StreamTest(unittest.TestCase):
         self.assertIn("researcher", done_tools[0]["input"])
         self.assertTrue(done_tools[1]["output"].startswith("# Answer"))
         self.assertEqual(done_tools[1]["end"] - done_tools[1]["start"], 420)
+        # How long it took, sent just before "done" (roadmap 2.1).
+        self.assertEqual(kinds[-2], "metrics")
+        m = events[-2][1]
+        self.assertEqual(m["steps"], 2)
+        # "Let me look into that." comes first; the whole answer waits on the
+        # 0.6 s helper step.
+        self.assertGreaterEqual(m["ttft_ms"], 0)
+        self.assertGreater(m["total_ms"], 600)
+        self.assertGreater(m["total_ms"], m["ttft_ms"])
+        self.assertGreater(m["input_tokens"], 0)
 
         # A second turn: the page shows exactly what was streamed, once each.
         events2 = self.run_turn(sid, "research again")
