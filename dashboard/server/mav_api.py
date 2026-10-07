@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import threading
 import time
 import unicodedata
@@ -148,6 +149,20 @@ try:
     occhannels.CHANNELS_FILE = Path(os.environ.get("MAV_CHANNELS_FILE", BOT_DIR / "channels.json"))
 except Exception:  # noqa: BLE001
     occhannels = None
+
+
+import mav_backup  # noqa: E402
+
+
+def backup_places() -> "mav_backup.Places":
+    """Where this install keeps what a backup holds."""
+    home = Path(os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME") or Path.home())
+    data_home = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
+    return mav_backup.Places(
+        dsn=PG_DSN, bot_dir=BOT_DIR, config_dir=_config_dir(),
+        storage_dir=data_home / "opencode" / "storage", env_server=ENV_SERVER,
+        version=installed_version(), runtime=RUNTIME or "systemd", chown=_chown_user,
+    )
 
 
 def channels_action(action: str, payload: dict) -> dict:
@@ -4444,6 +4459,40 @@ class Handler(BaseHTTPRequestHandler):
                 "Set-Cookie": AUTH.set_cookie(AUTH.issue(), self._secure())})
         return self._send(404, {"error": "not found"})
 
+    def _restore(self):
+        """Replace everything with an uploaded backup (raw .tar.gz body).
+
+        Needs a session *and* the password again (X-Mav-Password): a restore
+        rewrites the API keys, the helpers and the password itself.
+        """
+        # A refusal leaves the upload unread: never reuse this connection.
+        self.close_connection = True
+        if not self._guard("/api/backup/restore"):
+            return
+        who = self.client_address[0] if self.client_address else "?"
+        if AUTH.configured():
+            wait = AUTH.throttled(who)
+            if wait:
+                return self._send(429, {"error": f"Too many attempts. Try again in {int(wait) + 1} s."})
+            if not AUTH.check_password(self.headers.get("X-Mav-Password", "")):
+                AUTH.failed(who)
+                return self._send(403, {"error": "Wrong password."})
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            n = 0
+        if n <= 0 or n > mav_backup.MAX_UPLOAD:
+            return self._send(413 if n > 0 else 400, {"error": "Send a Mav backup (.tar.gz)."})
+        data = self.rfile.read(n)
+        try:
+            res = mav_backup.restore(backup_places(), data)
+        except mav_backup.BackupError as exc:
+            return self._send(400, {"error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            return self._send(500, {"error": f"Restore failed: {exc}"})
+        res["restart"] = restart_engine()
+        return self._send(200, res)
+
     def _sse_open(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -4581,6 +4630,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, global_search(p.get("q", "")))
             if path == "/api/push/key":
                 return self._send(200, {"key": push_public_key()})
+            if path == "/api/backup":
+                buf = tempfile.SpooledTemporaryFile(max_size=32 * 1024 * 1024)
+                mav_backup.create(backup_places(), buf, include_chats=p.get("chats", "1") != "0")
+                size = buf.tell()
+                buf.seek(0)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header("Content-Disposition",
+                                 'attachment; filename="mav-backup-' + time.strftime("%Y%m%d-%H%M") + '.tar.gz"')
+                self.send_header("Content-Length", str(size))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                shutil.copyfileobj(buf, self.wfile)
+                return
+            if path == "/api/backup/safety":
+                return self._send(200, {"copies": mav_backup.safety_copies(backup_places())})
             if path == "/api/channels":
                 if occhannels is None:
                     return self._send(200, {"channels": [], "types": {}, "public_url": ""})
@@ -4696,6 +4761,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path, _, _ = self.path.partition("?")
+        if path == "/api/backup/restore":
+            return self._restore()
         payload = self._body()
         if not self._guard(path):
             return

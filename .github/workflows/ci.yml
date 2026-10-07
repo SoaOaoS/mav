@@ -8,6 +8,20 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # A throwaway database for the tests that need a real one (backup round trip).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mavtest
+          POSTGRES_PASSWORD: mavtest
+          POSTGRES_DB: mavtest
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mavtest" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      MAV_TEST_PG_DSN: host=127.0.0.1 port=5432 user=mavtest password=mavtest dbname=mavtest
     steps:
       - uses: actions/checkout@v4
         with:

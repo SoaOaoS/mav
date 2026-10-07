@@ -89,6 +89,7 @@
             <span>Getting started</span>
             <a href="#install">Installation</a>
             <a href="#update">Updating</a>
+            <a href="#backup">Backup &amp; restore</a>
             <a href="#migrate">Moving to Docker</a>
             <a href="#requirements">Requirements</a>
             <a href="#phone">On your phone</a>
@@ -229,6 +230,29 @@ mav reconfigure       # Update / Change the model / Reconfigure / Uninstall</cod
             routines, your model and your settings. Your existing agent files
             are left untouched; the new everyday helpers are added next to
             them.
+          </div></div>
+        </section>
+
+        <section id="backup">
+          <h2>Backup &amp; restore</h2>
+          <p>
+            <em>Settings → General → Backup → Download</em> saves everything in
+            one <code>.tar.gz</code>: memory (every table), routines, chats,
+            helpers, connections, settings, API keys and the password. It works
+            the same with Docker and with the installer, and is how you move
+            Mav to another machine.
+          </p>
+          <p>
+            <em>Restore…</em> asks for your password again, checks the file
+            (only Mav's own folders, no unsafe path), keeps a copy of the
+            current state on the server (<code>bot/backups/</code>, the last
+            three), replaces the memory in one transaction, then the files, and
+            restarts the engine.
+          </p>
+          <div class="docs-note"><div>
+            A backup holds your API keys and password hash: keep it somewhere
+            private. From a terminal, <code>mav backup</code> still works on an
+            installer install.
           </div></div>
         </section>
 
