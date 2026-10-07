@@ -122,14 +122,22 @@ An answer can embed two directives, each on its own line:
   via the `/api/chart` proxy). `PERIOD` is `1d`, `5d`, `1mo`, `3mo`, `6mo`,
   `1y`, `2y` or `5y`. Example: `[[chart:^GDAXI:1mo]]`.
 - `[[file:PATH]]` — a download card pointing at `/api/download`. `PATH` can
-  be absolute (within an allowed root) or a bare filename, resolved in the
-  media archive, the attachments folder and `tools/` output folders.
+  be absolute (within an allowed root) or a bare filename, resolved in
+  `mav-files/` first, then the media archive, the attachments folder and
+  `tools/` output folders.
+
+**Files Mav hands you.** The helpers may write files in one folder only,
+`~/workspace/mav-files/` (the engine's working directory; `MAV_FILES`
+overrides it). Their `permission.edit` rule denies everything else. Asked for
+a CSV, a plan or a letter, Mav writes it there and answers with
+`[[file:name]]`. Each shared file is also copied to the media archive, so its
+card keeps working after the folder is cleaned.
 
 `/api/download` serves **any file type** from the same roots as `/api/asset`
 (images stay images-only there), so Mav can hand back whatever it produced —
 a PDF, a spreadsheet, an archive, a binary… The one exception is **sensitive
 files**, which are never served: `.env` (and `*.env`), private keys
-(`.pem`, `.key`, `.p12`…), credential/config files (`mail.conf`,
+(`.pem`, `.key`, `.p12`…, SSH keys such as `id_rsa` / `id_ed25519`), credential/config files (`mail.conf`,
 `mav*.env`, `push_subs.json`, `auth.json`, `.netrc`, `.pgpass`…), and any
 name containing `secret` / `credential` / `password` / `token` / `apikey`.
 Every answer also has a **Download** action in its toolbar that saves the

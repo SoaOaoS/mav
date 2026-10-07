@@ -3089,6 +3089,23 @@ MEDIA_DIR = Path(os.environ.get("MAV_MEDIA", BOT_DIR / "mav-media"))
 MEDIA_INDEX = MEDIA_DIR / "index.json"
 
 
+def _files_dir() -> Path:
+    """Where the helpers write the files they hand you ([[file:name]]).
+
+    The engine runs in ~/workspace, so the folder sits there: the helpers can
+    write `mav-files/<name>` and nothing else (see agents/*.md).
+    """
+    if os.environ.get("MAV_FILES"):
+        return Path(os.environ["MAV_FILES"])
+    home = os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME")
+    if home:
+        return Path(home) / "workspace" / "mav-files"
+    return BOT_DIR / "mav-files"
+
+
+FILES_DIR = _files_dir()
+
+
 def _media_load() -> list:
     try:
         data = json.loads(MEDIA_INDEX.read_text())
@@ -3158,10 +3175,36 @@ def find_media(query: str) -> list:
     return hits
 
 
+def sync_files_dir() -> int:
+    """Archive the files the helpers wrote in FILES_DIR (any safe type), so a
+    shared file stays downloadable even after the folder is cleaned."""
+    if not FILES_DIR.is_dir():
+        return 0
+    items = _media_load()
+    known = {(i.get("name"), i.get("size"), i.get("mtime")) for i in items}
+    added = 0
+    try:
+        for f in sorted(FILES_DIR.iterdir()):
+            if not f.is_file() or is_sensitive(f):
+                continue
+            st = f.stat()
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", f.name)[:120]
+            if (safe, st.st_size, int(st.st_mtime)) in known:
+                continue
+            mime = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+            if archive_media(f, f.name, mime, "mav", size=st.st_size, mtime=int(st.st_mtime)):
+                known.add((safe, st.st_size, int(st.st_mtime)))
+                added += 1
+    except Exception:
+        pass
+    return added
+
+
 def sync_media_dir() -> int:
     """Archive images present in /tmp/mav-dashboard that are not archived
     yet. Called before displaying media, so any generated image
     (Puppeteer screenshot, chart…) is persisted automatically."""
+    sync_files_dir()
     src_dir = Path("/tmp/mav-dashboard")
     if not src_dir.is_dir():
         return 0
@@ -3197,7 +3240,7 @@ ASSET_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 
 
 def _asset_roots() -> list[Path]:
-    roots = [MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
+    roots = [FILES_DIR, MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
     if BOT_DIR.exists():
         roots.append(Path(BOT_DIR).resolve())
     # Optional roots, specific to the user's installation.
@@ -3353,6 +3396,8 @@ SENSITIVE_NAMES = {
     ".netrc", ".git-credentials", ".npmrc", ".pypirc", ".htpasswd", ".pgpass",
     "mail.conf", "mav.env", "mav-dashboard.env", "mav-server.env",
     "push_subs.json", "auth.json", "credentials.json",
+    # SSH private keys (their .pub halves are fine)
+    "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_ecdsa_sk", "id_ed25519_sk",
 }
 SENSITIVE_EXTS = {
     ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", ".ppk",
@@ -3412,11 +3457,19 @@ def resolve_download(name: str) -> "Path | None":
         except Exception:
             return None
     # Bare filename: look in the usual output folders first, then anywhere.
-    search_dirs = [MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
+    search_dirs = [FILES_DIR, MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
     for d in search_dirs:
         cand = d / name
         if allowed(cand):
             return cand.resolve()
+    # A file Mav shared earlier and that was since removed from its folder:
+    # serve the archived copy (the newest one with that name).
+    base = Path(name).name
+    for item in sorted(_media_load(), key=lambda x: x.get("ts", 0), reverse=True):
+        if item.get("name") == re.sub(r"[^A-Za-z0-9._-]", "_", base) and item.get("path"):
+            cand = Path(item["path"])
+            if allowed(cand):
+                return cand.resolve()
     for r in roots:
         cand = Path(r) / name
         if allowed(cand):
@@ -4341,6 +4394,7 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     return self._send(404, {"error": "chart unavailable"})
             if path == "/api/download":
+                sync_files_dir()
                 res = download_response(p.get("path", ""))
                 if not res:
                     return self._send(404, "file not found", "text/plain")

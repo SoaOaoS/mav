@@ -4349,6 +4349,11 @@ function buildAgentFile(front, fields, body) {
       "  websearch: allow",
       "  webfetch: allow",
       "  todowrite: allow",
+      // Files it hands you go to mav-files/ only ([[file:name]] in a reply).
+      "  edit:",
+      '    "*": deny',
+      '    "mav-files/*": allow',
+      '    "*/mav-files/*": allow',
     );
   return `---\n${lines.join("\n")}\n---\n\n${body.trim()}\n`;
 }
