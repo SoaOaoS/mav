@@ -121,6 +121,9 @@ updates.
 - **From your phone:** push notifications need HTTPS. Put Mav behind your
   usual reverse proxy (Caddy, Traefik, Nginx Proxy Manager), or reach it
   through Tailscale.
+- **Already installed with the installer?** `sudo ./scripts/migrate-to-docker.sh`
+  moves everything to Docker: chats, memory, routines, model, keys and
+  password. See [Moving to Docker](https://soaoaos.github.io/mav/docs.html#migrate).
 
 ### With the installer (Linux with systemd)
 
