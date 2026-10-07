@@ -101,8 +101,15 @@ class AppE2E(unittest.TestCase):
         page.fill("input[name=time]", "07:30")
         page.click("#modalFoot .btn-primary")
         page.wait_for_selector("#routineList :text('Umbrella')", timeout=8000)
-        jobs = json.loads((self.stack.tmp / "jobs.json").read_text())
-        job = next(j for j in jobs if j["name"] == "Umbrella")
+        jobs_file = self.stack.tmp / "jobs.json"
+        job = None
+        for _ in range(50):  # the list can show before the file is read back
+            jobs = json.loads(jobs_file.read_text()) if jobs_file.exists() else []
+            job = next((j for j in jobs if j.get("name") == "Umbrella"), None)
+            if job:
+                break
+            page.wait_for_timeout(100)
+        self.assertIsNotNone(job, jobs_file.read_text() if jobs_file.exists() else "no jobs.json")
         self.assertEqual(job["time"], "07:30")
         self.assertIn("umbrella", job["prompt"])
 
