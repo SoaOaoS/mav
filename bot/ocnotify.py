@@ -437,6 +437,16 @@ def notify(
     nid = _record(chat_id, topic, title, body, dedup_key, [], False, link)
     result["id"] = nid
     target = link or (f"./?notif={nid}" if nid else url)
+    if channels == ["none"]:
+        # "Nowhere but the inbox" only means something once other channels
+        # exist; routines saved without any (an early form bug) keep Web Push.
+        try:
+            import occhannels  # noqa: PLC0415
+
+            if not occhannels.load()["channels"]:
+                channels = None
+        except Exception:  # noqa: BLE001
+            channels = None
     n = send_push(title, body, target) if channels is None or "push" in channels else 0
     result["push"] = n
     reached = ["push"] if n else []

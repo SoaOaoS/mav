@@ -98,6 +98,7 @@ class AppE2E(unittest.TestCase):
         page = self.page()
         page.goto(self.stack.url + "#routines")
         page.click("#routineNew")
+        page.wait_for_function("document.activeElement && document.activeElement.name === 'prompt'", timeout=3000)
         page.fill("textarea[name=prompt]", "Tell me if I need an umbrella today.")
         page.fill("input[name=name]", "Umbrella")
         page.fill("input[name=time]", "07:30")
@@ -113,7 +114,8 @@ class AppE2E(unittest.TestCase):
             page.wait_for_timeout(100)
         self.assertIsNotNone(job, jobs_file.read_text() if jobs_file.exists() else "no jobs.json")
         self.assertEqual(job["time"], "07:30")
-        self.assertIn("umbrella", job["prompt"])
+        self.assertEqual(job["prompt"], "Tell me if I need an umbrella today.")
+        self.assertNotIn("channels", job)  # no other channel set up: reports go everywhere
 
     def test_4_reload_keeps_the_history(self):
         page = self.page()

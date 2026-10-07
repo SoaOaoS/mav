@@ -152,6 +152,19 @@ class ChannelsTest(unittest.TestCase):
         res = ocnotify.notify("Report", "Body", force=True, channels=["none"])
         self.assertEqual((res["push"], res["channels"]), (0, []))
 
+    def test_none_without_any_channel_still_pushes(self):
+        """Routines saved as ["none"] while no channel existed (an early form
+        bug) must keep their Web Push."""
+        sent = []
+        saved = ocnotify.send_push
+        ocnotify.send_push = lambda *a, **k: sent.append(a) or 1
+        try:
+            res = ocnotify.notify("Report", "Body", force=True, channels=["none"])
+        finally:
+            ocnotify.send_push = saved
+        self.assertEqual(res["push"], 1)
+        self.assertEqual(len(sent), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

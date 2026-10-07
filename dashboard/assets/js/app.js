@@ -3277,6 +3277,7 @@ function channelPicker(chosen) {
 }
 function pickedChannels(form) {
   const boxes = [...form.querySelectorAll("[data-chans] input")];
+  if (!boxes.length) return []; // no other channel set up: everywhere (Web Push)
   const on = boxes.filter((b) => b.checked).map((b) => b.value);
   if (!on.length) return ["none"]; // only the inbox on the home screen
   return on.length === boxes.length ? [] : on;
