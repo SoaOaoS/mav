@@ -88,7 +88,9 @@ class AppE2E(unittest.TestCase):
         numbers = page.locator(".tool-step .tool-n").all_inner_texts()
         self.assertGreaterEqual(len(numbers), 2)
         self.assertEqual(numbers, [str(i + 1) for i in range(len(numbers))])
-        # A step opens to show its details.
+        # Once the answer has settled, a step opens to show its details.
+        page.wait_for_function("!document.querySelector('.msg.is-streaming')", timeout=20000)
+        page.wait_for_timeout(300)
         page.locator(".tool-step summary").first.click()
         page.wait_for_selector(".tool-step[open] .tool-body", timeout=3000)
 
