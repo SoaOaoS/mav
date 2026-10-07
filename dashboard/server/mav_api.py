@@ -142,6 +142,32 @@ except Exception:  # noqa: BLE001
     ocusage = None
     USAGE = None
 
+try:
+    import occhannels  # noqa: E402
+
+    occhannels.CHANNELS_FILE = Path(os.environ.get("MAV_CHANNELS_FILE", BOT_DIR / "channels.json"))
+except Exception:  # noqa: BLE001
+    occhannels = None
+
+
+def channels_action(action: str, payload: dict) -> dict:
+    """Settings → Notification channels (ntfy, Gotify, Discord, Slack)."""
+    if occhannels is None:
+        return {"ok": False, "error": "Channels unavailable."}
+    if action == "save":
+        res = occhannels.upsert(payload)
+    elif action == "delete":
+        res = occhannels.remove(str(payload.get("id") or ""))
+    elif action == "public-url":
+        res = occhannels.set_public_url(str(payload.get("public_url") or ""))
+    elif action == "test":
+        return occhannels.test(str(payload.get("id") or ""))
+    else:
+        return {"ok": False, "error": "Unknown action."}
+    if res.get("ok"):
+        _chown_user(occhannels.CHANNELS_FILE)  # the worker reads it as the install user
+    return res
+
 
 def record_usage(source: str, entries: list) -> None:
     """Add an answer's tokens/cost, and warn once at 80 % / 100 % of budget."""
@@ -1358,6 +1384,7 @@ def get_jobs() -> dict:
                 "last_day_of_month": bool(j.get("last_day_of_month")),
                 "on_event": j.get("on_event"),
                 "skip_if": j.get("skip_if"),
+                "channels": j.get("channels") or [],
                 "snooze_until": j.get("snooze_until", 0),
                 "last_run": state.get(j.get("name")),
                 "running": j.get("name") in _running_jobs,
@@ -1481,6 +1508,10 @@ def save_job(payload: dict) -> dict:
     cond = _condition_from_payload(payload)
     if cond:
         job["skip_if"] = cond
+    chans = payload.get("channels")
+    if isinstance(chans, list) and chans:
+        # Where its reports go: "push" and/or channel ids (empty = everywhere).
+        job["channels"] = [str(c)[:16] for c in chans if isinstance(c, str)][:10]
     try:
         snooze = int(payload.get("snooze_until") or 0)
     except (TypeError, ValueError):
@@ -1500,7 +1531,7 @@ def save_job(payload: dict) -> dict:
             # Keep unknown keys (retries, chat_id…) from hand-edited files.
             keep = {k: v for k, v in j.items() if k not in (
                 "time", "every_minutes", "days", "days_of_month",
-                "last_day_of_month", "on_event", "skip_if", "snooze_until",
+                "last_day_of_month", "on_event", "skip_if", "snooze_until", "channels",
             )}
             jobs[i] = {**keep, **job}
             replaced = True
@@ -4523,6 +4554,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, global_search(p.get("q", "")))
             if path == "/api/push/key":
                 return self._send(200, {"key": push_public_key()})
+            if path == "/api/channels":
+                if occhannels is None:
+                    return self._send(200, {"channels": [], "types": {}, "public_url": ""})
+                return self._send(200, occhannels.public_view())
             if path == "/api/asset":
                 res = serve_asset(p.get("path", ""))
                 if not res:
@@ -4831,6 +4866,9 @@ class Handler(BaseHTTPRequestHandler):
                     pass
                 ok = push_subscribe(payload)
                 return self._send(200, {"ok": ok})
+            if path.startswith("/api/channels/"):
+                res = channels_action(path[len("/api/channels/"):], payload)
+                return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/push/unsubscribe":
                 ok = push_unsubscribe(payload.get("endpoint", ""))
                 return self._send(200, {"ok": ok})

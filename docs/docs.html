@@ -715,6 +715,25 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
             is collected into the daily recap instead. The recap runs at
             <code>DIGEST_HOUR</code> (19:00; set <code>0</code> to disable).
           </p>
+          <h3>ntfy, Gotify, Discord and Slack</h3>
+          <p>
+            In <em>Settings → General → Other channels</em>, add as many as you
+            like: an <strong>ntfy</strong> topic (on ntfy.sh or your own
+            server, with an optional token), a <strong>Gotify</strong>
+            application token, or a <strong>Discord</strong> or
+            <strong>Slack</strong> webhook. Each one is tested as soon as you
+            add it, and has its own <em>Test</em> button and on/off switch.
+            Tokens and webhooks are stored on your server only
+            (<code>channels.json</code>, readable by Mav alone) and never shown
+            again in full.
+          </p>
+          <p>
+            Alerts go to Web Push and every enabled channel, with the same
+            rules: quiet hours, proactivity level, no duplicates. A routine
+            can pick its own: open it, then <em>Send reports to…</em>. Fill in
+            <em>Address of this Mav</em> so the notification links back to
+            the right chat.
+          </p>
         </section>
 
         <section id="model">
