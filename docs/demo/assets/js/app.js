@@ -6594,9 +6594,12 @@ if ("serviceWorker" in navigator && !document.documentElement.dataset.demo) {
       })
       .catch(() => {});
     let reloaded = false;
+    // A first visit has no worker yet: taking control then is not an update,
+    // and reloading would wipe what the person is typing (e.g. the password).
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // Never reload in the middle of an answer.
-      if (reloaded || anyStreaming()) return;
+      if (!hadController || reloaded || anyStreaming()) return;
       reloaded = true;
       location.reload();
     });

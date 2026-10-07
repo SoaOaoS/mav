@@ -210,7 +210,9 @@ routines.
 **Done when** the existing tests pass unchanged and no file is over ~1,200
 lines.
 
-### 3.2 End-to-end tests in CI · S
+### 3.2 End-to-end tests in CI · S · ✅ done
+
+> **Shipped:** `tests/test_e2e_app.py` and `tests/test_e2e_onboarding.py` run in Chromium on every pull request, with a shared set-up in `tests/e2e_support.py`. They found and fixed a reload on first visit that wiped the sign-in form.
 
 A Playwright suite against the fake engine on every pull request:
 - sign in;
