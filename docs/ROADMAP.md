@@ -236,7 +236,12 @@ A Playwright suite against the fake engine on every pull request:
 - reload a chat and keep its history;
 - open the mobile layout.
 
-### 3.3 Raspberry Pi / ARM · S
+### 3.3 Raspberry Pi / ARM · S · ✅ done
+
+> **Shipped:**
+> - CI runs the whole Docker stack and the installer checks on a native arm64 runner, as well as on x86.
+> - At rest, the stack measured 365 MB of memory on arm64.
+> - The docs have a Raspberry Pi section: which system, an SSD, and which model on which Pi.
 
 - Test the installer and the Docker images on `arm64`, the Raspberry Pi 5
   included.
