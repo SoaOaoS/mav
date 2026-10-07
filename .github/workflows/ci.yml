@@ -83,7 +83,13 @@ jobs:
   # The Docker install, end to end: build the image, start the whole stack
   # (Postgres, engine, web, worker) and check that it answers.
   docker:
-    runs-on: ubuntu-latest
+    # The whole stack on x86 and on 64-bit ARM (what a Raspberry Pi 4/5 runs).
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    name: docker (${{ matrix.runner == 'ubuntu-24.04-arm' && 'arm64' || 'amd64' }})
     steps:
       - uses: actions/checkout@v4
 
@@ -115,6 +121,16 @@ jobs:
             [ "$now" != "$before" ] && break
           done
           [ "$now" != "$before" ] || { echo "::error::the engine did not restart"; exit 1; }
+
+      - name: Installer (dry checks)
+        run: bash tests/test_install.sh
+
+      - name: Memory at rest
+        run: |
+          sleep 20
+          uname -m
+          docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}"
+          docker image ls --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" | grep -E "mav|postgres"
 
       - name: Logs
         if: always()
