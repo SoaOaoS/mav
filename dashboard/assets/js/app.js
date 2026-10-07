@@ -3226,7 +3226,29 @@ function draftToJob(d) {
     if (d.condition_type === "number")
       job.condition_op = d.condition_op || ">=";
   }
+  if (d.channels && d.channels.length) job.channels = d.channels;
   return job;
+}
+/* Where a routine's reports go. Shown only once other channels exist;
+   everything ticked (the default) is sent as "everywhere". */
+function channelPicker(chosen) {
+  const list = state.channels || [];
+  if (!list.length) return "";
+  const all = !chosen || !chosen.length;
+  const opts = [["push", "Web Push (this app)"], ...list.map((c) => [c.id, `${c.name} · ${c.type}`])];
+  return `<details class="field"><summary>Send reports to… (optional)</summary>
+    <div class="row wrap" style="margin-top:0.5rem" data-chans>${opts
+      .map(
+        ([id, label]) =>
+          `<label class="check"><input type="checkbox" value="${esc(id)}" ${all || chosen.includes(id) ? "checked" : ""}> ${esc(label)}</label>`,
+      )
+      .join("")}</div></details>`;
+}
+function pickedChannels(form) {
+  const boxes = [...form.querySelectorAll("[data-chans] input")];
+  const on = boxes.filter((b) => b.checked).map((b) => b.value);
+  if (!on.length) return ["none"]; // only the inbox on the home screen
+  return on.length === boxes.length ? [] : on;
 }
 function offerRoutine(d) {
   const card = document.createElement("div");
@@ -3379,7 +3401,7 @@ function editRoutine(src, existing = false) {
         <input type="text" name="condition_source" value="${esc(d.condition_source || "")}" placeholder="source (optional)">
       </div>
       <small>Checked before Mav runs — if it isn't met, the routine is skipped.</small>
-    </details>`;
+    </details>${channelPicker(d.channels)}`;
   let mode = d.mode;
   const setMode = (x) => {
     mode = x;
@@ -3438,6 +3460,7 @@ function editRoutine(src, existing = false) {
       condition_value: String(fd.get("condition_value") || "").trim(),
       condition_source: String(fd.get("condition_source") || "").trim(),
       description: existing ? d.description : "",
+      channels: pickedChannels(form),
     });
     if (mode === "weekly" && !job.days.length) {
       toast("Pick at least one day.", { error: true });
@@ -5398,6 +5421,133 @@ $("#pushTest").addEventListener("click", async () => {
     toast("Failed to send.", { error: true });
   }
 });
+
+/* Other channels: ntfy, Gotify, Discord, Slack (bot/occhannels.py). Secrets
+   come back masked; leaving one masked keeps the stored value. */
+const CHAN_FIELDS = {
+  server: ["Server", { ntfy: "https://ntfy.sh", gotify: "https://gotify.example.org" }],
+  topic: ["Topic", { ntfy: "a long, hard-to-guess name" }],
+  token: ["Token", { ntfy: "only for a protected topic", gotify: "the application token" }],
+  webhook: ["Webhook URL", { discord: "https://discord.com/api/webhooks/…", slack: "https://hooks.slack.com/services/…" }],
+};
+const CH = { types: {}, publicUrl: "" };
+async function loadChannels() {
+  if (!LIVE) return;
+  try {
+    const r = await api.get("channels");
+    state.channels = r.channels || [];
+    CH.types = r.types || {};
+    CH.publicUrl = r.public_url || "";
+  } catch (_) {
+    return;
+  }
+  const box = $("#chanList");
+  box.hidden = !state.channels.length;
+  box.innerHTML = state.channels
+    .map(
+      (c) => `<div class="chan" data-id="${esc(c.id)}">
+        <span class="chan-type">${esc((CH.types[c.type] || {}).label || c.type)}</span>
+        <strong>${esc(c.name)}</strong>
+        <span class="chan-acts">
+          <button class="btn btn-ghost btn-sm" data-ch="test">Test</button>
+          <button class="btn btn-ghost btn-sm" data-ch="edit">Edit</button>
+          <button class="switch" role="switch" aria-label="Enabled" aria-checked="${c.enabled ? "true" : "false"}" data-ch="toggle"></button>
+        </span></div>`,
+    )
+    .join("");
+}
+function editChannel(c) {
+  const isNew = !c;
+  const form = document.createElement("form");
+  form.className = "form";
+  const type = (c && c.type) || "ntfy";
+  form.innerHTML = `
+    <div class="field-grid">
+      <div class="field"><label>Type</label><select name="type" ${isNew ? "" : "disabled"}>${Object.entries(CH.types)
+        .map(([k, t]) => `<option value="${k}" ${k === type ? "selected" : ""}>${esc(t.label)}</option>`)
+        .join("")}</select></div>
+      <div class="field"><label>Name</label><input name="name" value="${esc((c && c.name) || "")}" placeholder="My phone"></div>
+    </div>
+    <div data-fields></div>
+    <div class="field"><label>Address of this Mav</label>
+      <input name="public_url" value="${esc(CH.publicUrl || location.origin)}" placeholder="https://mav.example.org">
+      <small>Used for the “open” link in the notification.</small></div>`;
+  const draw = () => {
+    const t = form.querySelector("[name=type]").value;
+    form.querySelector("[data-fields]").innerHTML = ((CH.types[t] || {}).fields || [])
+      .map((f) => {
+        const [label, ph] = CHAN_FIELDS[f] || [f, {}];
+        const secret = f === "token" || f === "webhook";
+        return `<div class="field"><label>${esc(label)}</label><input name="${f}" ${secret ? 'type="password" autocomplete="off"' : ""}
+          value="${esc((c && c[f]) || "")}" placeholder="${esc(ph[t] || "")}"></div>`;
+      })
+      .join("");
+  };
+  draw();
+  form.querySelector("[name=type]").addEventListener("change", draw);
+  form.addEventListener("submit", (e) => e.preventDefault());
+  const actions = [];
+  if (!isNew)
+    actions.push({
+      label: "Delete",
+      kind: "btn-danger",
+      left: true,
+      run: async () => {
+        await api.post("channels/delete", { id: c.id }).catch(() => {});
+        loadChannels();
+      },
+    });
+  actions.push(
+    { label: "Cancel" },
+    {
+      label: isNew ? "Add" : "Save",
+      kind: "btn-primary",
+      run: async () => {
+        const fd = Object.fromEntries(new FormData(form));
+        fd.type = form.querySelector("[name=type]").value;
+        if (c) Object.assign(fd, { id: c.id, enabled: c.enabled });
+        try {
+          const r = await api.post("channels/save", fd);
+          await loadChannels();
+          if (isNew) {
+            const t = await api.post("channels/test", { id: r.id }).catch((e) => ({ error: e.message }));
+            toast(t.ok ? "Channel added — a test is on its way." : `Saved, but the test failed: ${t.error || "?"}`, {
+              error: !t.ok,
+            });
+          } else toast("Channel saved.");
+        } catch (err) {
+          toast(err.message, { error: true });
+          return false;
+        }
+      },
+    },
+  );
+  modal.open({ title: isNew ? "Add a channel" : `Channel “${c.name}”`, body: form, actions });
+}
+$("#chanAdd").addEventListener("click", async () => {
+  if (!needLive()) return;
+  if (!Object.keys(CH.types).length) await loadChannels();
+  editChannel(null);
+});
+$("#chanList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-ch]");
+  if (!b) return;
+  const c = state.channels.find((x) => x.id === b.closest("[data-id]").dataset.id);
+  if (!c) return;
+  if (b.dataset.ch === "edit") return editChannel(c);
+  if (b.dataset.ch === "toggle") {
+    await api.post("channels/save", { ...c, enabled: !c.enabled }).catch((err) => toast(err.message, { error: true }));
+    return loadChannels();
+  }
+  b.disabled = true;
+  try {
+    const r = await api.post("channels/test", { id: c.id });
+    toast(r.ok ? `Test sent to ${c.name}.` : r.error, { error: !r.ok });
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+  b.disabled = false;
+});
 (async () => {
   try {
     if (
@@ -6278,6 +6428,7 @@ async function boot() {
     loadProactivity(),
     checkVersion(),
     loadBriefing(),
+    loadChannels(),
   ]);
   route();
   if (!state.chat.id) renderThread();

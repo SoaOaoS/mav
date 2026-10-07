@@ -2501,6 +2501,53 @@ h6.md-h {
   font-size: 0.84rem;
   color: var(--ink-3);
 }
+/* Other notification channels (ntfy, Gotify, Discord, Slack). */
+.chan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.25rem 0 0.75rem;
+  border-bottom: 1px solid var(--line-2);
+}
+.chan {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: var(--bg-2, var(--line-2));
+}
+.chan strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chan-type {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.chan-acts {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.row.wrap {
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
 .kvs {
   display: flex;
   flex-direction: column;

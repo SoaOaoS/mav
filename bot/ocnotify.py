@@ -374,6 +374,7 @@ def notify(
     force: bool = False,
     level: str | None = None,
     digest: bool = True,
+    channels: list[str] | None = None,
 ) -> dict:
     """Notify via Web Push, honouring preferences, quiet hours, deduplication
     and the user's proactivity level. Returns what was decided (for logs/tests).
@@ -387,6 +388,10 @@ def notify(
     inferred from the text (bot/ocpriority.py). Anything below the proactivity
     bar is recorded but not pushed, and — when `digest` — collected for the
     next recap instead of being lost.
+
+    `channels` picks where it goes: "push" (Web Push) and/or channel ids from
+    Settings (ntfy, Gotify, Discord, Slack — bot/occhannels.py). None means
+    everywhere: Web Push and every enabled channel.
     """
     link = url if url and url != "./" else None
     result = {"push": 0, "skipped": None, "id": None}
@@ -431,9 +436,21 @@ def notify(
     # notification opens it in the dashboard.
     nid = _record(chat_id, topic, title, body, dedup_key, [], False, link)
     result["id"] = nid
-    n = send_push(title, body, link or (f"./?notif={nid}" if nid else url))
+    target = link or (f"./?notif={nid}" if nid else url)
+    n = send_push(title, body, target) if channels is None or "push" in channels else 0
     result["push"] = n
-    _update_record(nid, ["push"] if n else [], bool(n))
+    reached = ["push"] if n else []
+    try:
+        import occhannels  # noqa: PLC0415
+
+        only = None if channels is None else [c for c in channels if c != "push"]
+        extra = occhannels.deliver(title, body, target, lvl, only) if only != [] else []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("channels: %s", exc)
+        extra = []
+    result["channels"] = extra
+    reached += extra
+    _update_record(nid, reached, bool(reached))
     return result
 
 

@@ -133,7 +133,9 @@ models.
   on a local model, measured before and after on the same machine. The
   numbers go in the PR.
 
-### 2.2 More ways to reach you · S
+### 2.2 More ways to reach you · S · ✅ done
+
+> **Shipped:** `bot/occhannels.py`: ntfy, Gotify, Discord and Slack in Settings → General, each with a test button. Routines can pick their channels. Tests: `tests/test_channels.py`.
 
 **Why.** Homelab users already run ntfy, Gotify or Discord.
 

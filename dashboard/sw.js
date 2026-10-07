@@ -4,7 +4,7 @@
    /api/* (the agent's live state).
 */
 
-const CACHE = "mav-shell-v28";
+const CACHE = "mav-shell-v29";
 const SHELL = [
   "./",
   "./index.html",

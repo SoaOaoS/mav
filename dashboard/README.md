@@ -123,6 +123,7 @@ talks to the opencode engine, and reads/writes Postgres.
 | GET      | `/api/chart?symbol=&range=`                                                          | Yahoo Finance series for inline `[[chart:SYM:PERIOD]]`                           |
 | GET      | `/api/download?path=`                                                                | download a document/code/archive (see below)                                     |
 | GET/POST | `/api/push/key` · `subscribe` · `unsubscribe` · `test` · `ack`                       | Web Push                                                                         |
+| GET/POST | `/api/channels` · `channels/save` · `delete` · `test` · `public-url`                 | ntfy, Gotify, Discord, Slack (`bot/occhannels.py`, secrets masked)               |
 
 ### Charts and downloadable files in answers
 

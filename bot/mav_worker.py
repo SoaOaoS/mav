@@ -306,6 +306,7 @@ async def run_job(job: dict) -> None:
             topic="routine",
             url=f"./#chat/{session_id}",
             dedup_key=f"routine-fail:{name}:{time.strftime('%Y-%m-%d')}",
+            channels=job.get("channels") or None,
         )
         return
 
@@ -325,6 +326,7 @@ async def run_job(job: dict) -> None:
         level="important" if briefing else None,
         url=f"./#chat/{session_id}",
         dedup_key=f"routine:{name}:{time.strftime('%Y-%m-%d %H:%M')}",
+        channels=job.get("channels") or None,
     )
 
 
