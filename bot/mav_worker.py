@@ -18,12 +18,13 @@ import logging
 import os
 import signal
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
 
 import ocbriefing
+import occalendar
 import ocevents
 import ocusage
 from ocbus import EventBus
@@ -273,7 +274,7 @@ def _resolve_condition(job: dict) -> tuple[bool, str]:
     return ok, why
 
 
-async def run_job(job: dict) -> None:
+async def run_job(job: dict, extra_context: str = "") -> None:
     name = job["name"]
     ok, why = _resolve_condition(job)
     if not ok:
@@ -290,6 +291,7 @@ async def run_job(job: dict) -> None:
 
     briefing = ocbriefing.is_briefing(job)
     context = await asyncio.to_thread(briefing_context) if briefing else ""
+    context = "\n\n".join(c for c in (context, extra_context) if c)
     answer, tracker = await run_prompt(session_id, job["prompt"], agent, context)
 
     if tracker.error:
@@ -297,7 +299,7 @@ async def run_job(job: dict) -> None:
         if retries > 0:
             log.warning("routine %s failed (%s), retrying in %.0fs", name, tracker.error, JOB_RETRY_DELAY)
             await asyncio.sleep(JOB_RETRY_DELAY)
-            await run_job(dict(job, retries=retries - 1))
+            await run_job(dict(job, retries=retries - 1), extra_context)
             return
         notify(
             f"⚠️ {name} failed",
@@ -349,7 +351,56 @@ def briefing_context() -> str:
         items = []
     return ocbriefing.build_context(
         facts=facts, notifications=recent(40), drafts=drafts, interests=items,
+        events=calendar_today(),
     )
+
+
+def calendar_today() -> list[str] | None:
+    """Today's events for the briefing; None when no calendar is connected."""
+    try:
+        if not occalendar.load():
+            return None
+        return occalendar.briefing_lines(occalendar.today())
+    except Exception as exc:  # noqa: BLE001
+        log.warning("calendar for the briefing: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------- calendar
+
+
+async def calendar_once(now: datetime | None = None) -> int:
+    """Fire the "N minutes before an event" routines whose moment is now."""
+    jobs = [j for j in load_jobs(JOBS_FILE) if occalendar.before_rule(j)]
+    if not jobs or not occalendar.load():
+        return 0
+    now = (now or datetime.now()).astimezone()
+    lead = occalendar.max_lead(jobs)
+    # A window aligned on 5-minute steps: the same one (and so the cache) for
+    # five ticks in a row, instead of asking the server every minute.
+    start = now - timedelta(minutes=2)
+    start = start.replace(minute=start.minute - start.minute % 5, second=0, microsecond=0)
+    evts = await asyncio.to_thread(occalendar.events, start, start + timedelta(minutes=lead + 15))
+    fired = await asyncio.to_thread(occalendar.load_fired)
+    due = occalendar.due_before(jobs, evts, now, fired)
+    for job, event in due:
+        log.info("calendar: %s, %s min before %s", job["name"], occalendar.before_rule(job)["minutes"], event["title"])
+        fired.add(occalendar.fire_key(job, event))
+        _spawn(_safe_run_job(job, occalendar.event_context(event, occalendar.before_rule(job)["minutes"])))
+    if due:
+        await asyncio.to_thread(occalendar.save_fired, fired)
+    return len(due)
+
+
+async def calendar_loop() -> None:
+    while True:
+        try:
+            await calendar_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("calendar loop error")
+        await asyncio.sleep(60 - time.time() % 60 + 1)  # just after each minute
 
 
 # ---------------------------------------------------------------- events
@@ -388,9 +439,9 @@ def _spawn(coro) -> asyncio.Task:
     return task
 
 
-async def _safe_run_job(job: dict) -> None:
+async def _safe_run_job(job: dict, extra_context: str = "") -> None:
     try:
-        await run_job(job)
+        await run_job(job, extra_context)
     except Exception:  # noqa: BLE001
         log.exception("event-triggered routine %s failed", job.get("name"))
 
@@ -581,6 +632,7 @@ async def main() -> None:
     watch = Watch(OWNER_ID)
     watch_task = asyncio.create_task(watch.run())
     events_task = asyncio.create_task(events_loop())
+    calendar_task = asyncio.create_task(calendar_loop())
     digest_task = asyncio.create_task(digest_loop())
     # Self-init first, then the pursuit loop: Mav gives itself the watchdogs
     # its interests require before deciding whether to reach out.
@@ -600,6 +652,7 @@ async def main() -> None:
     log.info("stopping")
     watch_task.cancel()
     events_task.cancel()
+    calendar_task.cancel()
     digest_task.cancel()
     selfinit_task.cancel()
     pursuit_task.cancel()

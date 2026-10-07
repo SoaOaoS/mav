@@ -165,6 +165,42 @@ def backup_places() -> "mav_backup.Places":
     )
 
 
+try:
+    import occalendar  # noqa: E402
+
+    occalendar.CALENDAR_FILE = Path(os.environ.get("MAV_CALENDAR_FILE", BOT_DIR / "calendar.json"))
+except Exception:  # noqa: BLE001
+    occalendar = None
+
+
+def calendar_view() -> dict:
+    """Connected calendars (secrets masked) and what is on today."""
+    if occalendar is None:
+        return {"sources": [], "today": []}
+    today = []
+    try:
+        today = [occalendar.view(e) for e in occalendar.today()]
+    except Exception:  # noqa: BLE001
+        pass
+    return {"sources": occalendar.public_view(), "today": today}
+
+
+def calendar_action(action: str, payload: dict) -> dict:
+    if occalendar is None:
+        return {"ok": False, "error": "Calendars unavailable."}
+    if action == "test":
+        return occalendar.test(str(payload.get("id") or ""))
+    if action == "save":
+        res = occalendar.upsert(payload)
+    elif action == "delete":
+        res = occalendar.remove(str(payload.get("id") or ""))
+    else:
+        return {"ok": False, "error": "Unknown action."}
+    if res.get("ok"):
+        _chown_user(occalendar.CALENDAR_FILE)  # the worker reads it as the install user
+    return res
+
+
 def channels_action(action: str, payload: dict) -> dict:
     """Settings → Notification channels (ntfy, Gotify, Discord, Slack)."""
     if occhannels is None:
@@ -1426,6 +1462,7 @@ def get_jobs() -> dict:
                 "days_of_month": j.get("days_of_month", []),
                 "last_day_of_month": bool(j.get("last_day_of_month")),
                 "on_event": j.get("on_event"),
+                "before_event": j.get("before_event"),
                 "skip_if": j.get("skip_if"),
                 "channels": j.get("channels") or [],
                 "snooze_until": j.get("snooze_until", 0),
@@ -1472,6 +1509,22 @@ def _schedule_from_payload(payload: dict) -> dict:
     if time_:
         out["time"] = time_
     mode = str(payload.get("schedule_mode") or "").strip().lower()
+    if not mode:
+        # The web form sends the routine's own keys (on_event, before_event,
+        # days_of_month…) rather than a mode: read the mode from them, or a
+        # monthly routine would be saved as a daily one.
+        ev, before = payload.get("on_event"), payload.get("before_event")
+        if isinstance(before, dict):
+            mode = "before_event"
+            payload = {**payload, "before_minutes": before.get("minutes"),
+                       "before_contains": before.get("contains", "")}
+        elif ev:
+            mode = "event"
+            ev = {"kind": ev} if isinstance(ev, str) else ev if isinstance(ev, dict) else {}
+            payload = {**payload, "event_kind": ev.get("kind") or "custom",
+                       "event_contains": ev.get("contains", "")}
+        elif payload.get("days_of_month") or payload.get("last_day_of_month"):
+            mode = "monthly"
     if mode == "monthly":
         dom = payload.get("days_of_month") or []
         if isinstance(dom, str):
@@ -1479,11 +1532,25 @@ def _schedule_from_payload(payload: dict) -> dict:
         dom = [int(d) for d in dom if str(d).strip().isdigit()]
         last = bool(payload.get("last_day_of_month"))
         if not dom and not last:
-            return {**out, "_error": "Choisis un jour du mois (ou le dernier jour)."}
+            return {**out, "_error": "Pick a day of the month (or the last day)."}
         if dom:
             out["days_of_month"] = dom
         if last:
             out["last_day_of_month"] = True
+        return out
+    if mode == "before_event":
+        try:
+            minutes = int(payload.get("before_minutes"))
+        except (TypeError, ValueError):
+            minutes = -1
+        if not 0 <= minutes <= 24 * 60:
+            return {**out, "_error": "How many minutes before the event (0 to 1440)?"}
+        rule: dict = {"minutes": minutes}
+        needle = str(payload.get("before_contains") or "").strip()[:80]
+        if needle:
+            rule["contains"] = needle
+        out["before_event"] = rule
+        out.pop("time", None)  # fired by the calendar, not the clock
         return out
     if mode == "event":
         kind = str(payload.get("event_kind") or "custom").strip()
@@ -1492,6 +1559,7 @@ def _schedule_from_payload(payload: dict) -> dict:
         if needle:
             ev["contains"] = needle
         out["on_event"] = ev
+        out.pop("time", None)
         return out
     days = [d for d in (payload.get("days") or []) if d in JOB_DAYS]
     out["days"] = days or JOB_DAYS
@@ -1535,7 +1603,7 @@ def save_job(payload: dict) -> dict:
     sched = _schedule_from_payload(payload)
     if sched.pop("_error", None):
         return {"ok": False, "error": sched.pop("_error", "Invalid schedule.")}
-    if not sched.get("every_minutes") and not sched.get("on_event"):
+    if not sched.get("every_minutes") and not sched.get("on_event") and not sched.get("before_event"):
         # A timed job needs a valid time; an event job does not.
         if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", str(sched.get("time") or "")):
             return {"ok": False, "error": "Pick a time (HH:MM), an interval, or an event."}
@@ -1574,7 +1642,7 @@ def save_job(payload: dict) -> dict:
             # Keep unknown keys (retries, chat_id…) from hand-edited files.
             keep = {k: v for k, v in j.items() if k not in (
                 "time", "every_minutes", "days", "days_of_month",
-                "last_day_of_month", "on_event", "skip_if", "snooze_until", "channels",
+                "last_day_of_month", "on_event", "before_event", "skip_if", "snooze_until", "channels",
             )}
             jobs[i] = {**keep, **job}
             replaced = True
@@ -1773,8 +1841,14 @@ def briefing_context() -> str:
             interests = INTERESTS.list(include_muted=False)
         except Exception:  # noqa: BLE001
             interests = []
+    events = None
+    if occalendar is not None and occalendar.load():
+        try:
+            events = occalendar.briefing_lines(occalendar.today())
+        except Exception:  # noqa: BLE001
+            events = None
     return ocbriefing.build_context(
-        facts=facts, notifications=notes, drafts=drafts, interests=interests,
+        facts=facts, notifications=notes, drafts=drafts, interests=interests, events=events,
     )
 
 
@@ -4687,6 +4761,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/backup/safety":
                 return self._send(200, {"copies": mav_backup.safety_copies(backup_places())})
+            if path == "/api/calendar":
+                return self._send(200, calendar_view())
             if path == "/api/channels":
                 if occhannels is None:
                     return self._send(200, {"channels": [], "types": {}, "public_url": ""})
@@ -5001,6 +5077,9 @@ class Handler(BaseHTTPRequestHandler):
                     pass
                 ok = push_subscribe(payload)
                 return self._send(200, {"ok": ok})
+            if path.startswith("/api/calendar/"):
+                res = calendar_action(path[len("/api/calendar/"):], payload)
+                return self._send(200 if res.get("ok") else 400, res)
             if path.startswith("/api/channels/"):
                 res = channels_action(path[len("/api/channels/"):], payload)
                 return self._send(200 if res.get("ok") else 400, res)

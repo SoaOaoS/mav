@@ -157,7 +157,15 @@ models.
 - A routine report reaches ntfy and Discord, and the tests cover each
   channel's payload.
 
-### 2.3 Calendar · M
+### 2.3 Calendar · M · ✅ done
+
+> **Shipped:**
+> - `bot/occalendar.py`: CalDAV (discovery, with the server expanding recurring events) and private iCal links (Google, Outlook…), which replace the planned Google-through-MCP and need no extra connection.
+> - Today's events are in the briefing.
+> - A new routine trigger, "N minutes before an event", with an optional word filter. Each one fires once, even across restarts.
+> - Tests (`tests/test_calendar.py`) run against a fake CalDAV server.
+>
+> This work also found and fixed two existing bugs: monthly routines created in the app were saved as daily ones, and event routines could not be created from the app.
 
 **Why.** The briefing and the weekly review are much better when Mav knows
 your day. Calendar data is also the first trigger that isn't based on a
