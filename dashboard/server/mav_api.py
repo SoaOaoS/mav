@@ -2262,15 +2262,42 @@ def get_debate(thread_id: str) -> dict:
     return {"debate": thread}
 
 
-VALID_WATCH_KINDS = ["web", "price", "news"]
+VALID_WATCH_KINDS = ["web", "price", "news", "rss", "github"]
+_GITHUB_REPO = re.compile(r"^(?:https?://github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:releases.*)?$")
+
+
+def watch_target(kind: str, target: str) -> str | None:
+    """Normalise what the form sent, or None when it can't be watched.
+
+    News, feeds and releases keep an optional condition after "|" (words the
+    item must mention); a price keeps its "|below" target.
+    """
+    base, sep, extra = str(target or "").strip().partition("|")
+    base = base.strip()
+    if not base:
+        return None
+    if kind in ("web", "price", "rss"):
+        u = urllib.parse.urlparse(base)
+        if u.scheme not in ("http", "https") or not u.netloc:
+            return None
+    if kind == "github":
+        m = _GITHUB_REPO.match(base)
+        if not m:
+            return None
+        base = f"{m.group(1)}/{m.group(2)}"
+    extra = re.sub(r"\s+", " ", extra).strip()[:120]
+    return (f"{base}|{extra}" if sep and extra else base)[:500]
 
 
 def watch_add(kind: str, target: str) -> bool:
-    if kind not in VALID_WATCH_KINDS or not target.strip():
+    if kind not in VALID_WATCH_KINDS:
+        return False
+    target = watch_target(kind, target)
+    if not target:
         return False
     pg_exec(
         "insert into watch_items (chat_id, kind, target, ts) values (%s, %s, %s, %s)",
-        (DEFAULT_CHAT_ID, kind, target.strip()[:500], int(time.time())),
+        (DEFAULT_CHAT_ID, kind, target, int(time.time())),
     )
     return True
 

@@ -5,7 +5,11 @@ Watched items live in Postgres (watch_items table):
             "price" — a product page whose price changes ("URL" or "URL|50"
                       to only care about going below 50)
             "news"  — new headlines about a topic (Google News)
-  target  : the URL or the topic
+            "rss"   — new items in an RSS or Atom feed
+            "github"— new releases of a GitHub repository ("owner/repo")
+  target  : the URL, the topic or the repository. News, feeds and releases
+            take an optional condition after "|": "topic|word, other" only
+            alerts on items that mention one of the words.
   last_state / last_checked : so we only alert again on a change
 
 The worker runs this loop alongside the routines scheduler. The first check
@@ -42,7 +46,10 @@ UA = (
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 
-KINDS = ("web", "price", "news")
+KINDS = ("web", "price", "news", "rss", "github")
+FEED_KINDS = ("news", "rss", "github")
+FEED_LIMIT = 30  # newest items considered per pass (the state remembers 40)
+GITHUB_REPO = re.compile(r"^(?:https?://github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:releases.*)?$")
 
 
 # ------------------------------------------------------------------ parsing
@@ -137,6 +144,71 @@ def news_items(topic: str) -> list[dict]:
 def split_price_target(target: str) -> tuple[str, float | None]:
     url, _, below = target.partition("|")
     return url.strip(), _num(below.strip()) if below.strip() else None
+
+
+_ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def _strip(s: str) -> str:
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"(?s)<[^>]+>", " ", s or ""))).strip()
+
+
+def feed_items(xml_text: str) -> list[dict]:
+    """Items of an RSS 2.0, RSS 1.0 or Atom feed, newest first as published."""
+    root = ET.fromstring(xml_text.encode("utf-8") if isinstance(xml_text, str) else xml_text)
+    out = []
+    for it in root.iter():
+        tag = it.tag.rsplit("}", 1)[-1]
+        if tag not in ("item", "entry"):
+            continue
+        title = link = guid = summary = ""
+        for child in it:
+            name = child.tag.rsplit("}", 1)[-1]
+            if name == "title":
+                title = _strip(child.text or "")
+            elif name == "link":
+                href = child.get("href")
+                if href and child.get("rel", "alternate") == "alternate":
+                    link = link or href
+                elif not href and child.text:
+                    link = link or child.text.strip()
+            elif name in ("guid", "id"):
+                guid = (child.text or "").strip()
+            elif name in ("description", "summary", "content") and not summary:
+                summary = _strip(child.text or "")[:300]
+        if title or link:
+            out.append({
+                "title": title or link,
+                "link": link,
+                "summary": summary,
+                "id": hashlib.sha1((guid or link or title).encode()).hexdigest()[:8],
+            })
+        if len(out) >= FEED_LIMIT:
+            break
+    return out
+
+
+def split_condition(target: str) -> tuple[str, list[str]]:
+    """'topic|word, other' → ('topic', ['word', 'other'])."""
+    base, _, cond = target.partition("|")
+    words = [w.strip().lower() for w in re.split(r"[,;]", cond) if w.strip()]
+    return base.strip(), words
+
+
+def mentions(item: dict, words: list[str]) -> bool:
+    if not words:
+        return True
+    text = f"{item.get('title', '')} {item.get('summary', '')}".lower()
+    return any(w in text for w in words)
+
+
+def github_feed(target: str) -> tuple[str, str] | None:
+    """'owner/repo' (or its URL) → (releases feed URL, 'owner/repo')."""
+    m = GITHUB_REPO.match(target.strip())
+    if not m:
+        return None
+    repo = f"{m.group(1)}/{m.group(2)}"
+    return f"https://github.com/{repo}/releases.atom", repo
 
 
 # ------------------------------------------------------------------ watcher
@@ -260,30 +332,45 @@ class Watch:
                 self._detail[iid] = f"Price {arrow}: {old:g} → {price:g} {cur} ({pct:+.0f}%)."
             return f"price={price}"
 
-        if kind == "news":
-            items = news_items(target)
+        if kind in FEED_KINDS:
+            base, words = split_condition(target)
+            if kind == "news":
+                items = news_items(base)
+            elif kind == "github":
+                gh = github_feed(base)
+                items = feed_items(fetch(gh[0])) if gh else []
+            else:
+                items = feed_items(fetch(base))
             if not items:
                 return None
-            seen = set(re.findall(r"[0-9a-f]{8}", prev))
-            fresh = [i for i in items if i["id"] not in seen]
-            if fresh:
-                lines = [f"• {i['title']}" for i in fresh[:3]]
-                more = f"\n+{len(fresh) - 3} more" if len(fresh) > 3 else ""
-                self._detail[iid] = "\n".join(lines) + more
-            # Remember a window of recent headlines, not only the last ones,
-            # so a story moving down the feed does not count as new again.
-            keep = [i["id"] for i in items] + [x for x in prev.split(",") if x]
-            return ",".join(dict.fromkeys(keep).keys())[: 9 * 40]
+            return self._feed_state(iid, items, prev, words)
 
         return None
 
+    def _feed_state(self, iid: int, items: list[dict], prev: str, words: list[str]) -> str:
+        """New items since last time, grouped into one alert; only those that
+        mention one of `words` when a condition is set."""
+        seen = set(re.findall(r"[0-9a-f]{8}", prev))
+        fresh = [i for i in items if i["id"] not in seen and mentions(i, words)]
+        if fresh:
+            lines = [f"• {i['title']}" for i in fresh[:3]]
+            more = f"\n+{len(fresh) - 3} more" if len(fresh) > 3 else ""
+            self._detail[iid] = "\n".join(lines) + more
+        # Remember a window of recent items (the ones skipped by the condition
+        # too), so an item moving down the feed never counts as new again.
+        keep = [i["id"] for i in items] + [x for x in prev.split(",") if x]
+        return ",".join(dict.fromkeys(keep).keys())[: 9 * 40]
+
     async def _alert(self, item: dict) -> None:
         kind = item["kind"]
-        emoji = {"web": "🌐", "price": "🏷️", "news": "📰"}.get(kind, "🔔")
+        emoji = {"web": "🌐", "price": "🏷️", "news": "📰", "rss": "📡", "github": "🚀"}.get(kind, "🔔")
+        base = split_condition(item["target"])[0]
         label = {
             "web": "Page changed",
             "price": "Price change",
-            "news": f"News · {item['target'][:40]}",
+            "news": f"News · {base[:40]}",
+            "rss": f"New in {urllib.parse.urlparse(base).netloc.removeprefix('www.')[:40] or 'your feed'}",
+            "github": f"New release · {(github_feed(base) or ('', base))[1][:40]}",
         }.get(kind, "Change")
         try:
             from ocnotify import notify  # noqa: PLC0415
@@ -314,4 +401,5 @@ class Watch:
             await asyncio.sleep(60)
 
 
-__all__ = ["Watch", "KINDS", "find_price", "visible_text", "news_items"]
+__all__ = ["Watch", "KINDS", "FEED_KINDS", "find_price", "visible_text", "news_items",
+           "feed_items", "split_condition", "mentions", "github_feed"]

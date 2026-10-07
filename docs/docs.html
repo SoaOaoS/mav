@@ -687,7 +687,25 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
               <td><strong>News</strong></td>
               <td>new headlines about a topic (Google News)</td>
             </tr>
+            <tr>
+              <td><strong>A feed</strong></td>
+              <td>new items in any RSS or Atom feed: a blog, a podcast, a forum</td>
+            </tr>
+            <tr>
+              <td><strong>Releases</strong></td>
+              <td>
+                each new release of a GitHub repository
+                (<code>owner/repo</code> or its address)
+              </td>
+            </tr>
           </table>
+          <p>
+            News, feeds and releases take an optional <em>Only if it
+            mentions…</em>: a few words, separated by commas. Mav then only
+            tells you about items whose title or summary contains one of them.
+            Several new items at once arrive as <strong>one</strong> grouped
+            alert, never one per item.
+          </p>
           <p>
             Items are checked about every 15 minutes
             (<code>WATCH_INTERVAL</code>). The first check only records the
