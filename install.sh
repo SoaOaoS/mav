@@ -991,7 +991,9 @@ write_units() {
         -e "s|__ENV_SERVER__|$ENV_SERVER|g" \
         -e "s|__SERVER_UNIT__|$SERVER_UNIT|g" "$1"
   }
-  mkdir -p "${A[INSTALL_HOME]}/workspace"
+  # mav-files/: the only folder the helpers may write to (files they hand you).
+  mkdir -p "${A[INSTALL_HOME]}/workspace/mav-files"
+  chown "$(owner)" "${A[INSTALL_HOME]}/workspace" "${A[INSTALL_HOME]}/workspace/mav-files" 2>/dev/null || true
   tpl "$SCRIPT_DIR/systemd/opencode-server.service.tpl" >"/etc/systemd/system/$SERVER_UNIT.service"
   tpl "$SCRIPT_DIR/systemd/mav-worker.service.tpl" >"/etc/systemd/system/$WORKER_UNIT.service"
   tpl "$SCRIPT_DIR/systemd/mav-dashboard.service.tpl" >"/etc/systemd/system/$DASH_UNIT.service"

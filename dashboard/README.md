@@ -22,11 +22,21 @@ OPENCODE_URL=http://127.0.0.1:4096 MAV_STATIC="$PWD/.." BOT_DIR=/tmp/mav \
 # → http://127.0.0.1:8787
 ```
 
-Opened without the server (e.g. from GitHub Pages), the app falls back to a
-**demo mode** with sample data.
+Opened without the server, the app falls back to a **demo mode** with
+sample chats (tool steps included), routines, alerts and memory. Replies are
+canned and nothing leaves the browser. This is the public demo at
+<https://soaoaos.github.io/mav/demo/>: `scripts/build-demo.sh` copies the
+app into `docs/demo/`, and CI fails if that copy is out of date. Run it, and
+commit, after any change in `dashboard/`.
 
 ## Screens
 
+- **Welcome** (first visit on a fresh install): connect a model, a few facts
+  about you (name, city, language, interests, saved as memory), and starter
+  routines with the daily briefing. It ends on *Brief me now*. Every step can
+  be skipped, and Settings → General → *Welcome setup* reopens it. Installs
+  that already have routines or memory are never asked
+  (`/api/onboarding`).
 - **Chat** (the main screen). A new chat shows a greeting, a centred message
   box, four everyday suggestions and **For you**: the latest routine reports
   and alerts, each with _Tell me more_. Chats are titled automatically after
@@ -122,14 +132,22 @@ An answer can embed two directives, each on its own line:
   via the `/api/chart` proxy). `PERIOD` is `1d`, `5d`, `1mo`, `3mo`, `6mo`,
   `1y`, `2y` or `5y`. Example: `[[chart:^GDAXI:1mo]]`.
 - `[[file:PATH]]` — a download card pointing at `/api/download`. `PATH` can
-  be absolute (within an allowed root) or a bare filename, resolved in the
-  media archive, the attachments folder and `tools/` output folders.
+  be absolute (within an allowed root) or a bare filename, resolved in
+  `mav-files/` first, then the media archive, the attachments folder and
+  `tools/` output folders.
+
+**Files Mav hands you.** The helpers may write files in one folder only,
+`~/workspace/mav-files/` (the engine's working directory; `MAV_FILES`
+overrides it). Their `permission.edit` rule denies everything else. Asked for
+a CSV, a plan or a letter, Mav writes it there and answers with
+`[[file:name]]`. Each shared file is also copied to the media archive, so its
+card keeps working after the folder is cleaned.
 
 `/api/download` serves **any file type** from the same roots as `/api/asset`
 (images stay images-only there), so Mav can hand back whatever it produced —
 a PDF, a spreadsheet, an archive, a binary… The one exception is **sensitive
 files**, which are never served: `.env` (and `*.env`), private keys
-(`.pem`, `.key`, `.p12`…), credential/config files (`mail.conf`,
+(`.pem`, `.key`, `.p12`…, SSH keys such as `id_rsa` / `id_ed25519`), credential/config files (`mail.conf`,
 `mav*.env`, `push_subs.json`, `auth.json`, `.netrc`, `.pgpass`…), and any
 name containing `secret` / `credential` / `password` / `token` / `apikey`.
 Every answer also has a **Download** action in its toolbar that saves the

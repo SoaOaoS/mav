@@ -20,6 +20,7 @@ import shutil
 import sys
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -366,8 +367,22 @@ def _run(cmd: list[str], timeout: float = 20) -> tuple[int, str]:
         return 1, str(exc)
 
 
+# In Docker (docker/entrypoint.sh) there is no systemd: the engine and worker
+# containers restart their process when the web app touches a flag file.
+RUNTIME = os.environ.get("MAV_RUNTIME", "").strip().lower()
+IN_DOCKER = RUNTIME == "docker"
+RESTART_FLAG = Path(os.environ.get("MAV_RESTART_FLAG", "/data/run/engine.restart"))
+ENGINE_STARTED = Path(os.environ.get("MAV_ENGINE_STARTED", "/data/run/engine.started"))
+DOCKER_UPDATE_HINT = (
+    "Mav runs in Docker: update it from the machine with "
+    "`docker compose pull && docker compose up -d`."
+)
+
+
 def server_unit() -> str:
     """Name of the systemd unit running the opencode engine."""
+    if IN_DOCKER:
+        return "engine (Docker)"
     if SERVER_UNIT_EXPLICIT:
         return SERVER_UNIT_EXPLICIT
     for u in DEFAULT_SERVER_UNITS:
@@ -385,7 +400,7 @@ def _unit_active(unit: str) -> bool:
 def engine_status() -> dict:
     """Live status of the agent engine + the services around it."""
     unit = server_unit()
-    active = _unit_active(unit)
+    active = True if IN_DOCKER else _unit_active(unit)
     health = {}
     try:
         health = http_json(f"{OPENCODE_URL}/global/health", timeout=4) or {}
@@ -412,6 +427,7 @@ def engine_status() -> dict:
         "checked": int(time.time()),
         "pending": pending_changes(),
         "mav_version": installed_version(),
+        "runtime": RUNTIME or "systemd",
     }
 
 
@@ -775,6 +791,15 @@ def restart_engine() -> dict:
 
     `systemctl` alone can take minutes because the bot holds a long-lived SSE
     connection, so the graceful stop waits. `--no-block` returns at once."""
+    if IN_DOCKER:
+        try:
+            RESTART_FLAG.parent.mkdir(parents=True, exist_ok=True)
+            RESTART_FLAG.write_text(str(time.time()))
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc), "unit": server_unit()}
+        _agents_cache["at"] = 0.0
+        _pending.clear()
+        return {"ok": True, "restarting": True, "unit": server_unit()}
     unit = server_unit()
     code, out = _run(["systemctl", "restart", "--no-block", unit], timeout=15)
     if code != 0:
@@ -801,6 +826,11 @@ def mark_pending(label: str) -> None:
 
 def engine_started_at() -> float | None:
     """Unix time the engine service last (re)started, or None."""
+    if IN_DOCKER:
+        try:
+            return float(ENGINE_STARTED.read_text().strip())
+        except Exception:  # noqa: BLE001
+            return None
     code, out = _run(
         ["systemctl", "show", server_unit(), "-p", "ActiveEnterTimestampMonotonic", "--value"], timeout=6
     )
@@ -905,10 +935,13 @@ def version_info(force: bool = False) -> dict:
         "release_url": (rel or {}).get("url", ""),
         "notes": (rel or {}).get("notes", "") if available else "",
         "updating": update_running(),
+        "runtime": RUNTIME or "systemd",
     }
 
 
 def update_running() -> bool:
+    if IN_DOCKER:
+        return False
     code, out = _run(["systemctl", "is-active", "mav-update"], timeout=6)
     return out.strip() in ("active", "activating")
 
@@ -916,6 +949,8 @@ def update_running() -> bool:
 def start_update() -> dict:
     """Run `mav update` outside the web app's own service: the update restarts
     the web app, and must survive that."""
+    if IN_DOCKER:
+        return {"ok": False, "docker": True, "error": DOCKER_UPDATE_HINT}
     if update_running():
         return {"ok": True, "already": True}
     if not Path(MAV_CLI).exists():
@@ -1477,16 +1512,18 @@ def save_job(payload: dict) -> dict:
     return {"ok": True, "job": job}
 
 
-def job_templates() -> dict:
+def job_templates(lang: str = "en") -> dict:
     """Ready-made routines for the dashboard's two-click creation."""
-    return {"templates": ROUTINE_TEMPLATES}
+    if not ocroutine_templates:
+        return {"templates": []}
+    return {"templates": [ocroutine_templates.localized(t, lang) for t in ROUTINE_TEMPLATES]}
 
 
-def template_to_job(template_id: str, *, name: str = "") -> dict:
+def template_to_job(template_id: str, *, name: str = "", lang: str = "en") -> dict:
     """Expand a template into a concrete job (not saved here)."""
     if not ocroutine_templates:
         return {"ok": False, "error": "Templates unavailable."}
-    tpl = ocroutine_templates.get(template_id)
+    tpl = ocroutine_templates.get(template_id, lang)
     if not tpl:
         return {"ok": False, "error": "Unknown template."}
     when = dict(tpl.get("when") or {})
@@ -1670,6 +1707,108 @@ def briefing_context() -> str:
 def briefing_job() -> dict | None:
     jobs = read_json(JOBS_FILE, [])
     return next((j for j in jobs if isinstance(j, dict) and j.get("kind") == "briefing"), None)
+
+
+# --------------------------------------------------------------- onboarding
+# A 3-step welcome on the first visit: connect a model, a few facts about
+# you, a couple of routines — then a first briefing. Existing installs (with
+# routines or memory already) are never asked.
+ONBOARDING_FILE = BOT_DIR / "onboarding.json"
+LANGUAGES = {"en": "English", "fr": "French", "es": "Spanish", "de": "German",
+             "it": "Italian", "pt": "Portuguese", "nl": "Dutch"}
+
+
+def _has_history() -> bool:
+    jobs = read_json(JOBS_FILE, [])
+    if isinstance(jobs, list) and any(isinstance(j, dict) and j.get("kind") != "briefing" for j in jobs):
+        return True
+    try:
+        return pg_query("select count(*) c from facts")[0]["c"] > 0
+    except Exception:
+        return False
+
+
+def get_onboarding() -> dict:
+    data = read_json(ONBOARDING_FILE, {})
+    if not isinstance(data, dict):
+        data = {}
+    done = data.get("done")
+    if done is None:
+        done = _has_history()
+    return {"done": bool(done), "languages": LANGUAGES, "briefing": get_briefing()}
+
+
+def set_onboarding(done: bool) -> dict:
+    write_json(ONBOARDING_FILE, {"done": bool(done), "ts": int(time.time())})
+    _chown_user(ONBOARDING_FILE)
+    return {"ok": True, "done": bool(done)}
+
+
+def onboarding_profile(payload: dict) -> dict:
+    """Turn the "About you" step into memory facts and interests."""
+    name = str(payload.get("name") or "").strip()[:60]
+    city = str(payload.get("city") or "").strip()[:80]
+    lang = str(payload.get("language") or "").strip().lower()
+    raw = payload.get("interests") or []
+    if isinstance(raw, str):
+        raw = re.split(r"[,;\n]+", raw)
+    interests = [str(i).strip()[:60] for i in raw if str(i).strip()][:12]
+    facts = []
+    if name:
+        facts.append(f"Their name is {name}.")
+    if city:
+        facts.append(f"Lives in {city} (use it for the weather and local suggestions).")
+    if lang in LANGUAGES:
+        facts.append(f"Prefers answers in {LANGUAGES[lang]}.")
+    saved = 0
+    for f in facts:
+        try:
+            if memory_action("fact/add", {"fact": f}).get("ok"):
+                saved += 1
+        except Exception:
+            pass
+    added = 0
+    for label in interests:
+        try:
+            if add_interest({"label": label}).get("ok"):
+                added += 1
+        except Exception:
+            pass
+    return {"ok": True, "facts": saved, "interests": added}
+
+
+def _job_name(label: str) -> str:
+    """A routine name the scheduler accepts, from any template label."""
+    ascii_ = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode()
+    name = re.sub(r"[^A-Za-z0-9 _.-]", "", ascii_).strip()[:61] or "Routine"
+    return name if name[0].isalnum() else "Routine " + name
+
+
+def onboarding_routines(payload: dict) -> dict:
+    """Create the routines picked in the welcome flow (skipping duplicates)."""
+    ids = [str(i) for i in (payload.get("templates") or []) if str(i)][:8]
+    existing = {j.get("name") for j in read_json(JOBS_FILE, []) if isinstance(j, dict)}
+    created, errors = [], []
+    for tid in ids:
+        res = template_to_job(tid, lang=str(payload.get("language") or "en"))
+        if not res.get("ok"):
+            errors.append(res.get("error") or tid)
+            continue
+        job = res["job"]
+        job["name"] = _job_name(job["name"])
+        if job["name"] in existing:
+            continue
+        saved = save_job(job)
+        if saved.get("ok"):
+            created.append(job["name"])
+            existing.add(job["name"])
+        else:
+            errors.append(saved.get("error") or tid)
+    brief = payload.get("briefing")
+    briefing = None
+    if isinstance(brief, dict):
+        briefing = set_briefing(bool(brief.get("enabled")), str(brief.get("time") or ""))
+    return {"ok": not errors, "created": created, "errors": errors, "briefing": briefing}
 
 
 def get_briefing() -> dict:
@@ -3089,6 +3228,23 @@ MEDIA_DIR = Path(os.environ.get("MAV_MEDIA", BOT_DIR / "mav-media"))
 MEDIA_INDEX = MEDIA_DIR / "index.json"
 
 
+def _files_dir() -> Path:
+    """Where the helpers write the files they hand you ([[file:name]]).
+
+    The engine runs in ~/workspace, so the folder sits there: the helpers can
+    write `mav-files/<name>` and nothing else (see agents/*.md).
+    """
+    if os.environ.get("MAV_FILES"):
+        return Path(os.environ["MAV_FILES"])
+    home = os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME")
+    if home:
+        return Path(home) / "workspace" / "mav-files"
+    return BOT_DIR / "mav-files"
+
+
+FILES_DIR = _files_dir()
+
+
 def _media_load() -> list:
     try:
         data = json.loads(MEDIA_INDEX.read_text())
@@ -3158,10 +3314,36 @@ def find_media(query: str) -> list:
     return hits
 
 
+def sync_files_dir() -> int:
+    """Archive the files the helpers wrote in FILES_DIR (any safe type), so a
+    shared file stays downloadable even after the folder is cleaned."""
+    if not FILES_DIR.is_dir():
+        return 0
+    items = _media_load()
+    known = {(i.get("name"), i.get("size"), i.get("mtime")) for i in items}
+    added = 0
+    try:
+        for f in sorted(FILES_DIR.iterdir()):
+            if not f.is_file() or is_sensitive(f):
+                continue
+            st = f.stat()
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", f.name)[:120]
+            if (safe, st.st_size, int(st.st_mtime)) in known:
+                continue
+            mime = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+            if archive_media(f, f.name, mime, "mav", size=st.st_size, mtime=int(st.st_mtime)):
+                known.add((safe, st.st_size, int(st.st_mtime)))
+                added += 1
+    except Exception:
+        pass
+    return added
+
+
 def sync_media_dir() -> int:
     """Archive images present in /tmp/mav-dashboard that are not archived
     yet. Called before displaying media, so any generated image
     (Puppeteer screenshot, chart…) is persisted automatically."""
+    sync_files_dir()
     src_dir = Path("/tmp/mav-dashboard")
     if not src_dir.is_dir():
         return 0
@@ -3197,7 +3379,7 @@ ASSET_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 
 
 def _asset_roots() -> list[Path]:
-    roots = [MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
+    roots = [FILES_DIR, MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
     if BOT_DIR.exists():
         roots.append(Path(BOT_DIR).resolve())
     # Optional roots, specific to the user's installation.
@@ -3353,6 +3535,8 @@ SENSITIVE_NAMES = {
     ".netrc", ".git-credentials", ".npmrc", ".pypirc", ".htpasswd", ".pgpass",
     "mail.conf", "mav.env", "mav-dashboard.env", "mav-server.env",
     "push_subs.json", "auth.json", "credentials.json",
+    # SSH private keys (their .pub halves are fine)
+    "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_ecdsa_sk", "id_ed25519_sk",
 }
 SENSITIVE_EXTS = {
     ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", ".ppk",
@@ -3412,11 +3596,19 @@ def resolve_download(name: str) -> "Path | None":
         except Exception:
             return None
     # Bare filename: look in the usual output folders first, then anywhere.
-    search_dirs = [MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
+    search_dirs = [FILES_DIR, MEDIA_DIR, ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
     for d in search_dirs:
         cand = d / name
         if allowed(cand):
             return cand.resolve()
+    # A file Mav shared earlier and that was since removed from its folder:
+    # serve the archived copy (the newest one with that name).
+    base = Path(name).name
+    for item in sorted(_media_load(), key=lambda x: x.get("ts", 0), reverse=True):
+        if item.get("name") == re.sub(r"[^A-Za-z0-9._-]", "_", base) and item.get("path"):
+            cand = Path(item["path"])
+            if allowed(cand):
+                return cand.resolve()
     for r in roots:
         cand = Path(r) / name
         if allowed(cand):
@@ -4230,6 +4422,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/briefing":
                 return self._send(200, get_briefing())
+            if path == "/api/onboarding":
+                return self._send(200, get_onboarding())
             if path == "/api/usage":
                 if USAGE is None:
                     return self._send(200, {"available": False})
@@ -4239,7 +4433,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/jobs":
                 return self._send(200, get_jobs())
             if path == "/api/job-templates":
-                return self._send(200, job_templates())
+                return self._send(200, job_templates(p.get("lang", "en")))
             if path == "/api/job-results":
                 return self._send(200, get_job_results())
             if path == "/api/proactivity":
@@ -4341,6 +4535,7 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     return self._send(404, {"error": "chart unavailable"})
             if path == "/api/download":
+                sync_files_dir()
                 res = download_response(p.get("path", ""))
                 if not res:
                     return self._send(404, "file not found", "text/plain")
@@ -4445,6 +4640,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/api/auth/"):
                 return self._auth_post(path, payload)
+            if path == "/api/onboarding":
+                return self._send(200, set_onboarding(bool(payload.get("done", True))))
+            if path == "/api/onboarding/profile":
+                return self._send(200, onboarding_profile(payload))
+            if path == "/api/onboarding/routines":
+                res = onboarding_routines(payload)
+                return self._send(200 if res.get("created") or res.get("ok") else 400, res)
             if path == "/api/briefing":
                 return self._send(200, set_briefing(bool(payload.get("enabled")),
                                                     str(payload.get("time") or "")))
@@ -4509,7 +4711,8 @@ class Handler(BaseHTTPRequestHandler):
                 res = save_job(payload)
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/job/template":
-                res = template_to_job(payload.get("id", ""), name=payload.get("name", ""))
+                res = template_to_job(payload.get("id", ""), name=payload.get("name", ""),
+                                      lang=str(payload.get("lang") or "en"))
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/job/snooze":
                 try:

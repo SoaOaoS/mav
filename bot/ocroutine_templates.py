@@ -7,7 +7,7 @@ the network; the API just copies a template into jobs.json when asked.
 
 from __future__ import annotations
 
-__all__ = ["TEMPLATES", "get", "as_jobs"]
+__all__ = ["TEMPLATES", "EN", "get", "localized", "as_jobs"]
 
 # `when` is kept human-readable here and expanded by the API into the concrete
 # time/days/every_minutes fields. `agent` must be one of the everyday helpers.
@@ -144,11 +144,74 @@ TEMPLATES: list[dict] = [
 ]
 
 
-def get(template_id: str) -> dict | None:
-    return next((t for t in TEMPLATES if t["id"] == template_id), None)
+# English wording (label, description, prompt). The catalog above is the
+# French original; `localized()` picks one by language. A prompt left out
+# here (None) keeps the French one — the model still answers in the user's
+# language. NOTHING TO REPORT is a quiet answer for the worker, like RAS.
+EN: dict[str, tuple[str, str, str | None]] = {
+    "morning-brief": (
+        "Morning brief", "A summary of the day: calendar, weather, what matters.",
+        "Give me a brief of the day: the weather where I live, the events in my "
+        "calendar, and the 3 things that deserve my attention today. Keep it to "
+        "a few lines.",
+    ),
+    "evening-recap": (
+        "Evening recap", "What happened today and what is left to do.",
+        "Review my day: what got done, what is left, and what is worth "
+        "preparing for tomorrow. Keep it short.",
+    ),
+    "weekly-review": (
+        "Weekly review", "A recap of the week, on Friday afternoon.",
+        "Do my weekly review: what moved forward, what got stuck, and 3 "
+        "concrete priorities for next week.",
+    ),
+    "monthly-review": (
+        "Monthly review", "A look back on the last day of the month.",
+        "Do my monthly review: what mattered this month, notable spending if "
+        "you know it, and one clear goal for next month.",
+    ),
+    "rain-reminder": (
+        "Umbrella if it rains", "A morning reminder, only when it will rain.",
+        "Tell me whether it will rain today and at what time, so I take an "
+        "umbrella. If you have no weather data, reply exactly: NOTHING TO REPORT",
+    ),
+    "news-digest": (
+        "News digest", "The headlines that matter on a topic, every morning.",
+        "Summarise today's news on the topics I care about: 5 headlines at "
+        "most, each with its source and why it matters.",
+    ),
+    "inbox-triage": (
+        "Inbox triage", "What deserves a reply, every morning.",
+        "Look at my inbox and tell me what deserves a reply today, with a "
+        "short suggested reply for each. If nothing is urgent, reply exactly: "
+        "NOTHING TO REPORT",
+    ),
+    "weekly-planning": (
+        "Plan the week", "Get ahead of the week, on Sunday evening.",
+        "Help me prepare my week: appointments, deadlines, and a realistic "
+        "plan for the 3 most important things.",
+    ),
+    "mail-watch": (
+        "Mail watch", "Spots the emails that need a reply and drafts one in the thread.",
+        None,
+    ),
+}
 
 
-def as_jobs() -> list[dict]:
+def localized(t: dict, lang: str = "fr") -> dict:
+    """A copy of template `t` worded for `lang` (French or English)."""
+    if (lang or "").lower().startswith("fr") or t["id"] not in EN:
+        return dict(t)
+    label, desc, prompt = EN[t["id"]]
+    return {**t, "label": label, "description": desc, "prompt": prompt or t["prompt"]}
+
+
+def get(template_id: str, lang: str = "fr") -> dict | None:
+    t = next((t for t in TEMPLATES if t["id"] == template_id), None)
+    return localized(t, lang) if t else None
+
+
+def as_jobs(lang: str = "fr") -> list[dict]:
     """The catalog as sent to the dashboard (no schedule expansion here)."""
     return [
         {
@@ -162,5 +225,5 @@ def as_jobs() -> list[dict]:
             "conditional": bool(t.get("skip_if")),
             "requires": t.get("requires", ""),
         }
-        for t in TEMPLATES
+        for t in (localized(x, lang) for x in TEMPLATES)
     ]

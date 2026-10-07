@@ -1,0 +1,84 @@
+# Mav with Docker Compose:
+#   cp .env.example .env        (optional: adjust ports, password, time zone)
+#   docker compose up -d
+# then open http://<this machine>:8787 — the welcome screen does the rest.
+# Update: docker compose pull && docker compose up -d
+name: mav
+
+x-mav: &mav
+  image: ghcr.io/soaoaos/mav:${MAV_VERSION:-latest}
+  build:
+    context: .
+    args:
+      MAV_VERSION: ${MAV_VERSION:-dev}
+  restart: unless-stopped
+  volumes:
+    - mav-data:/data
+  extra_hosts:
+    # Reach services on the host (e.g. Ollama) at host.docker.internal.
+    - host.docker.internal:host-gateway
+  environment:
+    TZ: ${TZ:-UTC}
+    OPENCODE_URL: http://engine:4096
+    PG_DSN: host=postgres port=5432 user=mav password=${POSTGRES_PASSWORD:-change-me-please} dbname=mav connect_timeout=5
+    MAV_REPO: SoaOaoS/mav
+    MAV_PROVIDER: ${MAV_PROVIDER:-}
+    MAV_MODEL: ${MAV_MODEL:-}
+    MAV_BASE_URL: ${MAV_BASE_URL:-}
+    MAV_PROVIDER_APIKEY: ${MAV_PROVIDER_APIKEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mav
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-please}
+      POSTGRES_DB: mav
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mav -d mav"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  engine:
+    <<: *mav
+    command: ["engine"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4096/global/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  web:
+    <<: *mav
+    command: ["web"]
+    ports:
+      - "${MAV_BIND:-0.0.0.0}:${MAV_PORT:-8787}:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      engine:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  worker:
+    <<: *mav
+    command: ["worker"]
+    depends_on:
+      web:
+        condition: service_healthy
+      engine:
+        condition: service_started
+
+volumes:
+  mav-data:
+  pgdata:
