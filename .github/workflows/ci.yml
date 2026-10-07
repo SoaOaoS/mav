@@ -51,7 +51,7 @@ jobs:
 
       - name: JavaScript (syntax)
         run: |
-          node --check dashboard/assets/js/app.js
+          for f in dashboard/assets/js/*.js; do node --check "$f"; done
           node --check dashboard/sw.js
           node --check docs/site.js
 
