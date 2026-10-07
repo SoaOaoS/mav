@@ -128,8 +128,9 @@ def _matches_day(job: dict, now: datetime) -> bool:
 
 
 def on_event(job: dict) -> bool:
-    """An event-triggered job has no time: it runs when the event arrives."""
-    return bool(job.get("on_event"))
+    """An event-triggered job has no time: it runs when the event arrives
+    (a webhook event, or N minutes before a calendar event)."""
+    return bool(job.get("on_event") or job.get("before_event"))
 
 
 def validate(job: dict) -> bool:

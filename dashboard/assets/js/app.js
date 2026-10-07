@@ -2598,6 +2598,7 @@ async function tellMeMore(n) {
    9. Routines
    ================================================================ */
 function jobMode(j) {
+  if (j.before_event) return "before";
   if (j.on_event) return "event";
   if (j.every_minutes) return "hours";
   if (j.days_of_month && j.days_of_month.length) return "monthly";
@@ -2606,11 +2607,13 @@ function jobMode(j) {
 }
 function jobWhen(j) {
   const mode = jobMode(j);
+  if (mode === "before") return beforeText(j.before_event);
   if (mode === "event")
     return `when ${(j.on_event && j.on_event.kind) || "an event"} fires`;
   if (mode === "hours") {
-    const h = Math.max(1, Math.round(Number(j.every_minutes) / 60));
-    return h === 1 ? "every hour" : `every ${h} hours`;
+    const m = Number(j.every_minutes);
+    if (m < 60 || m % 60) return `every ${m} minutes`;
+    return m === 60 ? "every hour" : `every ${m / 60} hours`;
   }
   if (mode === "monthly") {
     if (j.last_day_of_month) return `last day of the month at ${j.time}`;
@@ -3196,7 +3199,13 @@ function draftRoutine(text) {
 function escRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+function beforeText(b) {
+  const n = Number((b && b.minutes) || 0);
+  const what = b && b.contains ? `an event mentioning “${b.contains}”` : "each event";
+  return n ? `${n} min before ${what}` : `when ${what} starts`;
+}
 function draftWhen(d) {
+  if (d.mode === "before") return beforeText({ minutes: d.before_minutes, contains: d.before_contains });
   return d.mode === "hours"
     ? d.hours === 1
       ? "every hour"
@@ -3230,6 +3239,9 @@ function draftToJob(d) {
     if (d.last_day_of_month) job.last_day_of_month = true;
     if (d.days_of_month && d.days_of_month.length)
       job.days_of_month = d.days_of_month;
+  } else if (d.mode === "before") {
+    job.before_event = { minutes: Math.max(0, Math.round(Number(d.before_minutes) || 0)) };
+    if (d.before_contains) job.before_event.contains = d.before_contains;
   } else if (d.mode === "event") {
     job.on_event = { kind: d.event_kind || "custom" };
     if (d.event_contains) job.on_event.contains = d.event_contains;
@@ -3265,6 +3277,7 @@ function channelPicker(chosen) {
 }
 function pickedChannels(form) {
   const boxes = [...form.querySelectorAll("[data-chans] input")];
+  if (!boxes.length) return []; // no other channel set up: everywhere (Web Push)
   const on = boxes.filter((b) => b.checked).map((b) => b.value);
   if (!on.length) return ["none"]; // only the inbox on the home screen
   return on.length === boxes.length ? [] : on;
@@ -3332,6 +3345,8 @@ function editRoutine(src, existing = false) {
       last_day_of_month: !!src.last_day_of_month,
       event_kind: (src.on_event && src.on_event.kind) || "custom",
       event_contains: (src.on_event && src.on_event.contains) || "",
+      before_minutes: (src.before_event && src.before_event.minutes) ?? 15,
+      before_contains: (src.before_event && src.before_event.contains) || "",
       condition_type: cond.type || "none",
       condition_value: cond.value || "",
       condition_source: cond.source || "",
@@ -3346,6 +3361,7 @@ function editRoutine(src, existing = false) {
       time: "08:00",
       days_of_month: [],
       event_kind: "custom",
+      before_minutes: 15,
       condition_type: "none",
       ...src,
     };
@@ -3358,7 +3374,7 @@ function editRoutine(src, existing = false) {
       <small>Write it like a message to Mav. If there's nothing worth telling you, it stays quiet.</small></div>
     <div class="field"><span class="field-label">When</span>
       <div class="segmented" data-modes>
-        <button type="button" data-m="daily">Every day</button><button type="button" data-m="weekly">Some days</button><button type="button" data-m="monthly">Once a month</button><button type="button" data-m="hours">Every few hours</button><button type="button" data-m="event">On an event</button>
+        <button type="button" data-m="daily">Every day</button><button type="button" data-m="weekly">Some days</button><button type="button" data-m="monthly">Once a month</button><button type="button" data-m="hours">Every few hours</button><button type="button" data-m="event">On an event</button><button type="button" data-m="before" ${state.calendars && state.calendars.length ? "" : "hidden"}>Before a meeting</button>
       </div></div>
     <div class="when-row">
       <div class="field" data-f="time"><label>At</label><input type="time" name="time" value="${esc(d.time)}"></div>
@@ -3384,6 +3400,11 @@ function editRoutine(src, existing = false) {
           )
           .join("")}</select>
         <input type="text" name="event_contains" value="${esc(d.event_contains || "")}" placeholder="contains… (optional)"></div>
+      </div>
+      <div class="field" data-f="before">
+        <label>How long before each event</label>
+        <div class="row"><input type="number" min="0" max="1440" name="before_minutes" value="${esc(d.before_minutes ?? 15)}" style="width:90px"> min
+        <input type="text" name="before_contains" value="${esc(d.before_contains || "")}" placeholder="only events mentioning… (optional)"></div>
       </div>
       <div class="field" data-f="hours"><label>Every</label><div class="row"><input type="number" min="1" max="1440" name="hours" value="${esc(d.hours)}" style="width:90px">
         <select name="unit">
@@ -3428,7 +3449,8 @@ function editRoutine(src, existing = false) {
       .querySelectorAll("[data-m]")
       .forEach((b) => b.classList.toggle("is-active", b.dataset.m === x));
     form.querySelector('[data-f="time"]').hidden =
-      x === "hours" || x === "event";
+      x === "hours" || x === "event" || x === "before";
+    form.querySelector('[data-f="before"]').hidden = x !== "before";
     form.querySelector('[data-f="days"]').hidden = x !== "weekly";
     form.querySelector('[data-f="monthly"]').hidden = x !== "monthly";
     form.querySelector('[data-f="event"]').hidden = x !== "event";
@@ -3475,6 +3497,8 @@ function editRoutine(src, existing = false) {
       last_day_of_month: !!fd.get("last_day_of_month"),
       event_kind: fd.get("event_kind"),
       event_contains: String(fd.get("event_contains") || "").trim(),
+      before_minutes: Number(fd.get("before_minutes") || 0),
+      before_contains: String(fd.get("before_contains") || "").trim(),
       condition_type: fd.get("condition_type"),
       condition_value: String(fd.get("condition_value") || "").trim(),
       condition_source: String(fd.get("condition_source") || "").trim(),
@@ -5534,6 +5558,139 @@ $("#backupFile").addEventListener("change", () => {
   });
 });
 
+/* Calendars (bot/occalendar.py): CalDAV or a private iCal link, read-only.
+   Passwords and iCal links come back masked; leaving them keeps the stored one. */
+async function loadCalendars() {
+  if (!LIVE) return;
+  let r;
+  try {
+    r = await api.get("calendar");
+  } catch (_) {
+    return;
+  }
+  state.calendars = r.sources || [];
+  state.today = r.today || [];
+  const box = $("#calList");
+  box.hidden = !state.calendars.length;
+  box.innerHTML = state.calendars
+    .map(
+      (c) => `<div class="chan" data-id="${esc(c.id)}">
+        <span class="chan-type">${c.kind === "caldav" ? "CalDAV" : "iCal"}</span>
+        <strong>${esc(c.name)}</strong>
+        <span class="chan-acts">
+          <button class="btn btn-ghost btn-sm" data-cal="test">Test</button>
+          <button class="btn btn-ghost btn-sm" data-cal="edit">Edit</button>
+          <button class="switch" role="switch" aria-label="Enabled" aria-checked="${c.enabled ? "true" : "false"}" data-cal="toggle"></button>
+        </span></div>`,
+    )
+    .join("");
+}
+function fmtEvent(e) {
+  const d = new Date(e.start * 1000);
+  const day = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  const when = e.all_day ? `${day}, all day` : `${day} ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+  return `${when} — ${e.title}${e.location ? ` (${e.location})` : ""}`;
+}
+function editCalendar(c) {
+  const isNew = !c;
+  const kind = (c && c.kind) || "caldav";
+  const form = document.createElement("form");
+  form.className = "form";
+  form.innerHTML = `
+    <div class="segmented" data-kinds ${isNew ? "" : "hidden"}>
+      <button type="button" data-k="caldav">CalDAV account</button><button type="button" data-k="ics">iCal link</button>
+    </div>
+    <div class="field"><label>Name</label><input name="name" value="${esc((c && c.name) || "")}" placeholder="Personal"></div>
+    <div class="field"><label data-urllabel>Address</label><input name="url" value="${esc((c && c.url) || "")}" placeholder="https://"></div>
+    <div class="field-grid" data-auth>
+      <div class="field"><label>User name</label><input name="username" autocomplete="off" value="${esc((c && c.username) || "")}"></div>
+      <div class="field"><label>Password (an app password is best)</label><input name="password" type="password" autocomplete="new-password" value="${esc((c && c.password) || "")}"></div>
+    </div>
+    <p class="hint" data-hint></p>`;
+  let k = kind;
+  const hints = {
+    caldav:
+      "The CalDAV address of your account or of one calendar. Nextcloud: https://cloud.example.org/remote.php/dav — iCloud: https://caldav.icloud.com — Fastmail: https://caldav.fastmail.com/dav/calendars",
+    ics: "Google Calendar: Settings → your calendar → “Secret address in iCal format”. Outlook: Calendar → Shared calendars → Publish → ICS. Keep it private: anyone with it can read the calendar.",
+  };
+  const setKind = (x) => {
+    k = x;
+    form.querySelectorAll("[data-k]").forEach((b) => b.classList.toggle("is-active", b.dataset.k === x));
+    form.querySelector("[data-auth]").hidden = x !== "caldav";
+    form.querySelector("[data-urllabel]").textContent = x === "caldav" ? "CalDAV address" : "iCal link";
+    form.querySelector("[data-hint]").textContent = hints[x];
+  };
+  setKind(kind);
+  form.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-k]");
+    if (b) setKind(b.dataset.k);
+  });
+  form.addEventListener("submit", (e) => e.preventDefault());
+  const actions = [];
+  if (!isNew)
+    actions.push({
+      label: "Remove",
+      kind: "btn-danger",
+      left: true,
+      run: async () => {
+        await api.post("calendar/delete", { id: c.id }).catch(() => {});
+        loadCalendars();
+      },
+    });
+  actions.push(
+    { label: "Cancel" },
+    {
+      label: isNew ? "Add" : "Save",
+      kind: "btn-primary",
+      run: async (btn) => {
+        const fd = Object.fromEntries(new FormData(form));
+        fd.kind = k;
+        if (c) Object.assign(fd, { id: c.id, enabled: c.enabled });
+        btn.disabled = true;
+        try {
+          const r = await api.post("calendar/save", fd);
+          const t = await api.post("calendar/test", { id: r.id }).catch((e) => ({ error: e.message }));
+          await loadCalendars();
+          if (t.ok)
+            toast(
+              t.count
+                ? `Connected — next: ${fmtEvent(t.upcoming[0])}${t.count > 1 ? ` (+${t.count - 1} in the next 2 weeks)` : ""}`
+                : "Connected — nothing in the next 2 weeks.",
+            );
+          else toast(`Saved, but it could not be read: ${t.error || "?"}`, { error: true });
+        } catch (err) {
+          btn.disabled = false;
+          toast(err.message, { error: true });
+          return false;
+        }
+      },
+    },
+  );
+  modal.open({ title: isNew ? "Add a calendar" : `Calendar “${c.name}”`, body: form, actions });
+}
+$("#calAdd").addEventListener("click", () => {
+  if (needLive()) editCalendar(null);
+});
+$("#calList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-cal]");
+  if (!b) return;
+  const c = (state.calendars || []).find((x) => x.id === b.closest("[data-id]").dataset.id);
+  if (!c) return;
+  if (b.dataset.cal === "edit") return editCalendar(c);
+  if (b.dataset.cal === "toggle") {
+    await api.post("calendar/save", { ...c, enabled: !c.enabled }).catch((err) => toast(err.message, { error: true }));
+    return loadCalendars();
+  }
+  b.disabled = true;
+  try {
+    const r = await api.post("calendar/test", { id: c.id });
+    toast(r.count ? `Next: ${fmtEvent(r.upcoming[0])}` : "Readable — nothing in the next 2 weeks.");
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+  b.disabled = false;
+});
+
 /* Other channels: ntfy, Gotify, Discord, Slack (bot/occhannels.py). Secrets
    come back masked; leaving one masked keeps the stored value. */
 const CHAN_FIELDS = {
@@ -6541,6 +6698,7 @@ async function boot() {
     checkVersion(),
     loadBriefing(),
     loadChannels(),
+    loadCalendars(),
   ]);
   route();
   if (!state.chat.id) renderThread();

@@ -101,6 +101,7 @@
             <a href="#memory">Memory</a>
             <a href="#briefing">Daily briefing</a>
             <a href="#usage">Usage &amp; budget</a>
+            <a href="#calendar">Calendar</a>
             <a href="#routines">Routines</a>
             <a href="#proactivity">Proactivity</a>
             <a href="#drafts">Drafts &amp; background</a>
@@ -535,6 +536,37 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
             helper can run shell commands. The prompt each turn sends is
             47–69 % smaller than before (measured with
             <code>dashboard/tools/fake_openai.py</code>).
+          </p>
+        </section>
+
+        <section id="calendar">
+          <h2>Calendar</h2>
+          <p>
+            In <em>Settings → General → Calendars</em>, connect a
+            <strong>CalDAV</strong> account (Nextcloud, iCloud, Fastmail,
+            Radicale…; an app password is best) or paste a calendar's
+            <strong>private iCal link</strong> (Google Calendar: <em>Settings
+            → your calendar → Secret address in iCal format</em>; Outlook:
+            <em>Publish → ICS</em>). Mav only reads it. It is tested when you
+            add it, and the next event is shown.
+          </p>
+          <ul>
+            <li>
+              <strong>The briefing</strong> lists today's events, in order,
+              and points out a tight gap or an early start.
+            </li>
+            <li>
+              <strong>Before a meeting</strong> is a new kind of routine:
+              <em>15 minutes before each event</em>, or only events whose title
+              or place mentions a word. Mav gets the event's details with the
+              routine's prompt (“What do I need for it? How long is the drive?”).
+              Each one runs once, even across a restart.
+            </li>
+          </ul>
+          <p>
+            Recurring events, moved and cancelled occurrences and time zones
+            are handled. Passwords and iCal links are stored on your server
+            only (<code>calendar.json</code>) and never shown again.
           </p>
         </section>
 

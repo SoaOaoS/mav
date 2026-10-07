@@ -1,7 +1,8 @@
 """The daily briefing: one short message that starts (or ends) the day.
 
-It gathers what Mav already knows — facts about you, the alerts and routine
-reports of the last day, drafts waiting for you, your interests — and hands
+It gathers what Mav already knows — facts about you, today's calendar, the
+alerts and routine reports of the last day, drafts waiting for you, your
+interests — and hands
 it to the model as hidden context, with one visible line ("Brief me on my
 day"). The model adds what only it can fetch (the weather where you live).
 
@@ -25,6 +26,8 @@ Write my daily briefing from the context below. Rules:
 - Weather: if you know where I live (facts), look up today's forecast there
   and give it in one line (temperature range, rain or not, what to wear).
   If you do not know where I live, skip it and ask me once at the end.
+- "Today": my calendar below, in time order (skip if empty). Point out a
+  tight gap or an early start; never invent events.
 - "Happened since yesterday": the alerts and routine reports below, one line
   each, most important first. Skip the section if there are none.
 - "Needs you": drafts waiting for my approval and anything that calls for an
@@ -47,6 +50,7 @@ def build_context(
     notifications: list[dict] | None = None,
     drafts: int = 0,
     interests: list[dict] | None = None,
+    events: list[str] | None = None,
     now: float | None = None,
     window_h: int = 24,
 ) -> str:
@@ -62,6 +66,11 @@ def build_context(
     facts = [f.get("fact") for f in (facts or []) if f.get("fact")]
     lines.append("## What I know about you")
     lines += [f"- {f}" for f in facts[:15]] or ["- (nothing yet)"]
+
+    if events is not None:  # only when a calendar is connected
+        lines.append("")
+        lines.append("## Today's calendar")
+        lines += events or ["- (nothing scheduled)"]
 
     recent = [
         n for n in (notifications or [])
