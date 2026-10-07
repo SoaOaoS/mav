@@ -3545,7 +3545,20 @@ const WATCH_KINDS = {
     ico: "news",
     label: "News",
   },
+  rss: {
+    ph: "https://example.com/feed.xml",
+    hint: "New items in an RSS or Atom feed — several at once arrive as one alert.",
+    ico: "news",
+    label: "Feed",
+  },
+  github: {
+    ph: "owner/repo, e.g. home-assistant/core",
+    hint: "You'll hear about each new release of this GitHub repository.",
+    ico: "bolt",
+    label: "Releases",
+  },
 };
+const WATCH_FEEDS = ["news", "rss", "github"];
 let watchKind = "web";
 function setWatchKind(k) {
   watchKind = k;
@@ -3555,6 +3568,7 @@ function setWatchKind(k) {
   $("#watchTarget").placeholder = WATCH_KINDS[k].ph;
   $("#watchHint").textContent = WATCH_KINDS[k].hint;
   $("#watchBelow").hidden = k !== "price";
+  $("#watchOnly").hidden = !WATCH_FEEDS.includes(k);
 }
 $("#watchKinds").addEventListener("click", (e) => {
   const b = e.target.closest("[data-kind]");
@@ -3573,12 +3587,20 @@ function renderWatch(w) {
     ? items
         .map((x) => {
           const k = WATCH_KINDS[x.kind];
-          const [target, below] = String(x.target).split("|");
+          const [target, extra] = String(x.target).split("|");
+          const below = x.kind === "price" ? extra : "";
+          const only = WATCH_FEEDS.includes(x.kind) ? extra : "";
           const price = (x.last_state || "").match(/price=([0-9.]+)/);
+          const href = /^https?:/.test(target)
+            ? target
+            : x.kind === "github"
+              ? `https://github.com/${target}/releases`
+              : "";
           return `<div class="wcard"><div class="wtop">${I(k.ico)} ${esc(k.label)}
             <button class="icon-btn" data-rm="${x.id}" title="Stop">${I("trash")}</button></div>
-            <div class="wtarget">${/^https?:/.test(target) ? `<a href="${esc(target)}" target="_blank" rel="noopener">${esc(target.replace(/^https?:\/\/(www\.)?/, "").slice(0, 70))}</a>` : esc(target)}</div>
+            <div class="wtarget">${href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(target.replace(/^https?:\/\/(www\.)?/, "").slice(0, 70))}</a>` : esc(target)}</div>
             <div class="wstate"><span class="dot ${x.last_state ? "ok" : ""}"></span>
+              ${only ? `Only if it mentions ${esc(only)} · ` : ""}
               ${price ? `Now ${esc(price[1])}${below ? ` · alert below ${esc(below)}` : ""} · ` : below ? `Alert below ${esc(below)} · ` : ""}
               ${x.last_checked ? `checked ${esc(fmtRel(x.last_checked))}` : "first check soon"}</div></div>`;
         })
@@ -3590,14 +3612,18 @@ $("#watchForm").addEventListener("submit", async (e) => {
   if (!needLive()) return;
   let target = $("#watchTarget").value.trim();
   if (!target) return $("#watchTarget").focus();
-  if (watchKind !== "news" && !/^https?:\/\//i.test(target))
+  if (!["news", "github"].includes(watchKind) && !/^https?:\/\//i.test(target))
     target = "https://" + target;
+  target = target.replace(/\|/g, " ");
   const below = $("#watchBelow").value.trim();
   if (watchKind === "price" && below) target += `|${below}`;
+  const only = $("#watchOnly").value.replace(/\|/g, " ").trim();
+  if (WATCH_FEEDS.includes(watchKind) && only) target += `|${only}`;
   try {
     await api.post("watch/add", { kind: watchKind, target });
     $("#watchTarget").value = "";
     $("#watchBelow").value = "";
+    $("#watchOnly").value = "";
     toast("Got it — Mav will keep an eye on it.");
     loadWatch();
   } catch (_) {

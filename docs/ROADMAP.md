@@ -165,7 +165,9 @@ clock time.
 - The briefing shows today's events from a CalDAV test server, and a
   "15 min before" routine fires on time.
 
-### 2.4 RSS and more watchers · S
+### 2.4 RSS and more watchers · S · ✅ done
+
+> **Shipped:** feeds (RSS/Atom) and GitHub releases in *Keep an eye on*, with an optional "only if it mentions…". New items are grouped into one alert. Tests: `tests/test_feeds.py`.
 
 **Scope**
 - "Keep an eye on" gains **RSS/Atom feeds** (new items only, summarised) and
