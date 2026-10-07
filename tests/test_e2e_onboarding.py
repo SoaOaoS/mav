@@ -91,7 +91,7 @@ class OnboardingE2E(unittest.TestCase):
             pg.goto(self.url)
             pg.request.post(self.url + "api/auth/setup", data={"password": "e2e-password-123"})
             pg.goto(self.url)
-            pg.wait_for_selector("#welcome:not([hidden])", timeout=8000)
+            pg.wait_for_selector("#onboarding:not([hidden])", timeout=8000)
 
             # 1. model: Ollama needs no key
             pg.click('[data-obprov="ollama"]')
@@ -111,11 +111,16 @@ class OnboardingE2E(unittest.TestCase):
             # 4. first briefing opens its chat
             pg.click("#obNext")
             pg.wait_for_function("location.hash.startsWith('#chat/')", timeout=8000)
-            self.assertTrue(pg.locator("#welcome").is_hidden())
+            self.assertTrue(pg.locator("#onboarding").is_hidden())
 
             # Done once: a reload does not show it again.
             pg.reload()
             pg.wait_for_timeout(1500)
-            self.assertTrue(pg.locator("#welcome").is_hidden())
+            self.assertTrue(pg.locator("#onboarding").is_hidden())
+            # The overlay's styles never leak onto the chat's own greeting.
+            pg.click(".new-chat")
+            pg.wait_for_selector("div.welcome h1", timeout=5000)
+            pos = pg.evaluate("getComputedStyle(document.querySelector('div.welcome')).position")
+            self.assertNotEqual(pos, "fixed")
             self.assertEqual(errors, [])
             b.close()

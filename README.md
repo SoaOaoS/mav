@@ -21,6 +21,7 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 
 `curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
 
+**Try it in your browser:** [live demo](https://soaoaos.github.io/mav/demo/) (sample data, nothing to install) ·
 **Website & docs:** <https://soaoaos.github.io/mav/> ·
 [documentation](https://soaoaos.github.io/mav/docs.html)
 

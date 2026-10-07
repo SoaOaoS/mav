@@ -23,7 +23,7 @@ jobs:
       - name: Shell scripts (shellcheck)
         run: |
           shellcheck -S warning install.sh get.sh run-opencode.sh scripts/mav \
-            scripts/next-version.sh scripts/agent-hashes.sh dashboard/tools/make_certs.sh tests/*.sh
+            scripts/next-version.sh scripts/agent-hashes.sh scripts/build-demo.sh dashboard/tools/make_certs.sh tests/*.sh
 
       - name: Python (compile)
         run: python3 -m py_compile bot/*.py dashboard/server/*.py dashboard/tools/*.py
@@ -41,6 +41,14 @@ jobs:
           scripts/agent-hashes.sh
           git diff --exit-code agents/shipped.sha256 \
             || { echo "::error::run scripts/agent-hashes.sh and commit agents/shipped.sha256"; exit 1; }
+
+      - name: Demo copy up to date
+        run: |
+          scripts/build-demo.sh
+          git diff --exit-code docs/demo \
+            || { echo "::error::run scripts/build-demo.sh and commit docs/demo"; exit 1; }
+          test -z "$(git status --porcelain docs/demo)" \
+            || { echo "::error::docs/demo has untracked files: run scripts/build-demo.sh and commit"; exit 1; }
 
       - name: Tests
         run: |
