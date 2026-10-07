@@ -92,6 +92,7 @@
             <a href="#backup">Backup &amp; restore</a>
             <a href="#migrate">Moving to Docker</a>
             <a href="#requirements">Requirements</a>
+            <a href="#pi">Raspberry Pi &amp; ARM</a>
             <a href="#phone">On your phone</a>
           </div>
           <div class="side-group">
@@ -344,8 +345,10 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
               <code>dnf</code> accordingly.
             </li>
             <li>
-              About 1 GB of RAM for Mav itself — more if you run models
-              locally with Ollama.
+              About 400 MB of RAM for Mav itself (measured at rest: engine
+              258 MB, Postgres 43 MB, web app 35 MB, worker 29 MB) and
+              1.2 GB of disk for the images — more if you run models locally
+              with Ollama.
             </li>
             <li>An API key from a model provider, or an Ollama server.</li>
           </ul>
@@ -356,6 +359,53 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
               >opencode</a
             >
             agent engine.
+          </p>
+        </section>
+
+        <section id="pi">
+          <h2>Raspberry Pi &amp; ARM</h2>
+          <p>
+            Mav runs on 64-bit ARM: every change is tested on a native arm64
+            machine (the whole Docker stack, and the installer), and the
+            release images are published for <code>arm64</code>. A
+            <strong>Raspberry Pi 4 or 5</strong> runs it comfortably: at rest
+            the four containers use about 365 MB of memory together.
+          </p>
+          <ul>
+            <li>Use a <strong>64-bit</strong> system (Raspberry Pi OS Lite 64-bit, Ubuntu Server arm64).</li>
+            <li>Put the data on an <strong>SSD</strong> rather than the SD card: Postgres writes often.</li>
+            <li>Install with Docker (<a href="#install">above</a>); <code>docker compose pull</code> fetches the arm64 images.</li>
+          </ul>
+          <h3>Which model?</h3>
+          <table>
+            <thead><tr><th>Machine</th><th>Recommended</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Pi 4 / Pi 5, 4 GB</td>
+                <td>A cloud model (Anthropic, OpenAI, OpenRouter…). The Pi
+                only runs Mav; answers are as fast as on a big server.</td>
+              </tr>
+              <tr>
+                <td>Pi 5, 8–16 GB</td>
+                <td>A cloud model for chats, or a small local model with tool
+                calling through Ollama (a 1.5B–3B model such as Qwen 2.5 or
+                Llama 3.2) for privacy, accepting slow answers: on a CPU, the
+                first word can take tens of seconds. Use it as the
+                <em>Model for background work</em> (titles, memory) to keep
+                that work at home.</td>
+              </tr>
+              <tr>
+                <td>Pi + a PC with a GPU on the network</td>
+                <td>Run Ollama on the PC and point Mav at it
+                (<code>http://&lt;pc&gt;:11434/v1</code>): local and quick.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            Each helper only receives the tools it uses (see
+            <a href="#usage">Speed</a>), which keeps prompts small: that
+            matters most on slow hardware. The Speed card shows what your
+            machine actually does.
           </p>
         </section>
 
