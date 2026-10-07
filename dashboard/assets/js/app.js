@@ -904,6 +904,7 @@ function appendMessage(
           <button class="icon-btn" data-act="download" title="Download as Markdown">${I("download")}</button>
           <button class="icon-btn" data-act="retry" title="Regenerate">${I("refresh")}</button>
           <button class="icon-btn" data-act="speak" title="Read aloud">${I("volume")}</button>
+          ${speedHtml(m.metrics)}
         </div>
       </div>`;
     el.querySelector(".bubble").innerHTML = mdToHtml(m.text || "");
@@ -1572,6 +1573,20 @@ function fmtSeconds(ms) {
   if (ms < 60000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
   return `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`;
 }
+/* How long an answer took (shown with the message actions, 2.1). */
+function speedHtml(mt) {
+  if (!mt || mt.total_ms == null) return "";
+  const parts = [];
+  if (mt.ttft_ms != null) parts.push(`${fmtSeconds(mt.ttft_ms)} to first word`);
+  parts.push(`${fmtSeconds(mt.total_ms)} in all`);
+  if (mt.steps > 1) parts.push(`${mt.steps} steps`);
+  if (mt.input_tokens) {
+    const k = mt.input_tokens >= 1000 ? `${(mt.input_tokens / 1000).toFixed(1)}k` : mt.input_tokens;
+    const cached = mt.cached_tokens ? `, ${Math.round((100 * mt.cached_tokens) / mt.input_tokens)} % cached` : "";
+    parts.push(`${k} tokens read${cached}`);
+  }
+  return `<span class="msg-speed" title="How long this answer took">${esc(parts.join(" · "))}</span>`;
+}
 function fmtClockSec(ms) {
   return ms
     ? new Date(ms).toLocaleTimeString([], {
@@ -1806,6 +1821,10 @@ function applyEvent(st, ev, d) {
     else st.tools.push(entry);
     st.reply.tools = st.tools; // kept on the message once the answer ends
     paintStream(st);
+  } else if (ev === "metrics") {
+    st.reply.metrics = d;
+    const acts = st.el && st.el.querySelector(".msg-actions");
+    if (acts && !acts.querySelector(".msg-speed")) acts.insertAdjacentHTML("beforeend", speedHtml(d));
   } else if (ev === "done") {
     if (!st.reply.text && d.text) st.reply.text = d.text;
     st.reply.interrupted = !!d.interrupted;
@@ -4101,6 +4120,7 @@ async function loadUsage() {
   $("#usageSplit").innerHTML = Object.entries(u.by_source || {})
     .map(([k, v]) => `<span><strong>${esc(label[k] || k)}</strong> ${money(v.cost)} · ${v.answers}</span>`)
     .join("");
+  renderSpeed(u.speed || {});
   $("#budgetAmount").value = b.monthly_usd || "";
   setBudgetAction(b.action);
   $("#smallModel").value = u.small_model || "";
@@ -4118,6 +4138,18 @@ async function loadUsage() {
         .join("");
     }
   } catch (_) {}
+}
+function renderSpeed(sp) {
+  $("#speedCard").hidden = !sp.answers;
+  if (!sp.answers) return;
+  $("#speedTtft").textContent = sp.ttft_ms != null ? fmtSeconds(sp.ttft_ms) : "—";
+  $("#speedTotal").textContent = sp.total_ms != null ? fmtSeconds(sp.total_ms) : "—";
+  $("#speedSteps").textContent = sp.steps != null ? String(sp.steps) : "—";
+  $("#speedIn").textContent = sp.input_tokens != null ? `${compact(sp.input_tokens)} tokens` : "—";
+  const bits = [`${sp.answers} answer${sp.answers > 1 ? "s" : ""} measured`];
+  if (sp.ttft_p90_ms != null && sp.answers >= 10) bits.push(`9 in 10 start within ${fmtSeconds(sp.ttft_p90_ms)}`);
+  if (sp.cached_pct != null) bits.push(`${sp.cached_pct} % of the prompt came from the provider's cache`);
+  $("#speedHint").textContent = bits.join(" · ") + ".";
 }
 $("#budgetAction").addEventListener("click", (e) => {
   const b = e.target.closest("[data-v]");

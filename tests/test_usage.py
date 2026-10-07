@@ -35,6 +35,34 @@ class StoreTest(unittest.TestCase):
         self.assertAlmostEqual(t["cost"], 0.03)
         self.assertEqual(t["model"], "anthropic/claude-x")
 
+    def test_speed_medians(self):
+        self.assertEqual(self.u.speed_summary(), {"answers": 0})
+        for ttft, total, steps, inp, cached in ((800, 3000, 1, 4000, 0), (1200, 5000, 2, 6000, 3000),
+                                                 (30000, 60000, 4, 9000, 0)):
+            self.u.record_speed("chat", ttft, total, steps, inp, cached)
+        self.u.record_speed("routine", 99999, 99999, 9, 1, 0)  # routines are not chat speed
+        sp = self.u.speed_summary()
+        self.assertEqual(sp["answers"], 3)
+        self.assertEqual(sp["ttft_ms"], 1200)        # the median, not the mean (10 667)
+        self.assertEqual(sp["ttft_p90_ms"], 30000)
+        self.assertEqual(sp["total_ms"], 5000)
+        self.assertEqual(sp["input_tokens"], 6000)
+        self.assertAlmostEqual(sp["steps"], 2.33, places=2)
+        self.assertEqual(sp["cached_pct"], 15.8)
+        self.assertEqual(ocusage.speed_stats([{"ttft": None, "total": 10}])["ttft_ms"], None)
+
+    def test_speed_keeps_a_bounded_history(self):
+        for i in range(ocusage.SPEED_KEEP + 20):
+            self.u.record_speed("chat", i, i, 1)
+        import json  # noqa: PLC0415
+        self.assertEqual(len(json.loads(self.u.path.read_text())["speed"]), ocusage.SPEED_KEEP)
+
+    def test_answer_metrics(self):
+        m = mav_api.answer_metrics(100.0, 101.25, 104.0, [entry(1000, 50, 0)["info"], entry(200, 30, 0)["info"]])
+        self.assertEqual((m["ttft_ms"], m["total_ms"], m["steps"]), (1250, 4000, 2))
+        self.assertEqual((m["input_tokens"], m["cached_tokens"], m["output_tokens"]), (1220, 20, 90))
+        self.assertIsNone(mav_api.answer_metrics(100.0, None, 101.0, [])["ttft_ms"])
+
     def test_summary_by_source(self):
         self.u.record_entries("chat", [entry(100, 20, 0.5)])
         self.u.record_entries("routine", [entry(10, 10, 0.25)])

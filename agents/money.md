@@ -2,10 +2,10 @@
 description: Helps with budgets, purchases, subscriptions and comparing prices or offers
 mode: all
 permission:
+  "*": deny
   read: allow
   websearch: allow
   webfetch: allow
-  todowrite: allow
   edit:
     "*": deny
     "mav-files/*": allow

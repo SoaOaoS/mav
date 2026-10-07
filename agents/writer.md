@@ -2,6 +2,7 @@
 description: Drafts and polishes emails, messages, posts and letters in the right tone
 mode: all
 permission:
+  "*": deny
   read: allow
   webfetch: allow
   edit:

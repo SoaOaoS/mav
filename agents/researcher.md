@@ -3,11 +3,14 @@ description: Looks things up on the web, checks facts and compares options, with
 mode: all
 permission:
   read: allow
-  grep: allow
-  glob: allow
   websearch: allow
   webfetch: allow
-  todowrite: allow
+  bash: deny
+  task: deny
+  todowrite: deny
+  glob: deny
+  grep: deny
+  skill: deny
   edit:
     "*": deny
     "mav-files/*": allow

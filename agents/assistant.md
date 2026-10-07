@@ -3,12 +3,14 @@ description: Your everyday assistant — answers directly, and calls in the Rese
 mode: primary
 permission:
   read: allow
-  grep: allow
-  glob: allow
-  todowrite: allow
   task: allow
   websearch: allow
   webfetch: allow
+  bash: deny
+  todowrite: deny
+  glob: deny
+  grep: deny
+  skill: deny
   edit:
     "*": deny
     "mav-files/*": allow

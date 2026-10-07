@@ -205,6 +205,34 @@ def record_usage(source: str, entries: list) -> None:
             pass
 
 
+def answer_metrics(t_sent: float, t_first: float | None, t_end: float, entries: list) -> dict:
+    """How long one answer took and what it cost in prompt: shown under the
+    answer, kept for the Speed card in Usage."""
+    steps = [e for e in entries if isinstance(e, dict)]
+    cached = sum(int(((e.get("tokens") or {}).get("cache") or {}).get("read") or 0) for e in steps)
+    sent = sum(int((e.get("tokens") or {}).get("input") or 0) for e in steps) + cached
+    out = sum(int((e.get("tokens") or {}).get("output") or 0) + int((e.get("tokens") or {}).get("reasoning") or 0)
+              for e in steps)
+    return {
+        "ttft_ms": int((t_first - t_sent) * 1000) if t_first else None,
+        "total_ms": int((t_end - t_sent) * 1000),
+        "steps": len(steps),
+        "input_tokens": sent,
+        "cached_tokens": cached,
+        "output_tokens": out,
+    }
+
+
+def record_speed(source: str, m: dict) -> None:
+    if USAGE is None:
+        return
+    try:
+        USAGE.record_speed(source, m.get("ttft_ms"), m.get("total_ms") or 0, m.get("steps") or 0,
+                           m.get("input_tokens") or 0, m.get("cached_tokens") or 0)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def budget_blocked() -> bool:
     try:
         return bool(USAGE and USAGE.blocked())
@@ -3118,6 +3146,7 @@ class Run:
         self.agent_out = agent
         self.recalled = 0
         self.tools: list[dict] = []
+        self.metrics: dict = {}
         self.status = "running"  # running | done | error
         self.interrupted = False
         self.error: str | None = None
@@ -3160,6 +3189,8 @@ class Run:
                     self.text = data.get("text") or ""
                 self.interrupted = bool(data.get("interrupted"))
                 self.status = "done"
+            elif event == "metrics":
+                self.metrics = data
             elif event == "error":
                 self.error = data.get("message") or "engine error"
                 self.status = "error"
@@ -3192,7 +3223,7 @@ class Run:
                 "session": self.sid, "text": self.text, "tools": list(self.tools),
                 "status": self.status, "interrupted": self.interrupted,
                 "agent": self.agent_out, "recalled": self.recalled,
-                "error": self.error, "seq": len(self.events),
+                "error": self.error, "seq": len(self.events), "metrics": self.metrics,
             }
 
     def follow(self, from_seq: int = 0):
@@ -4053,6 +4084,7 @@ def stream_answer(
     if context:
         body["parts"].insert(0, {"type": "text", "text": context, "synthetic": True})
 
+    t_sent = time.time()  # speed is measured from here (2.1: time to first word)
     try:
         http_json(f"{OPENCODE_URL}/session/{sid}/prompt_async", method="POST", body=body)
     except Exception as exc:  # noqa: BLE001
@@ -4060,6 +4092,7 @@ def stream_answer(
         return
 
     yield sse("start", {"session": sid, "agent": ag, "recalled": recalled})
+    t_first: float | None = None
 
     deadline = time.time() + 900      # overall guard (15 min)
     idle_limit = 240                  # no real progress (4 min)
@@ -4172,6 +4205,8 @@ def stream_answer(
                 delta = ""
             last_sent = text
             if delta:
+                if t_first is None:
+                    t_first = time.time()
                 yield sse("delta", {"delta": delta})
 
         if linfo.get("error"):
@@ -4192,7 +4227,11 @@ def stream_answer(
             break
 
     if turn_info:
-        record_usage("routine" if raw_session else "chat", list(turn_info.values()))
+        source = "routine" if raw_session else "chat"
+        record_usage(source, list(turn_info.values()))
+        metrics = answer_metrics(t_sent, t_first, time.time(), list(turn_info.values()))
+        record_speed(source, metrics)
+        yield sse("metrics", metrics)
 
     # Interrupted on purpose: whatever text was shown stays, but this is not a
     # finished exchange, so it is not remembered as the answer.
@@ -4534,7 +4573,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/usage":
                 if USAGE is None:
                     return self._send(200, {"available": False})
-                return self._send(200, {"available": True, **USAGE.summary(int(p.get("days") or 30))})
+                days = int(p.get("days") or 30)
+                return self._send(200, {"available": True, **USAGE.summary(days),
+                                        "speed": USAGE.speed_summary(days)})
             if path == "/api/status":
                 return self._send(200, get_status())
             if path == "/api/jobs":

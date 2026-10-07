@@ -2,8 +2,8 @@
 description: Organises days, trips, projects and to-do lists into clear, doable plans
 mode: all
 permission:
+  "*": deny
   read: allow
-  todowrite: allow
   websearch: allow
   webfetch: allow
   edit:

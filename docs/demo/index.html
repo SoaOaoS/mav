@@ -813,6 +813,21 @@
                 <div class="usage-bars" id="usageBars" aria-label="Cost per day, last 30 days"></div>
                 <div class="usage-split" id="usageSplit"></div>
               </div>
+              <div class="card" id="speedCard" hidden>
+                <div class="setting-row">
+                  <div>
+                    <strong>Speed</strong>
+                    <span>Typical chat answer over the last 30 days (median). Each answer shows its own times next to its buttons.</span>
+                  </div>
+                </div>
+                <div class="usage-head speed-head">
+                  <div class="usage-stat"><span>First word after</span><strong id="speedTtft">—</strong></div>
+                  <div class="usage-stat"><span>Whole answer</span><strong id="speedTotal">—</strong></div>
+                  <div class="usage-stat"><span>Steps per answer</span><strong id="speedSteps">—</strong></div>
+                  <div class="usage-stat"><span>Prompt read</span><strong id="speedIn">—</strong></div>
+                </div>
+                <p class="hint" id="speedHint"></p>
+              </div>
               <div class="card">
                 <div class="setting-row">
                   <div>

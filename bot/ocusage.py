@@ -47,6 +47,41 @@ def tally(entries: list[dict]) -> dict:
     return out
 
 
+SPEED_KEEP = 500  # answers whose timings are kept
+
+
+def _median(values: list) -> float | None:
+    v = sorted(x for x in values if x is not None)
+    if not v:
+        return None
+    mid = len(v) // 2
+    return v[mid] if len(v) % 2 else (v[mid - 1] + v[mid]) / 2
+
+
+def _p90(values: list) -> float | None:
+    v = sorted(x for x in values if x is not None)
+    return v[min(len(v) - 1, int(round(0.9 * (len(v) - 1))))] if v else None
+
+
+def speed_stats(samples: list[dict]) -> dict:
+    """Medians over answers: what "fast" means is the typical answer, not the mean
+    (one slow web search must not hide that most answers got quicker)."""
+    if not samples:
+        return {"answers": 0}
+    ins = [s.get("in", 0) for s in samples]
+    cached = sum(s.get("cached", 0) for s in samples)
+    total_in = sum(ins)
+    return {
+        "answers": len(samples),
+        "ttft_ms": _median([s.get("ttft") for s in samples]),
+        "ttft_p90_ms": _p90([s.get("ttft") for s in samples]),
+        "total_ms": _median([s.get("total") for s in samples]),
+        "steps": round(sum(s.get("steps", 0) for s in samples) / len(samples), 2),
+        "input_tokens": _median(ins),
+        "cached_pct": round(100 * cached / total_in, 1) if total_in else None,
+    }
+
+
 class Usage:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -101,6 +136,26 @@ class Usage:
         t = tally(entries)
         self.record(source, t["input"], t["output"], t["cost"], t["model"])
         return t
+
+    # ------------------------------------------------------------- speed
+    def record_speed(self, source: str, ttft_ms: int | None, total_ms: int, steps: int,
+                     input_tokens: int = 0, cached_tokens: int = 0, ts: float | None = None) -> None:
+        """One answer's timings: time to first word, total, steps, prompt size."""
+        sample = {"ts": int(ts or time.time()), "src": source if source in SOURCES else "chat",
+                  "ttft": int(ttft_ms) if ttft_ms is not None else None, "total": int(total_ms),
+                  "steps": int(steps), "in": int(input_tokens), "cached": int(cached_tokens)}
+        with self._locked():
+            data = self._read()
+            speed = data.setdefault("speed", [])
+            speed.append(sample)
+            del speed[:-SPEED_KEEP]
+            self._write(data)
+
+    def speed_summary(self, days: int = 30, source: str | None = "chat") -> dict:
+        since = time.time() - days * 86400
+        samples = [s for s in self._read().get("speed", [])
+                   if s.get("ts", 0) >= since and (source is None or s.get("src") == source)]
+        return speed_stats(samples)
 
     # ------------------------------------------------------------- reading
     def month_cost(self, month: str | None = None) -> float:

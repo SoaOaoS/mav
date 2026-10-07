@@ -520,6 +520,22 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
               plenty), so they cost a fraction of your main one.</li>
           </ul>
           <p>A local model (Ollama) costs nothing here.</p>
+                  <h3>Speed</h3>
+          <p>
+            Every answer shows how long it took next to its buttons: time to
+            the first word, the whole answer, the number of steps and how much
+            prompt the model read (and how much of it came from the provider's
+            cache). <em>Settings → Usage → Speed</em> gives the typical answer
+            over 30 days (medians, so one slow web search does not hide that
+            most answers got quicker).
+          </p>
+          <p>
+            To keep answers quick, each helper only receives the tools it uses:
+            the Writer, Planner and Money helpers get a closed list, and no
+            helper can run shell commands. The prompt each turn sends is
+            47–69 % smaller than before (measured with
+            <code>dashboard/tools/fake_openai.py</code>).
+          </p>
         </section>
 
         <section id="routines">

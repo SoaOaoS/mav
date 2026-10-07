@@ -96,6 +96,22 @@ def edit_rules(text: str) -> dict:
     return rules
 
 
+def top_permissions(text: str) -> dict:
+    """The single-value `permission` rules of an agent's frontmatter, in order."""
+    front = text.split("---")[1].splitlines()
+    rules, inside = {}, False
+    for line in front:
+        if line == "permission:":
+            inside = True
+        elif inside and line.startswith("  ") and not line.startswith("    "):
+            key, _, val = line.strip().rpartition(":")
+            if val.strip():
+                rules[key.strip().strip('"')] = val.strip()
+        elif inside and not line.startswith(" "):
+            break
+    return rules
+
+
 class HelperPermissionsTest(unittest.TestCase):
     """Every shipped helper may write in mav-files/ and nowhere else."""
 
@@ -107,6 +123,23 @@ class HelperPermissionsTest(unittest.TestCase):
             self.assertEqual(edit.get("mav-files/*"), "allow", f.name)
             self.assertEqual(edit.get("*/mav-files/*"), "allow", f.name)
             self.assertEqual(list(edit)[0], "*", f"{f.name}: the catch-all must come first (last match wins)")
+
+    def test_no_helper_can_run_commands(self):
+        """The engine's default is "*": allow, so a tool not named is allowed:
+        every helper must deny bash, either by name or with a closed list."""
+        for f in sorted((ROOT / "agents").glob("*.md")):
+            perm = top_permissions(f.read_text())
+            closed = list(perm)[:1] == ["*"] and perm["*"] == "deny"
+            self.assertTrue(closed or perm.get("bash") == "deny", f"{f.name} lets the model run shell commands")
+            self.assertNotEqual(perm.get("bash"), "allow", f.name)
+
+    def test_focused_helpers_get_a_closed_list(self):
+        """Writer, Planner and Money only get the tools they use (smaller prompt, 2.1)."""
+        for name in ("writer", "planner", "money"):
+            perm = top_permissions((ROOT / "agents" / f"{name}.md").read_text())
+            self.assertEqual(list(perm)[0], "*", name)
+            self.assertEqual(perm["*"], "deny", name)
+            self.assertNotIn("task", [k for k, v in perm.items() if v == "allow"], name)
 
     def test_the_assistant_knows_how_to_share(self):
         text = (ROOT / "agents" / "assistant.md").read_text()
