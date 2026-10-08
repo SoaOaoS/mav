@@ -745,6 +745,9 @@ async function boot() {
   }
   if (auth && auth.user) ME = auth.user;
   MODEL_MANAGED = !!(auth && auth.model_managed);
+  EDITION = (auth && auth.edition) || "self";
+  FEATURES = (auth && auth.features) || {};
+  applyFeatures();
   document.body.dataset.model = MODEL_MANAGED ? "managed" : "own";
   applyRole();
   if (auth && !auth.enabled) $("#accountRow").hidden = true;

@@ -55,6 +55,7 @@ PRESETS: dict[str, dict] = {
     },
     "ollama": {
         "label": "Ollama (local)",
+        "self_only": True,  # on this machine: unreachable from Mav Cloud
         "hint": "Models running on your own machine or LAN. No key needed.",
         "native": False,
         "env": "OLLAMA_API_KEY",

@@ -485,7 +485,7 @@ $("#mcpSave").addEventListener("click", () => {
 
 /* ---- Version & updates ---- */
 async function checkVersion(force = false) {
-  if (!LIVE) return;
+  if (!LIVE || !feature("updates")) return;
   let v;
   try {
     v = await api.get(`version${force ? "?refresh=1" : ""}`);

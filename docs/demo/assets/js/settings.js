@@ -18,6 +18,7 @@ function openSettingsTab(tab) {
   if (!$(`#spanel-${tab}`)) tab = "model";
   if (!isOwner()) tab = "general"; // the rest is the owner's
   if (tab === "model" && MODEL_MANAGED) tab = "general"; // the plan's model
+  if (tab === "usage" && !feature("usage")) tab = "general";
   $$("[data-stab]").forEach((t) =>
     t.classList.toggle("is-active", t.dataset.stab === tab),
   );

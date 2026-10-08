@@ -189,6 +189,17 @@ and `/api/hooks/*` (webhooks carry their own token). `sudo mav password` resets
 it from the machine; `MAV_AUTH=off` turns sign-in off (only behind your own
 authenticating proxy). Stored in `BOT_DIR/auth.json` (PBKDF2-SHA256).
 
+**Three versions, one app.** `MAV_EDITION` (`self`, the default; `mymav`;
+`cloudmav`, set by Mav Cloud) decides which parts the app has
+(`server/mav_edition.py`, one table). Self-hosted has everything. MyMav
+(Mav Cloud with your own key) has no family, password, backup, updates,
+advanced section, webhook or "Run code" switch: the platform does those
+(e-mail sign-in, nightly backups and export, updates, a sandbox that is always
+on). CloudMav also has no model settings, costs and budget, or debates. Parts
+that are off are hidden (`/api/auth/state` carries `edition` and `features`)
+and their routes answer 404; in the cloud, Ollama (local) and the "Your files"
+and "Web browser" connections are not offered.
+
 **A model that comes with the plan.** `MAV_MODEL_MANAGED=1` (set by Mav Cloud
 for CloudMav) makes the model part of the plan, not a setting: the Model tab,
 the background-model setting and the welcome flow's model step are hidden, and

@@ -24,7 +24,7 @@ const PAL_ACTIONS = [
       $("#factInput").focus();
     },
   },
-  { text: "Change the model", ico: "cpu", model: true, run: () => go("settings", "model") },
+  { text: "Change the model", ico: "cpu", feature: "model", run: () => go("settings", "model") },
   {
     text: "Custom instructions",
     ico: "edit",
@@ -50,6 +50,7 @@ const PAL_ACTIONS = [
   {
     text: "Check for updates",
     ico: "download",
+    feature: "updates",
     run: () => {
       go("settings", "general");
       checkVersion(true).then((v) => v && v.update_available && openUpdate());
@@ -102,7 +103,7 @@ function renderPalette(q) {
         run: () => newChat(a),
       }),
     );
-  PAL_ACTIONS.filter((a) => !(a.model && MODEL_MANAGED) && (!q || a.text.toLowerCase().includes(ql))).forEach(
+  PAL_ACTIONS.filter((a) => !(a.feature && !feature(a.feature)) && !(a.feature === "model" && MODEL_MANAGED) && (!q || a.text.toLowerCase().includes(ql))).forEach(
     (a) => items.push({ group: "Actions", ...a }),
   );
   palItems = items;

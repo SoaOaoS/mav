@@ -9,6 +9,16 @@
 let ME = { id: 0, name: "", role: "owner" };
 // Mav Cloud's included plan: the model comes with the plan, nobody changes it.
 let MODEL_MANAGED = false;
+// Which Mav this is (self, mymav, cloudmav) and the parts of the app it has
+// (dashboard/server/mav_edition.py). Unknown parts count as on (the demo).
+let EDITION = "self";
+let FEATURES = {};
+const feature = (name) => FEATURES[name] !== false;
+function applyFeatures() {
+  for (const [name, on] of Object.entries(FEATURES))
+    document.body.classList.toggle(`no-${name}`, on === false);
+  document.body.classList.toggle("is-cloud", EDITION !== "self");
+}
 let AUTH_NAMED = false; // several accounts: sign-in asks for a name
 const isOwner = () => ME.role === "owner";
 
@@ -64,7 +74,7 @@ const VIEW_TITLES = {
 };
 
 function go(view, sub, { push = true } = {}) {
-  if (!$(`#view-${view}`) || (view === "debates" && !isOwner())) view = "chat";
+  if (!$(`#view-${view}`) || (view === "debates" && (!isOwner() || !feature("debates")))) view = "chat";
   state.view = view;
   $$(".nav-item").forEach((b) =>
     b.classList.toggle("is-active", b.dataset.view === view),
