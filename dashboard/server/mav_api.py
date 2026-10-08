@@ -107,6 +107,11 @@ MEMBER_POST = frozenset({
 })
 MEMBER_POST_PREFIXES = ("/api/auth/", "/api/memory/")
 
+# Mav Cloud's included plan: the platform gives Mav its model and pays for
+# it, so nobody here may change the model, the key or the background model.
+MODEL_MANAGED = os.environ.get("MAV_MODEL_MANAGED", "").lower() in ("1", "true", "yes")
+MODEL_POST = frozenset({"/api/config/provider", "/api/config/provider/test", "/api/usage/small-model"})
+
 # Calls about one chat, and where they carry its id: only its owner may.
 SESSION_GET = {"/api/session": "id", "/api/session/export": "id", "/api/stream": "session"}
 SESSION_POST = {"/api/session/rename": "id", "/api/session/agent": "id", "/api/session/pin": "id",
@@ -192,6 +197,9 @@ class Handler(BaseHTTPRequestHandler):
         """False (and a 403/404 sent) when the current user may not do this."""
         if not path.startswith("/api/"):
             return True
+        if MODEL_MANAGED and method == "POST" and path in MODEL_POST:
+            self._send(403, {"error": "The model is included in your plan and managed by Mav Cloud."})
+            return False
         if not mav_core.is_owner():
             allowed = (path in MEMBER_GET) if method == "GET" else (
                 path in MEMBER_POST or path.startswith(MEMBER_POST_PREFIXES))
@@ -359,7 +367,8 @@ class Handler(BaseHTTPRequestHandler):
     def _get(self, path: str, p: dict):
         try:
             if path == "/api/auth/state":
-                return self._send(200, mav_core.AUTH.state(self.headers.get("Cookie", "")))
+                return self._send(200, {**mav_core.AUTH.state(self.headers.get("Cookie", "")),
+                                        "model_managed": MODEL_MANAGED})
             if path == "/api/health":
                 return self._send(200, {"ok": True})
             if path == "/api/briefing":

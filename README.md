@@ -19,7 +19,11 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/SoaOaoS/mav/badge)](https://securityscorecards.dev/viewer/?uri=github.com/SoaOaoS/mav)
 [![Security policy](https://img.shields.io/badge/security-policy-E8962E)](SECURITY.md)
 
-`curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
+**No server? [Start your Mav in the cloud](https://app.getmav.dev)** —
+**MyMav** (9 €/month, your own model key) or **CloudMav** (19 €/month, model
+included). [Compare the plans](https://getmav.dev/#cloud).
+
+**Or run it yourself, free:** `curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
 
 **Try it in your browser:** [live demo](https://getmav.dev/demo/) (sample data, nothing to install) ·
 **Website & docs:** <https://getmav.dev/> ·

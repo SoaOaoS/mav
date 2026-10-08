@@ -2519,6 +2519,10 @@ a.btn:hover {
 body[data-role="member"] .owner-only {
   display: none !important;
 }
+/* Mav Cloud's included plan: the model is the plan's, not a setting. */
+body[data-model="managed"] .model-only {
+  display: none !important;
+}
 /* Other notification channels (ntfy, Gotify, Discord, Slack). */
 .chan-list {
   display: flex;

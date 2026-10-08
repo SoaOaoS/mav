@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mav — the AI assistant that works while you don't</title>
+    <title>Mav — the AI assistant that works while you don't · in the cloud or at home</title>
     <meta
       name="description"
       content="Mav is an everyday AI assistant you run yourself: it remembers you, runs routines on its own, ranks what matters, prepares drafts and keeps an eye on things — on your machine, with your model."
@@ -45,7 +45,8 @@
           <a href="#film">Film</a>
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
-          <a href="#install">Install</a>
+          <a href="#cloud">Pricing</a>
+          <a href="#install">Self-host</a>
           <a href="docs.html">Docs</a>
           <a href="demo/">Live demo</a>
         </nav>
@@ -74,20 +75,21 @@
         </div>
         <div class="wrap">
           <div class="hero-copy">
-            <a class="pill" id="versionPill" href="https://github.com/SoaOaoS/mav/releases" target="_blank" rel="noopener" data-reveal
-              ><b data-latest-version>New</b> Docker install, files in the chat, a live demo →</a
+            <a class="pill" id="versionPill" href="#cloud" data-reveal
+              ><b>New</b> Mav Cloud: your own Mav, nothing to install →</a
             >
             <h1 class="split" data-split>The assistant that <em>works while you don't.</em></h1>
             <p class="lede" data-reveal style="--i: 3">
               ChatGPT answers when you ask. Mav <strong>notices things</strong>,
               <strong>decides what deserves your attention</strong> and
-              <strong>gets it done</strong>. On your machine, with the model you choose.
+              <strong>gets it done</strong>. In the cloud in one minute, or on your own machine.
             </p>
             <div class="hero-cta" data-reveal style="--i: 4">
-              <a class="btn" href="#install">
-                Install Mav
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7" /></svg>
+              <a class="btn" href="https://app.getmav.dev">
+                Start my Mav
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
               </a>
+              <a class="btn ghost" href="#cloud">Compare the plans</a>
               <a class="btn ghost" href="demo/">Try the live demo</a>
               <a class="btn ghost" href="#film">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z" /></svg>
@@ -95,9 +97,9 @@
               </a>
             </div>
             <ul class="hero-points" data-reveal style="--i: 5">
+              <li>Cloud from 9 €/month</li>
+              <li>Or self-hosted, free</li>
               <li>Open source · MIT</li>
-              <li>Any model, even local</li>
-              <li>No account, no telemetry</li>
             </ul>
           </div>
 
@@ -369,14 +371,74 @@
             <article class="tile wide" data-reveal>
               <span class="tile-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg></span>
               <h3>Private by design</h3>
-              <p>Chats, memory and routines stay on your machine. With a local model, nothing leaves home.</p>
+              <p>Self-hosted, everything stays at home. In the cloud, your Mav is yours alone, kept in Europe, exported or deleted in one click.</p>
             </article>
             <article class="tile wide" data-reveal style="--i: 1">
               <span class="tile-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5" /></svg></span>
               <h3>Any model, no terminal</h3>
-              <p>Claude, GPT, Ollama, OpenRouter… Switch from Settings: paste a key, pick from the list.</p>
+              <p>Claude, GPT, Ollama, OpenRouter… Paste a key in the app, pick from the list. Or take CloudMav: the model is included.</p>
             </article>
           </div>
+        </div>
+      </section>
+
+      <!-- ============ CLOUD / PRICING ============ -->
+      <section class="section band" id="cloud">
+        <div class="wrap">
+          <header class="section-head" data-reveal>
+            <span class="eyebrow">Mav Cloud</span>
+            <h2>Your own Mav, <em>without a server.</em></h2>
+            <p>Sign in with your e-mail and Mav is running a minute later: same app, same routines, kept in Europe. It sleeps when you do and wakes for its routines.</p>
+          </header>
+          <div class="plans">
+            <article class="plan" data-reveal>
+              <header>
+                <h3>MyMav</h3>
+                <p class="plan-for">For people who already have a model key.</p>
+              </header>
+              <p class="price"><b>9 €</b><span>/ month · or 90 € / year</span></p>
+              <ul class="plan-list">
+                <li>Your own Mav in the cloud, always on</li>
+                <li><strong>Your model, your key</strong>: Claude, GPT, Mistral, OpenRouter…</li>
+                <li>Pick and change the model in the app, any time</li>
+                <li>You pay your provider directly, no markup</li>
+                <li>Routines, memory, watch, files, push</li>
+              </ul>
+              <a class="btn ghost" href="https://app.getmav.dev">Start MyMav</a>
+            </article>
+            <article class="plan featured" data-reveal style="--i: 1">
+              <span class="plan-tag">Nothing to set up</span>
+              <header>
+                <h3>CloudMav</h3>
+                <p class="plan-for">For everyone else: the model comes with it.</p>
+              </header>
+              <p class="price"><b>19 €</b><span>/ month · or 190 € / year</span></p>
+              <ul class="plan-list">
+                <li>Your own Mav in the cloud, always on</li>
+                <li><strong>Model included</strong>: Claude Haiku, fast and capable</li>
+                <li>No key, no account elsewhere, no bill to watch</li>
+                <li>A generous monthly allowance, shown on your account</li>
+                <li>Routines, memory, watch, files, push</li>
+              </ul>
+              <a class="btn" href="https://app.getmav.dev">Start CloudMav</a>
+            </article>
+            <article class="plan" data-reveal style="--i: 2">
+              <header>
+                <h3>Self-hosted</h3>
+                <p class="plan-for">For tinkerers with a home server.</p>
+              </header>
+              <p class="price"><b>Free</b><span>/ forever · MIT</span></p>
+              <ul class="plan-list">
+                <li>On your machine, NAS, Raspberry Pi or VPS</li>
+                <li>Any model, even local with Ollama</li>
+                <li>Nothing leaves your home</li>
+                <li>One Docker command, amd64 and arm64</li>
+                <li>Every feature, no limits</li>
+              </ul>
+              <a class="btn ghost" href="#install">Install it yourself</a>
+            </article>
+          </div>
+          <p class="plans-note" data-reveal>Prices include VAT where it applies. Cancel in one click from your account; export or delete everything yourself, any time.</p>
         </div>
       </section>
 
@@ -384,8 +446,8 @@
       <section class="section" id="install" style="padding-top: 40px">
         <div class="wrap setup">
           <div data-reveal>
-            <span class="eyebrow">Install</span>
-            <h2 class="h2">Running in <em>three steps.</em></h2>
+            <span class="eyebrow">Self-host</span>
+            <h2 class="h2">At home in <em>three steps.</em></h2>
             <p style="color: var(--ink-2); font-size: 1.1rem; margin: 0">
               A home server, a mini PC, a NAS or a VPS. Docker on anything, or the installer on Debian,
               Ubuntu, Arch and Fedora.
@@ -415,7 +477,7 @@
       <section class="wrap" style="padding-bottom: 40px">
         <div class="stats" data-reveal>
           <div class="stat"><b><span data-count="1">1</span></b><span>command to install</span></div>
-          <div class="stat"><b><span data-count="0">0</span></b><span>accounts or telemetry</span></div>
+          <div class="stat"><b><span data-count="1">1</span></b><span>minute to start in the cloud</span></div>
           <div class="stat"><b><span data-count="5">5</span></b><span>helpers built in</span></div>
           <div class="stat"><b>MIT</b><span>yours to keep and change</span></div>
         </div>
@@ -427,8 +489,9 @@
         <div class="wrap" style="position: relative">
           <span class="mark big-mark" data-reveal></span>
           <h2 class="split" data-split>Give it a <em>home.</em></h2>
-          <p data-reveal style="--i: 2">Open source, MIT-licensed, yours to keep.</p>
+          <p data-reveal style="--i: 2">In the cloud in a minute, or on your own machine. Open source, MIT-licensed, yours to keep.</p>
           <div class="hero-cta" data-reveal style="--i: 3">
+            <a class="btn" href="https://app.getmav.dev" style="--cta: #34d39d; --on-cta: #0b0d10">Start my Mav</a>
             <div class="install">
               <div class="install-row">
                 <code>docker compose up -d</code>
@@ -446,12 +509,14 @@
       <div class="wrap">
         <div>
           <a class="brand" href="./"><span class="mark"></span>Mav</a>
-          <p class="tag">The everyday AI assistant you run yourself. Built to be yours.</p>
+          <p class="tag">The everyday AI assistant that works while you don't. In the cloud or at home.</p>
         </div>
         <div>
           <h4>Product</h4>
           <ul>
             <li><a href="#features">Features</a></li>
+            <li><a href="#cloud">Pricing</a></li>
+            <li><a href="https://app.getmav.dev">Sign in</a></li>
             <li><a href="demo/">Live demo</a></li>
             <li><a href="#film">Film</a></li>
           </ul>

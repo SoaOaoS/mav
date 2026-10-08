@@ -65,12 +65,13 @@
         <div class="wrap">
           <span class="eyebrow">Documentation</span>
           <h1>Everything about <em>Mav.</em></h1>
-          <p>Install your own everyday assistant, and get the most out of it.</p>
+          <p>Start your own everyday assistant in the cloud or at home, and get the most out of it.</p>
           <button class="search-trigger" data-search aria-label="Search the docs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             <span>Search the docs…</span><kbd>⌘ K</kbd>
           </button>
           <nav class="quick" aria-label="Start here">
+            <a href="#cloud"><b>Mav Cloud</b><span>MyMav or CloudMav, in a minute</span></a>
             <a href="#install"><b>Install with Docker</b><span>docker compose up -d</span></a>
             <a href="#migrate"><b>Move to Docker</b><span>Keep chats and memory</span></a>
             <a href="#routines"><b>Routines</b><span>Let Mav work on its own</span></a>
@@ -87,6 +88,7 @@
         <aside class="side" id="side" aria-label="Documentation">
           <div class="side-group">
             <span>Getting started</span>
+            <a href="#cloud">Mav Cloud</a>
             <a href="#install">Installation</a>
             <a href="#update">Updating</a>
             <a href="#backup">Backup &amp; restore</a>
@@ -126,6 +128,53 @@
         </aside>
 
         <article class="prose">
+        <section id="cloud">
+          <h2>Mav Cloud</h2>
+          <p>
+            Mav Cloud runs your own Mav for you: no server, no Docker, no
+            updates. Go to <a href="https://app.getmav.dev">app.getmav.dev</a>, enter your
+            e-mail, follow the link you receive, choose a plan, and your Mav
+            starts a minute later. It is the same app as the self-hosted one,
+            with your own chats, memory, routines and files, kept apart from
+            everyone else's.
+          </p>
+          <h3>Two plans</h3>
+          <table>
+            <tr><th></th><th>MyMav</th><th>CloudMav</th></tr>
+            <tr><td><strong>Price</strong></td><td>9 € / month, 90 € / year</td><td>19 € / month, 190 € / year</td></tr>
+            <tr><td><strong>Model</strong></td><td>yours: Claude, GPT, Mistral, OpenRouter…</td><td>included: Claude Haiku</td></tr>
+            <tr><td><strong>Key</strong></td><td>your provider's key, paid to them directly</td><td>none, nothing to set up</td></tr>
+            <tr><td><strong>Changing the model</strong></td><td>any time, in the app</td><td>no: the model comes with the plan</td></tr>
+            <tr><td><strong>Limits</strong></td><td>your provider's</td><td>a monthly allowance, shown on your account; it renews on the 1st</td></tr>
+          </table>
+          <h3>Choosing your model (MyMav)</h3>
+          <p>
+            Your Mav's welcome screen asks for it, exactly like the
+            self-hosted app: pick a provider, paste your key, choose a model.
+            Change it later in <em>Settings → Model</em>. The key stays in
+            your own Mav.
+          </p>
+          <h3>The included model (CloudMav)</h3>
+          <p>
+            CloudMav runs on Claude Haiku, through Mav Cloud: your Mav never
+            holds a key, and there is no model setting to get wrong. The
+            <em>Model</em> tab is not shown, and the model cannot be changed.
+            Want another model? Switch to MyMav from your account page.
+          </p>
+          <h3>Your account</h3>
+          <ul>
+            <li><strong>Invoices, card, cancellation</strong>: <em>Your account → Invoices, card, cancel</em>. Cancelling stops at the end of the paid period.</li>
+            <li><strong>Export</strong>: <em>Export my data</em> downloads everything Mav keeps for you, database included.</li>
+            <li><strong>Delete</strong>: <em>Delete my account</em> erases your Mav, its database and files, and cancels the subscription. Nightly backups of a deleted account expire within 30 days.</li>
+            <li><strong>Where</strong>: everything is kept in the European Union.</li>
+            <li><strong>Sleep</strong>: your Mav sleeps 15 minutes after you leave and wakes in a few seconds when you come back, or on its own for a routine.</li>
+          </ul>
+          <p>
+            Prefer to keep everything at home? The self-hosted Mav is free and
+            has every feature: see <a href="#install">Installation</a>.
+          </p>
+        </section>
+
         <section id="install">
           <h2>Installation</h2>
           <h3>With Docker</h3>
@@ -908,7 +957,8 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
         <section id="model">
           <h2>Model</h2>
           <p>
-            Settings → Model: pick a provider, paste a key, press
+            On <a href="#cloud">CloudMav</a> the model is included and this
+            tab is not shown. Everywhere else, Settings → Model: pick a provider, paste a key, press
             <em>Check &amp; list models</em> to verify it and fill the model
             list, then <em>Save</em>. Mav restarts for a few seconds and uses
             the new model.

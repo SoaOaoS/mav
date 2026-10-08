@@ -7,6 +7,8 @@
    ================================================================ */
 // Who is signed in: the owner, or a family member (fewer settings).
 let ME = { id: 0, name: "", role: "owner" };
+// Mav Cloud's included plan: the model comes with the plan, nobody changes it.
+let MODEL_MANAGED = false;
 let AUTH_NAMED = false; // several accounts: sign-in asks for a name
 const isOwner = () => ME.role === "owner";
 

@@ -189,6 +189,12 @@ and `/api/hooks/*` (webhooks carry their own token). `sudo mav password` resets
 it from the machine; `MAV_AUTH=off` turns sign-in off (only behind your own
 authenticating proxy). Stored in `BOT_DIR/auth.json` (PBKDF2-SHA256).
 
+**A model that comes with the plan.** `MAV_MODEL_MANAGED=1` (set by Mav Cloud
+for CloudMav) makes the model part of the plan, not a setting: the Model tab,
+the background-model setting and the welcome flow's model step are hidden, and
+`POST /api/config/provider`, `/api/config/provider/test` and
+`/api/usage/small-model` answer 403. `/api/auth/state` carries `model_managed`.
+
 **Family accounts.** The owner can add people (Settings → General → Family;
 `/api/family/*`). Members sign in with their name; their chats, memory,
 routines, watch items, notifications and push devices are kept apart (by

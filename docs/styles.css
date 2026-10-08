@@ -2770,3 +2770,110 @@ h3:hover > .anchor,
     width: auto;
   }
 }
+
+/* -------------------------------------------------------------- Mav Cloud plans */
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px 26px 26px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.plan h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.plan-for {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.price {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.price b {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.price span {
+  color: var(--ink-3);
+  font-size: 0.9rem;
+}
+.plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  flex: 1;
+}
+.plan-list li {
+  position: relative;
+  padding-left: 26px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.plan-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.32em;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-soft)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f7a5c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 10px no-repeat;
+}
+.plan-list strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.plan .btn {
+  justify-content: center;
+}
+.plan.featured {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-lg);
+}
+.plan-tag {
+  position: absolute;
+  top: -12px;
+  left: 26px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--signal);
+  color: #1b1206;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.plans-note {
+  margin: 22px auto 0;
+  max-width: 640px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 0.9rem;
+}
+@media (max-width: 900px) {
+  .plans {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+}
