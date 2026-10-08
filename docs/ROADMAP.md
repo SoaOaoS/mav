@@ -93,7 +93,7 @@ value within 5 minutes.
 
 ### 1.4 Public live demo · S · ✅ done
 
-> **Shipped:** <https://soaoaos.github.io/mav/demo/>, a copy built by `scripts/build-demo.sh` and checked by CI.
+> **Shipped:** <https://getmav.dev/demo/>, a copy built by `scripts/build-demo.sh` and checked by CI.
 
 **Why.** Let people try Mav before they install it.
 

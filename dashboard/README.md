@@ -25,7 +25,7 @@ OPENCODE_URL=http://127.0.0.1:4096 MAV_STATIC="$PWD/.." BOT_DIR=/tmp/mav \
 Opened without the server, the app falls back to a **demo mode** with
 sample chats (tool steps included), routines, alerts and memory. Replies are
 canned and nothing leaves the browser. This is the public demo at
-<https://soaoaos.github.io/mav/demo/>: `scripts/build-demo.sh` copies the
+<https://getmav.dev/demo/>: `scripts/build-demo.sh` copies the
 app into `docs/demo/`, and CI fails if that copy is out of date. Run it, and
 commit, after any change in `dashboard/`.
 
