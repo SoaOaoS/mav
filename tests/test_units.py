@@ -135,6 +135,20 @@ class Provider(unittest.TestCase):
         self.assertTrue(cur["has_key"])
         self.assertEqual(cur["ref"], "anthropic/claude-sonnet-4-5")
 
+    def test_the_cloud_model_behind_the_proxy(self):
+        """Mav Cloud's CloudMav: the plan's model through the edge's proxy,
+        given with or without its provider prefix."""
+        for model in ("anthropic/claude-haiku-5-5", "claude-haiku-5-5"):
+            res = mav_provider.apply(self.cfg, self.env, "anthropic", model,
+                                     base_url="https://app.example/llm/anthropic/v1", api_key="tok")
+            self.assertTrue(res["ok"], res)
+            cfg = json.loads((self.cfg / "opencode.json").read_text())
+            self.assertEqual(cfg["model"], "anthropic/claude-haiku-5-5")
+            block = cfg["provider"]["anthropic"]
+            self.assertEqual(block["options"]["baseURL"], "https://app.example/llm/anthropic/v1")
+            self.assertIn("claude-haiku-5-5", block["models"])
+        self.assertIn("ANTHROPIC_API_KEY=tok", self.env.read_text())
+
     def test_blank_key_keeps_existing(self):
         mav_provider.apply(self.cfg, self.env, "openai", "gpt-4o", api_key="first")
         mav_provider.apply(self.cfg, self.env, "openai", "gpt-4o-mini", api_key=None)
