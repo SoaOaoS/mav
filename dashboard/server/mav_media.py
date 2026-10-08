@@ -180,9 +180,9 @@ ASSET_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 
 
 def _asset_roots() -> list[Path]:
+    # Never the whole of BOT_DIR: it holds routines, sign-in, channel and
+    # calendar secrets, and backups. Only its media archive is served.
     roots = [FILES_DIR, MEDIA_DIR, mav_core.ATTACH_DIR, Path("/tmp/mav-dashboard"), Path("/tmp/opencode")]
-    if mav_core.BOT_DIR.exists():
-        roots.append(Path(mav_core.BOT_DIR).resolve())
     # Optional roots, specific to the user's installation.
     for env in ("MAV_USER_HOME", "BOT_HOME"):
         home = os.environ.get(env)
@@ -192,6 +192,17 @@ def _asset_roots() -> list[Path]:
 
 
 ASSET_ROOTS = _asset_roots()
+
+
+def _within(p: Path, roots: list) -> bool:
+    """Is the (resolved) path inside one of the roots?"""
+    for root in roots:
+        try:
+            if p.is_relative_to(Path(root).resolve()):
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
 
 
 def serve_asset(path: str):
@@ -205,17 +216,7 @@ def serve_asset(path: str):
         p = Path(raw).resolve()
     except Exception:
         return None
-    if p.suffix.lower() not in ASSET_EXT or not p.is_file():
-        return None
-    allowed = False
-    for root in ASSET_ROOTS:
-        try:
-            if str(p).startswith(str(Path(root).resolve())):
-                allowed = True
-                break
-        except Exception:
-            continue
-    if not allowed:
+    if p.suffix.lower() not in ASSET_EXT or not p.is_file() or not _within(p, ASSET_ROOTS):
         return None
     try:
         data = p.read_bytes()
@@ -335,7 +336,8 @@ DOWNLOAD_EXT = {
 SENSITIVE_NAMES = {
     ".netrc", ".git-credentials", ".npmrc", ".pypirc", ".htpasswd", ".pgpass",
     "mail.conf", "mav.env", "mav-dashboard.env", "mav-server.env",
-    "push_subs.json", "auth.json", "credentials.json",
+    "push_subs.json", "auth.json", "credentials.json", "channels.json", "calendar.json",
+    "engine.secret", "jobs.json", "dash_sessions.json",
     # SSH private keys (their .pub halves are fine)
     "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_ecdsa_sk", "id_ed25519_sk",
 }
@@ -389,10 +391,9 @@ def resolve_download(name: str) -> "Path | None":
         if is_sensitive(p):
             return False
         try:
-            rp = str(p.resolve())
+            return _within(p.resolve(), roots)
         except Exception:
             return False
-        return any(rp.startswith(str(Path(r).resolve())) for r in roots)
 
     p = Path(name)
     if p.is_absolute():
@@ -590,4 +591,4 @@ def send_push(title: str, body: str, url: str = "./") -> int:
     return sent
 
 
-__all__ = ['ASSET_EXT', 'ASSET_ROOTS', 'DOWNLOAD_EXT', 'FILES_DIR', 'MEDIA_DIR', 'MEDIA_INDEX', 'SENSITIVE_EXTS', 'SENSITIVE_NAMES', 'SENSITIVE_WORDS', '_CHART_TTL', '_EXT_MIME', '_YAHOO_UA', '_asset_roots', '_chart_cache', '_files_dir', '_guess_file', '_media_load', '_media_save', '_mime_from_ext', '_vapid_keys', '_vapid_lock', '_yahoo_closes', 'archive_media', 'chart_data', 'download_response', 'find_media', 'is_sensitive', 'list_media', 'push_public_key', 'push_subscribe', 'push_unsubscribe', 'resolve_download', 'send_push', 'serve_asset', 'sync_files_dir', 'sync_media_dir']
+__all__ = ['_within', 'ASSET_EXT', 'ASSET_ROOTS', 'DOWNLOAD_EXT', 'FILES_DIR', 'MEDIA_DIR', 'MEDIA_INDEX', 'SENSITIVE_EXTS', 'SENSITIVE_NAMES', 'SENSITIVE_WORDS', '_CHART_TTL', '_EXT_MIME', '_YAHOO_UA', '_asset_roots', '_chart_cache', '_files_dir', '_guess_file', '_media_load', '_media_save', '_mime_from_ext', '_vapid_keys', '_vapid_lock', '_yahoo_closes', 'archive_media', 'chart_data', 'download_response', 'find_media', 'is_sensitive', 'list_media', 'push_public_key', 'push_subscribe', 'push_unsubscribe', 'resolve_download', 'send_push', 'serve_asset', 'sync_files_dir', 'sync_media_dir']

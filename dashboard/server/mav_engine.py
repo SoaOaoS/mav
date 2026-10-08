@@ -922,12 +922,13 @@ def get_status() -> dict:
     pg = False
     n_watch = n_conv = n_facts = 0
     who, args = mav_core.mine()  # each person counts their own
-    try:
-        mav_core.pg_query("select 1")
+    try:  # one round trip for the three counts
+        row = mav_core.pg_query(
+            f"select (select count(*) from watch_items where {who}) w, "
+            f"(select count(*) from conversations where {who}) c, "
+            f"(select count(*) from facts where {who}) f", args * 3)[0]
+        n_watch, n_conv, n_facts = row["w"], row["c"], row["f"]
         pg = True
-        n_watch = mav_core.pg_query(f"select count(*) c from watch_items where {who}", args)[0]["c"]
-        n_conv = mav_core.pg_query(f"select count(*) c from conversations where {who}", args)[0]["c"]
-        n_facts = mav_core.pg_query(f"select count(*) c from facts where {who}", args)[0]["c"]
     except Exception:
         pass
 

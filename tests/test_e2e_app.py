@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from e2e_support import PASSWORD, Stack, launch, signed_in, sync_playwright, watch_errors  # noqa: E402
+from e2e_support import PASSWORD, Stack, launch, new_context, signed_in, sync_playwright, watch_errors  # noqa: E402
 
 
 @unittest.skipIf(sync_playwright is None, "playwright not installed")
@@ -54,7 +54,7 @@ class AppE2E(unittest.TestCase):
     def test_1_sign_in(self):
         """First visit asks for a password; afterwards it asks to sign in."""
         with Stack() as stack:
-            context = self.browser.new_context()
+            context = new_context(self.browser)
             page = context.new_page()
             page.goto(stack.url)
             page.wait_for_selector("#authGate:not([hidden])", timeout=8000)
@@ -64,7 +64,7 @@ class AppE2E(unittest.TestCase):
             page.wait_for_selector("#authGate", state="hidden", timeout=8000)
             context.close()
             # A new device: wrong password first, then the right one.
-            context = self.browser.new_context()
+            context = new_context(self.browser)
             page = context.new_page()
             page.goto(stack.url)
             page.wait_for_selector("#authGate:not([hidden])", timeout=8000)

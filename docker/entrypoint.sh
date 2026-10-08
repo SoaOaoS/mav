@@ -40,6 +40,14 @@ if [[ "$(id -u)" == 0 ]]; then
   # Created once: touching them on every start would look like a key change
   # ("restart needed") to the web app.
   for f in "$MAV_ENV_SERVER" "$MAV_ENV_BOT"; do [[ -f "$f" ]] || install -m 600 /dev/null "$f"; done
+  # The engine's password, shared by the three roles: only they can talk to
+  # it (not the assistant's own web fetch). Created once; first one wins.
+  if [[ ! -s "$DATA/config/engine.secret" ]]; then
+    tmp="$(mktemp "$DATA/config/.engine.XXXXXX")"
+    python3 -c 'import secrets; print(secrets.token_urlsafe(30), end="")' >"$tmp"
+    ln "$tmp" "$DATA/config/engine.secret" 2>/dev/null || true
+    rm -f "$tmp"
+  fi
   chown -R "$RUN_UID:$RUN_GID" "$DATA" 2>/dev/null || chown -R "$RUN_UID:$RUN_GID" "$HOME" "$BOT_DIR" "$DATA/config" "$DATA/run"
   exec setpriv --reuid="$RUN_UID" --regid="$RUN_GID" --init-groups "$0" "$role" "$@"
 fi
@@ -47,6 +55,8 @@ fi
 # Read KEY=value files without executing them (values may hold any character).
 load_env() {
   local f line
+  OPENCODE_SERVER_PASSWORD="$(cat "$DATA/config/engine.secret" 2>/dev/null || true)"
+  export OPENCODE_SERVER_PASSWORD
   for f in "$MAV_ENV_BOT" "$MAV_ENV_SERVER"; do
     [[ -f "$f" ]] || continue
     while IFS= read -r line || [[ -n "$line" ]]; do

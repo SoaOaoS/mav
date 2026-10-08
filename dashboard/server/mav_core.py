@@ -47,7 +47,8 @@ MEMORY_FILE = BOT_DIR / "memory.json"
 STATIC_DIR = Path(os.environ.get("MAV_STATIC", Path(__file__).resolve().parent.parent))
 
 
-ATTACH_DIR = Path(os.environ.get("MAV_ATTACH", "/tmp/mav-dashboard/attachments"))
+# Files people send in the chat (not under /tmp: the web app may run as root).
+ATTACH_DIR = Path(os.environ.get("MAV_ATTACH", BOT_DIR / "attachments"))
 
 
 PUSH_FILE = Path(os.environ.get("MAV_PUSH_FILE", BOT_DIR / "push_subs.json"))
@@ -66,6 +67,17 @@ DEFAULT_AGENT = os.environ.get("MAV_DASH_AGENT", "").strip() or "assistant"
 
 
 DEFAULT_MODEL = os.environ.get("OPENCODE_MODEL", "").strip()
+
+
+# The engine's password (opencode's OPENCODE_SERVER_PASSWORD): every call to
+# OPENCODE_URL carries it, so nothing else that reaches the engine (the
+# assistant's own web fetch included) can read the chats.
+if os.environ.get("OPENCODE_SERVER_PASSWORD"):
+    _engine_auth = urllib.request.HTTPPasswordMgrWithPriorAuth()
+    _engine_auth.add_password(None, OPENCODE_URL, os.environ.get("OPENCODE_SERVER_USERNAME", "opencode"),
+                              os.environ["OPENCODE_SERVER_PASSWORD"], is_authenticated=True)
+    urllib.request.install_opener(
+        urllib.request.build_opener(urllib.request.HTTPBasicAuthHandler(_engine_auth)))
 
 
 # Owner id: memory, facts and watch items are attached to it (kept from the
@@ -297,34 +309,91 @@ def http_json(url: str, method: str = "GET", body=None, timeout: float = 8):
         return json.loads(raw) if raw else None
 
 
-def pg_query(sql: str, params: tuple = ()) -> list[dict]:
+# A few Postgres connections kept open and shared by the request threads,
+# instead of a new one (TCP + auth) for every query.
+_pg_pool = None
+_pg_pool_dsn = ""
+_pg_pool_lock = threading.Lock()
+PG_POOL_MAX = int(os.environ.get("MAV_PG_POOL", "8"))
+
+
+def _pg_get_pool():
+    import psycopg2.pool
+
+    global _pg_pool, _pg_pool_dsn
+    with _pg_pool_lock:
+        if _pg_pool is None or _pg_pool_dsn != PG_DSN:
+            if _pg_pool is not None:
+                _pg_pool.closeall()
+            # psycopg2 keeps at most `minconn` idle connections (it closes the
+            # others when they come back): two warm ones, up to PG_POOL_MAX.
+            _pg_pool = psycopg2.pool.ThreadedConnectionPool(
+                min(2, PG_POOL_MAX), PG_POOL_MAX, PG_DSN, connect_timeout=3)
+            _pg_pool_dsn = PG_DSN
+        return _pg_pool
+
+
+def _pg_drop_pool(pool) -> None:
+    """Forget a pool whose connections the server dropped (it restarted)."""
+    global _pg_pool
+    with _pg_pool_lock:
+        if _pg_pool is pool:
+            _pg_pool = None
+    try:
+        pool.closeall()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _pg_run(sql: str, params: tuple, fetch: bool):
     import psycopg2
     import psycopg2.extras
+    import psycopg2.pool
 
-    conn = psycopg2.connect(PG_DSN, connect_timeout=3)
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            if cur.description:
-                rows = [dict(r) for r in cur.fetchall()]
-                conn.commit()
-                return rows
+    for attempt in (1, 2):
+        pool = _pg_get_pool()
+        try:
+            conn, pooled = pool.getconn(), True
+        except psycopg2.pool.PoolError:  # all busy: one more, just for this query
+            conn, pooled = psycopg2.connect(PG_DSN, connect_timeout=3), False
+        broken = False
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, params)
+                rows = [dict(r) for r in cur.fetchall()] if fetch and cur.description else []
             conn.commit()
-            return []
-    finally:
-        conn.close()
+            return rows
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            # The server dropped the connection (restart, idle timeout): start
+            # over once with fresh ones.
+            broken = True
+            if attempt == 2:
+                raise
+            if pooled:
+                _pg_drop_pool(pool)
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:  # noqa: BLE001
+                broken = True
+            raise
+        finally:
+            if pooled:
+                try:
+                    pool.putconn(conn, close=broken or bool(conn.closed))
+                except Exception:  # noqa: BLE001  (the pool was closed meanwhile)
+                    conn.close()
+            else:
+                conn.close()
+    return []
+
+
+def pg_query(sql: str, params: tuple = ()) -> list[dict]:
+    return _pg_run(sql, params, fetch=True)
 
 
 def pg_exec(sql: str, params: tuple = ()) -> None:
-    import psycopg2
-
-    conn = psycopg2.connect(PG_DSN, connect_timeout=3)
-    try:
-        cur = conn.cursor()
-        cur.execute(sql, params)
-        conn.commit()
-    finally:
-        conn.close()
+    _pg_run(sql, params, fetch=False)
 
 
 def inside(root: Path, name: str) -> Path:
@@ -469,4 +538,4 @@ def _chown_user(path: Path) -> None:
         pass
 
 
-__all__ = ['inside', '_who', 'as_user', 'is_owner', 'mine', 'spawn', 'uid', 'ACTIONS', 'ATTACH_DIR', 'AUTH', 'Actions', 'BIND', 'BOT_DIR', 'CADENCES', 'CADENCE_DAYS', 'CATALOG_FILE', 'CATEGORIES', 'DEFAULT_AGENT', 'DEFAULT_CHAT_ID', 'DEFAULT_MODEL', 'DOCKER_UPDATE_HINT', 'DRAFTS', 'Drafts', 'ENGINE_STARTED', 'ENV_FILES', 'ENV_SERVER', 'INSTALL_LOG', 'INTERESTS', 'IN_DOCKER', 'Interests', 'JOBS_FILE', 'JOBS_STATE', 'MAV_CLI', 'MAV_REPO', 'MEMORY', 'MEMORY_ENABLED', 'MEMORY_FILE', 'MEMORY_TOP', 'Memory', 'OPENCODE_URL', 'PG_DSN', 'POLARITIES', 'PORT', 'PRIMARY_AGENTS', 'PUSH_FILE', 'RAG', 'RESTART_FLAG', 'ROUTINE_TEMPLATES', 'RUNTIME', 'SESSIONS_META', 'STATIC_DIR', 'TLS_CERT', 'TLS_KEY', 'TLS_PORT', 'USAGE', 'VERSION_FILE', 'WORKER_UNIT', '_RAG', '_chown_user', '_config_dir', '_json_default', '_opencode_config_path', '_p', '_run', 'agents_path', 'http_json', 'mav_auth', 'mav_backup', 'mav_provider', 'ocbriefing', 'occalendar', 'occhannels', 'ocroutine_nl', 'ocroutine_templates', 'ocselfinit', 'ocusage', 'pg_exec', 'pg_query', 'read_json', 'write_json']
+__all__ = ['inside', 'PG_POOL_MAX', '_pg_pool', '_pg_pool_dsn', '_pg_pool_lock', '_pg_run', '_pg_get_pool', '_pg_drop_pool', '_who', 'as_user', 'is_owner', 'mine', 'spawn', 'uid', 'ACTIONS', 'ATTACH_DIR', 'AUTH', 'Actions', 'BIND', 'BOT_DIR', 'CADENCES', 'CADENCE_DAYS', 'CATALOG_FILE', 'CATEGORIES', 'DEFAULT_AGENT', 'DEFAULT_CHAT_ID', 'DEFAULT_MODEL', 'DOCKER_UPDATE_HINT', 'DRAFTS', 'Drafts', 'ENGINE_STARTED', 'ENV_FILES', 'ENV_SERVER', 'INSTALL_LOG', 'INTERESTS', 'IN_DOCKER', 'Interests', 'JOBS_FILE', 'JOBS_STATE', 'MAV_CLI', 'MAV_REPO', 'MEMORY', 'MEMORY_ENABLED', 'MEMORY_FILE', 'MEMORY_TOP', 'Memory', 'OPENCODE_URL', 'PG_DSN', 'POLARITIES', 'PORT', 'PRIMARY_AGENTS', 'PUSH_FILE', 'RAG', 'RESTART_FLAG', 'ROUTINE_TEMPLATES', 'RUNTIME', 'SESSIONS_META', 'STATIC_DIR', 'TLS_CERT', 'TLS_KEY', 'TLS_PORT', 'USAGE', 'VERSION_FILE', 'WORKER_UNIT', '_RAG', '_chown_user', '_config_dir', '_json_default', '_opencode_config_path', '_p', '_run', 'agents_path', 'http_json', 'mav_auth', 'mav_backup', 'mav_provider', 'ocbriefing', 'occalendar', 'occhannels', 'ocroutine_nl', 'ocroutine_templates', 'ocselfinit', 'ocusage', 'pg_exec', 'pg_query', 'read_json', 'write_json']

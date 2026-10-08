@@ -19,12 +19,16 @@ only records the state; afterwards a push notification is sent on change.
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import html
+import ipaddress
 import logging
 import os
 import re
+import socket
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -55,11 +59,37 @@ _REPO_PART = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 # ------------------------------------------------------------------ parsing
 
 
-def fetch(url: str, limit: int = 1_500_000) -> str:
+def public_host(url: str) -> bool:
+    """Does the URL point to the public internet only (no loopback, LAN,
+    link-local or cloud metadata address, whatever the name resolves to)?"""
+    host = urllib.parse.urlparse(url).hostname
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    return bool(infos) and all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
+
+
+class _PublicRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not public_host(newurl):
+            raise urllib.error.URLError("redirected to a private address")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def fetch(url: str, limit: int = 1_500_000, public_only: bool = False) -> str:
+    """The page at `url`. `public_only`: refuse (also after a redirect)
+    anything but the public internet — for family members' watch items, so
+    nobody can point Mav at the machine's own services."""
+    if public_only and not public_host(url):
+        raise ValueError("not a public address")
     req = urllib.request.Request(
         url, headers={"User-Agent": UA, "Accept-Language": f"{NEWS_LANG},en;q=0.8"}
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    opener = urllib.request.build_opener(_PublicRedirects) if public_only else urllib.request.build_opener()
+    with opener.open(req, timeout=30) as resp:
         raw = resp.read(limit)
         charset = resp.headers.get_content_charset() or "utf-8"
     return raw.decode(charset, "replace")
@@ -319,9 +349,13 @@ class Watch:
         kind, target, prev = item["kind"], item["target"], item.get("last_state") or ""
         iid = item["id"]
         self._detail.pop(iid, None)
+        # A family member's item reaches the public internet only.
+        owner = getattr(self, "chat_id", None)
+        member = item.get("chat_id", owner) != owner
+        get = functools.partial(fetch, public_only=True) if member else fetch
 
         if kind == "web":
-            text = visible_text(fetch(target))
+            text = visible_text(get(target))
             if len(text) < 40:
                 return None  # blocked / empty page: not a real change
             self._detail[iid] = f"{target} has changed."
@@ -329,7 +363,7 @@ class Watch:
 
         if kind == "price":
             url, below = split_price_target(target)
-            found = find_price(fetch(url))
+            found = find_price(get(url))
             if not found:
                 return None
             price, cur = found
@@ -356,9 +390,9 @@ class Watch:
                 items = news_items(base)
             elif kind == "github":
                 gh = github_feed(base)
-                items = feed_items(fetch(gh[0])) if gh else []
+                items = feed_items(get(gh[0])) if gh else []
             else:
-                items = feed_items(fetch(base))
+                items = feed_items(get(base))
             if not items:
                 return None
             return self._feed_state(iid, items, prev, words)

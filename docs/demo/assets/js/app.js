@@ -361,6 +361,44 @@ async function loadFamily() {
     )
     .join("");
 }
+/* Webhook: the address and token other services post events to. */
+async function showWebhook() {
+  if (!needLive()) return;
+  let token = "";
+  try {
+    token = (await api.get("webhook")).token || "";
+  } catch (_) {}
+  const url = `${location.origin}/api/hooks/event`;
+  const body = () =>
+    token
+      ? `<div class="field"><label>Address</label><input readonly value="${esc(url)}"></div>
+        <div class="field"><label>Token</label><input readonly value="${esc(token)}"></div>
+        <pre class="tool-pre">${esc(`curl -X POST ${url} \\\n  -H 'Content-Type: application/json' \\\n  -d '{"kind":"custom","token":"${token}","payload":{"text":"hello"}}'`)}</pre>
+        <p class="hint">A routine set to run “when an event arrives” starts on the next tick. Anyone with the token can start those routines: keep it private.</p>`
+      : `<p>Create a token first: without one, only you, signed in, can post events.</p>`;
+  modal.open({
+    title: "Webhook",
+    body: body(),
+    actions: [
+      { label: "Close" },
+      {
+        label: token ? "New token" : "Create a token",
+        kind: "btn-primary",
+        run: async () => {
+          try {
+            await api.post("webhook/new");
+            toast(token ? "New token: the old one no longer works." : "Token created.");
+            setTimeout(showWebhook, 0);
+          } catch (ex) {
+            toast(ex.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+}
+$("#hookShow").addEventListener("click", showWebhook);
 $("#familyAdd").addEventListener("click", () => {
   if (!needLive()) return;
   modal.open({

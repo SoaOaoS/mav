@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from e2e_support import PASSWORD, Stack, launch, sync_playwright  # noqa: E402
+from e2e_support import PASSWORD, Stack, launch, new_context, sync_playwright  # noqa: E402
 
 
 @unittest.skipIf(sync_playwright is None, "playwright not installed")
@@ -32,7 +32,7 @@ class OnboardingE2E(unittest.TestCase):
                 b = launch(pw)
             except Exception as exc:  # noqa: BLE001
                 self.skipTest(f"no Chromium: {exc}")
-            pg = b.new_page()
+            pg = new_context(b).new_page()
             errors = []
             pg.on("pageerror", lambda e: errors.append(str(e)))
             pg.goto(self.url)

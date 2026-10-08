@@ -7,7 +7,9 @@ Part of the web app server (see mav_api.py).
 
 from __future__ import annotations
 
+import hmac
 import re
+import secrets
 import time
 import unicodedata
 import urllib.error
@@ -740,21 +742,41 @@ def get_events(limit: int = 30) -> dict:
         return {"events": []}
 
 
-def hook_event(kind: str, payload: dict, token: str = "") -> dict:
+def hook_token() -> str:
+    try:
+        rows = mav_core.pg_query("select value from preferences where key = 'hooks.token' limit 1")
+        return (rows[0].get("value") or "") if rows else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def new_hook_token() -> dict:
+    """A fresh webhook token (the old one stops working)."""
+    token = secrets.token_urlsafe(24)
+    try:
+        mav_core.pg_exec("delete from preferences where key = 'hooks.token'")
+        mav_core.pg_exec(
+            "insert into preferences (chat_id, key, value, ts) values (%s, 'hooks.token', %s, %s)",
+            (mav_core.DEFAULT_CHAT_ID, token, int(time.time())),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)[:200]}
+    return {"ok": True, "token": token}
+
+
+def hook_event(kind: str, payload: dict, token: str = "", signed_in: bool = False) -> dict:
     """Record an incoming event and (best-effort) kick the worker."""
     try:
         from ocevents import ensure_schema, push  # noqa: PLC0415
 
         ensure_schema()
         # Optional shared-secret guard, configured in Settings → Proactivity.
-        want = ""
-        try:
-            rows = mav_core.pg_query("select value from preferences where key = 'hooks.token' limit 1")
-            want = (rows[0].get("value") or "") if rows else ""
-        except Exception:  # noqa: BLE001
-            want = ""
-        if want and token != want:
+        want = hook_token()
+        if want and not hmac.compare_digest(token, want):
             return {"ok": False, "error": "bad token"}
+        if not want and not signed_in:
+            # Without a token, anyone who can reach Mav could fire routines.
+            return {"ok": False, "error": "Set a webhook token in Settings → Proactivity first."}
         eid = push(kind, payload)
         return {"ok": eid is not None, "id": eid}
     except Exception as exc:  # noqa: BLE001
@@ -794,6 +816,11 @@ def watch_add(kind: str, target: str) -> bool:
     target = watch_target(kind, target)
     if not target:
         return False
+    if kind in ("web", "price", "rss") and not mav_core.is_owner():
+        from ocwatch import public_host  # noqa: PLC0415
+
+        if not public_host(target.partition("|")[0]):
+            return False  # a member watches the public internet only
     mav_core.pg_exec(
         "insert into watch_items (chat_id, kind, target, ts) values (%s, %s, %s, %s)",
         (mav_core.uid(), kind, target, int(time.time())),
@@ -807,4 +834,4 @@ def watch_remove(item_id: int) -> bool:
     return True
 
 
-__all__ = ['_briefing_job_new', '_mine', '_onboarding_state', 'job_owner', 'my_jobs', 'ACTION_PREFIX', 'JOB_DAYS', 'JOB_NAME_RE', 'LANGUAGES', 'ONBOARDING_FILE', 'ROUTINE_PREFIX', 'VALID_WATCH_KINDS', '_condition_from_payload', '_has_history', '_job_name', '_running_jobs', '_schedule_from_payload', 'briefing_context', 'briefing_job', 'delete_job', 'detect_routine', 'get_briefing', 'get_events', 'get_job_results', 'get_jobs', 'get_onboarding', 'get_proactivity', 'get_watch', 'hook_event', 'job_templates', 'onboarding_profile', 'onboarding_routines', 'routine_session', 'run_briefing_now', 'run_job_now', 'save_job', 'set_briefing', 'set_job_enabled', 'set_onboarding', 'set_proactivity', 'snooze_job', 'start_action', 'template_to_job', 'watch_add', 'watch_remove', 'watch_target']
+__all__ = ['hook_token', 'new_hook_token', '_briefing_job_new', '_mine', '_onboarding_state', 'job_owner', 'my_jobs', 'ACTION_PREFIX', 'JOB_DAYS', 'JOB_NAME_RE', 'LANGUAGES', 'ONBOARDING_FILE', 'ROUTINE_PREFIX', 'VALID_WATCH_KINDS', '_condition_from_payload', '_has_history', '_job_name', '_running_jobs', '_schedule_from_payload', 'briefing_context', 'briefing_job', 'delete_job', 'detect_routine', 'get_briefing', 'get_events', 'get_job_results', 'get_jobs', 'get_onboarding', 'get_proactivity', 'get_watch', 'hook_event', 'job_templates', 'onboarding_profile', 'onboarding_routines', 'routine_session', 'run_briefing_now', 'run_job_now', 'save_job', 'set_briefing', 'set_job_enabled', 'set_onboarding', 'set_proactivity', 'snooze_job', 'start_action', 'template_to_job', 'watch_add', 'watch_remove', 'watch_target']

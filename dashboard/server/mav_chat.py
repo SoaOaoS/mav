@@ -96,23 +96,33 @@ def _list_raw_sessions() -> list[dict]:
         return []
 
 
-def _migrate_legacy() -> None:
-    for s in _list_raw_sessions():
+_migrated = False
+
+
+def _migrate_legacy(sessions: list[dict]) -> None:
+    """Rename the very first dashboard chat (titled "dashboard"), once."""
+    global _migrated
+    if _migrated or not sessions:  # nothing listed (engine down): try again later
+        return
+    _migrated = True
+    for s in sessions:
         if s.get("title") == "dashboard":
             try:
                 mav_core.http_json(f"{mav_core.OPENCODE_URL}/session/{s['id']}", method="PATCH", body={"title": PREFIX + "First conversation"})
+                s["title"] = PREFIX + "First conversation"
             except Exception:
                 pass
 
 
 def list_sessions() -> list[dict]:
-    _migrate_legacy()
+    raw = _list_raw_sessions()
+    _migrate_legacy(raw)
     meta = mav_core.read_json(mav_core.SESSIONS_META, {}) or {}
     jobs = mav_core.read_json(mav_core.JOBS_FILE, []) or []
     active = {r["session"] for r in mav_stream.runs_view() if r["status"] == "running"}
     me = mav_core.uid()
     out = []
-    for s in _list_raw_sessions():
+    for s in raw:
         title = str(s.get("title", ""))
         if not title.startswith(PREFIX):
             continue
@@ -597,4 +607,4 @@ def save_upload(name: str, data_b64: str, mime: str = "") -> dict:
 INTERRUPTED: set[str] = set()
 
 
-__all__ = ['can_access', 'session_owner', 'ABOUT_ME_RE', 'AFTER_IDLE_WAIT', 'DEFAULT_TITLE', 'INTERRUPTED', 'LEGACY_TITLES', 'PREFIX', '_after_cv', '_after_q', '_after_thread', '_after_worker', '_clean_title', '_drop_open_turn', '_engine_busy', '_list_raw_sessions', '_meta_lock', '_migrate_legacy', '_model_body', '_part_text', '_parts', '_ts', 'after_answer', 'create_session', 'delete_session', 'drop_session_meta', 'export_session_markdown', 'generate_title', 'learn_facts', 'learn_interests', 'list_sessions', 'memory_context', 'quick_completion', 'quick_title', 'remember_exchange', 'rename_session', 'save_learned_facts', 'save_upload', 'schedule_after_answer', 'session_messages', 'session_meta', 'session_title', 'set_session_meta', 'summarize_session', 'wants_facts']
+__all__ = ['_migrated', 'can_access', 'session_owner', 'ABOUT_ME_RE', 'AFTER_IDLE_WAIT', 'DEFAULT_TITLE', 'INTERRUPTED', 'LEGACY_TITLES', 'PREFIX', '_after_cv', '_after_q', '_after_thread', '_after_worker', '_clean_title', '_drop_open_turn', '_engine_busy', '_list_raw_sessions', '_meta_lock', '_migrate_legacy', '_model_body', '_part_text', '_parts', '_ts', 'after_answer', 'create_session', 'delete_session', 'drop_session_meta', 'export_session_markdown', 'generate_title', 'learn_facts', 'learn_interests', 'list_sessions', 'memory_context', 'quick_completion', 'quick_title', 'remember_exchange', 'rename_session', 'save_learned_facts', 'save_upload', 'schedule_after_answer', 'session_messages', 'session_meta', 'session_title', 'set_session_meta', 'summarize_session', 'wants_facts']

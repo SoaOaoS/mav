@@ -47,7 +47,8 @@ services:
     <<: *mav
     command: ["engine"]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4096/global/health', timeout=3)"]
+      # Up = it answers (401 included: the engine wants its password).
+      test: ["CMD", "python3", "-c", "import urllib.request as r, urllib.error as e\ntry: r.urlopen('http://127.0.0.1:4096/global/health', timeout=3)\nexcept e.HTTPError: pass"]
       interval: 10s
       timeout: 5s
       retries: 30

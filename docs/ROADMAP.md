@@ -110,7 +110,7 @@ value within 5 minutes.
 
 ---
 
-## Phase 2 — Faster and stickier (weeks 3–6)
+## Phase 2 — Faster and stickier (weeks 3–6) · ✅ done
 
 ### 2.1 Speed: measure, then trim · M · ✅ done
 
@@ -219,7 +219,7 @@ routines.
 
 ---
 
-## Phase 3 — Codebase health (ongoing, alongside)
+## Phase 3 — Codebase health (ongoing, alongside) · ✅ done
 
 ### 3.1 Split the big files · M · ✅ done
 
@@ -279,6 +279,10 @@ Mav without running a server:
 - billing.
 
 Phase 1.1 (Docker) is the foundation for this.
+
+> **Status:** not started on purpose. Phases 1–3 are done; this phase only
+> makes sense once there is demand for a paid, hosted Mav. The ground work
+> is in place: one image, one data volume, backup and restore, and accounts.
 
 ---
 

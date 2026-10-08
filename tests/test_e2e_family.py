@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from e2e_support import PASSWORD, Stack, launch, signed_in, sync_playwright, watch_errors  # noqa: E402
+from e2e_support import PASSWORD, Stack, launch, new_context, signed_in, sync_playwright, watch_errors  # noqa: E402
 
 ALEX_PW = "alex-password-1"
 
@@ -50,7 +50,7 @@ class FamilyE2E(unittest.TestCase):
         page.wait_for_selector("#familyList :text('Alex')", timeout=8000)
 
         # Alex, on another device: the sign-in now asks for a name.
-        alex = self.browser.new_context()
+        alex = new_context(self.browser)
         self.addCleanup(alex.close)
         page = self.open(alex)
         page.goto(self.stack.url)
@@ -86,7 +86,7 @@ class FamilyE2E(unittest.TestCase):
         owner = signed_in(self.browser, self.stack)
         owner.request.post(self.stack.url + "api/family/add", data={"name": "Alex", "password": ALEX_PW})
         owner.close()
-        context = self.browser.new_context()
+        context = new_context(self.browser)
         self.addCleanup(context.close)
         page = self.open(context)
         page.goto(self.stack.url)
@@ -95,7 +95,7 @@ class FamilyE2E(unittest.TestCase):
         page.click("#authSubmit")
         page.wait_for_selector("#authGate", state="hidden", timeout=10000)
         # The page reloads signed in, then knows who it is for.
-        page.wait_for_function("document.body.dataset.role === 'owner'", timeout=10000)
+        page.wait_for_function("document.body && document.body.dataset.role === 'owner'", timeout=10000)
         self.assertTrue(page.locator("[data-stab='model']").count())
 
 
