@@ -195,6 +195,15 @@ the background-model setting and the welcome flow's model step are hidden, and
 `POST /api/config/provider`, `/api/config/provider/test` and
 `/api/usage/small-model` answer 403. `/api/auth/state` carries `model_managed`.
 
+**Running code.** `dashboard/tools/mav_code.py` is a stdio MCP server (the
+`code` connection): `run_python`, `run_command`, `write_file`, `read_file`,
+`list_files`, `save_to_chat` (a workspace file → `mav-files/`, shown as a
+download card) and `load_from_chat`. Self-hosted, the owner turns it on with
+`POST /api/config/code {"enabled": true}` (Settings → General): commands run on
+this machine in `MAV_CODE_DIR` (default `~/workspace/code`) with secrets
+removed from the environment. With `MAV_CODE_URL` and `MAV_CODE_TOKEN` (set by
+Mav Cloud) they run in the person's sandbox instead, and the setting is locked.
+
 **Family accounts.** The owner can add people (Settings → General → Family;
 `/api/family/*`). Members sign in with their name; their chats, memory,
 routines, watch items, notifications and push devices are kept apart (by

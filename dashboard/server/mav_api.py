@@ -427,6 +427,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, mav_engine.read_mcp())
             if path == "/api/config/engine":
                 return self._send(200, mav_engine.engine_status())
+            if path == "/api/config/code":
+                return self._send(200, mav_engine.code_state())
             if path == "/api/config/provider":
                 return self._send(200, mav_engine.provider_snapshot())
             if path == "/api/config/mcp/catalog":
@@ -783,6 +785,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/config/provider/test":
                 return self._send(200, mav_engine.provider_test(payload))
+            if path == "/api/config/code":
+                res = mav_engine.code_set(bool(payload.get("enabled")))
+                return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/config/mcp/install":
                 res = mav_engine.install_from_catalog(payload.get("id", ""), payload.get("values") or {})
                 return self._send(200 if res.get("ok") else 400, res)

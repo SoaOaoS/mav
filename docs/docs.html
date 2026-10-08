@@ -102,6 +102,7 @@
             <span>Using Mav</span>
             <a href="#chat">Chat</a>
             <a href="#helpers">Helpers</a>
+            <a href="#code">Running code</a>
             <a href="#memory">Memory</a>
             <a href="#briefing">Daily briefing</a>
             <a href="#usage">Usage &amp; budget</a>
@@ -592,6 +593,41 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
             its helper. Create your own (a coach, a tutor…) in Settings →
             Helpers. Each helper is a Markdown file in
             <code>~/.config/opencode/agent/</code>.
+          </p>
+        </section>
+
+        <section id="code">
+          <h2>Running code</h2>
+          <p>
+            Mav can run code, like a code interpreter: exact calculations,
+            analysing a spreadsheet you attach, converting a file, drawing a
+            chart, building a real Excel, Word, PDF or image file — which it
+            then hands you as a download card in the chat.
+          </p>
+          <ul>
+            <li>
+              <strong>Mav Cloud</strong> (MyMav and CloudMav): always on. Code
+              runs in your own sandbox — a separate Linux container with
+              Python, Node and internet access, which holds none of Mav's
+              keys, data or files. It sleeps when unused; only the files Mav
+              hands you are kept.
+            </li>
+            <li>
+              <strong>Self-hosted</strong>: off by default. The owner turns it
+              on in <em>Settings → General → Run code and commands</em>. Code
+              then runs on your machine, as Mav's user, in its own folder
+              (<code>~/workspace/code</code>, or <code>MAV_CODE_DIR</code>),
+              with Mav's secrets removed from its environment. It is not a
+              sandbox: turn it on only if you accept that Mav can run commands
+              on that machine (in Docker, inside Mav's container).
+            </li>
+          </ul>
+          <p>
+            The tools are an MCP connection called <code>code</code>
+            (<code>dashboard/tools/mav_code.py</code>): <code>run_python</code>,
+            <code>run_command</code>, <code>write_file</code>,
+            <code>read_file</code>, <code>list_files</code>,
+            <code>save_to_chat</code> and <code>load_from_chat</code>.
           </p>
         </section>
 
