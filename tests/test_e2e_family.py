@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from e2e_support import PASSWORD, Stack, launch, new_context, signed_in, sync_playwright, watch_errors  # noqa: E402
+from e2e_support import PASSWORD, Stack, launch, new_context, signed_in, sync_playwright, wait_or_explain, watch_errors  # noqa: E402
 
 ALEX_PW = "alex-password-1"
 
@@ -47,7 +47,7 @@ class FamilyE2E(unittest.TestCase):
         page.fill("#famName", "Alex")
         page.fill("#famPw", ALEX_PW)
         page.click("#modalFoot .btn-primary")
-        page.wait_for_selector("#familyList :text('Alex')", timeout=8000)
+        wait_or_explain(page, self.stack, "#familyList :text('Alex')")
 
         # Alex, on another device: the sign-in now asks for a name.
         alex = new_context(self.browser)
@@ -58,7 +58,7 @@ class FamilyE2E(unittest.TestCase):
         page.fill("#authName", "Alex")
         page.fill("#authPassword", ALEX_PW)
         page.click("#authSubmit")
-        page.wait_for_selector("#authGate", state="hidden", timeout=10000)
+        wait_or_explain(page, self.stack, "#authGate", "hidden")
         # The welcome flow runs for Alex too, without the model step's form.
         page.wait_for_selector("#onboarding:not([hidden])", timeout=10000)
         self.assertTrue(page.locator("#obModelReady").is_visible())
@@ -93,7 +93,7 @@ class FamilyE2E(unittest.TestCase):
         page.wait_for_selector("#authName:not([hidden])", timeout=10000)
         page.fill("#authPassword", PASSWORD)
         page.click("#authSubmit")
-        page.wait_for_selector("#authGate", state="hidden", timeout=10000)
+        wait_or_explain(page, self.stack, "#authGate", "hidden")
         # The page reloads signed in, then knows who it is for.
         page.wait_for_function("document.body && document.body.dataset.role === 'owner'", timeout=10000)
         self.assertTrue(page.locator("[data-stab='model']").count())

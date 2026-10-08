@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from e2e_support import PASSWORD, Stack, launch, new_context, signed_in, sync_playwright, watch_errors  # noqa: E402
+from e2e_support import PASSWORD, Stack, launch, new_context, signed_in, sync_playwright, wait_or_explain, watch_errors  # noqa: E402
 
 
 @unittest.skipIf(sync_playwright is None, "playwright not installed")
@@ -61,7 +61,7 @@ class AppE2E(unittest.TestCase):
             page.fill("#authPassword", PASSWORD)
             page.fill("#authPassword2", PASSWORD)
             page.click("#authSubmit")
-            page.wait_for_selector("#authGate", state="hidden", timeout=8000)
+            wait_or_explain(page, stack, "#authGate", "hidden")
             context.close()
             # A new device: wrong password first, then the right one.
             context = new_context(self.browser)
@@ -74,7 +74,7 @@ class AppE2E(unittest.TestCase):
             page.wait_for_selector("#authError:not([hidden])", timeout=5000)
             page.fill("#authPassword", PASSWORD)
             page.click("#authSubmit")
-            page.wait_for_selector("#authGate", state="hidden", timeout=8000)
+            wait_or_explain(page, stack, "#authGate", "hidden")
             context.close()
 
     def test_2_message_shows_tool_steps_in_order(self):

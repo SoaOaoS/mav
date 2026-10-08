@@ -122,3 +122,27 @@ def watch_errors(page) -> list:
     errors: list = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     return errors
+
+
+# Steps that hash a password (set up, sign in, add a person) are slow on
+# purpose (PBKDF2), and shared CI runners can be slower still.
+SLOW = 25000
+
+
+def wait_or_explain(page, stack: Stack, selector: str, state: str = "visible", timeout: int = SLOW) -> None:
+    """wait_for_selector, but a timeout says what the page and the server saw."""
+    try:
+        page.wait_for_selector(selector, state=state, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001
+        err = page.locator("#authError")
+        detail = {
+            "url": page.url,
+            "auth_error": err.inner_text() if err.count() and err.is_visible() else "",
+            "has_session_cookie": any(c["name"].startswith("mav") for c in page.context.cookies()),
+            "auth_state": page.request.get(stack.url + "api/auth/state").text()[:300],
+        }
+        try:
+            log = (stack.tmp / "api.log").read_text(errors="replace").splitlines()[-40:]
+        except OSError:
+            log = []
+        raise AssertionError(f"{selector} not {state}: {detail}\n--- api.log ---\n" + "\n".join(log)) from exc
