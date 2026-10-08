@@ -50,12 +50,11 @@ function renderInbox(items) {
   $("#inboxWrap").hidden = !list.length;
   $("#inbox").innerHTML = list
     .map(
-      (x, i) => `<li class="inbox-item">
+      (x, i) => `<li><button class="inbox-item" data-more="${i}" title="Tell me more">
         <span class="inbox-ico">${I(TOPIC_ICON[x.topic] || "bell")}</span>
         <span class="what"><strong>${esc(x.title || "Notification")}</strong><span>${esc((x.body || "").replace(/[*_`#>|]+/g, "").replace(/\s+/g, " "))}</span></span>
-        <span class="inbox-side"><span class="t">${esc(fmtRel(x.ts))}</span>
-        <button class="btn btn-ghost btn-sm" data-more="${i}">Tell me more</button></span>
-      </li>`,
+        <span class="inbox-side"><span class="t">${esc(fmtRel(x.ts))}</span>${I("chevron").replace("data-i", 'class="go" data-i')}</span>
+      </button></li>`,
     )
     .join("");
   $("#inbox")._items = list;
@@ -158,7 +157,7 @@ function renderRoutines() {
     .map(
       (j, i) => `<div class="job ${j.enabled ? "" : "is-off"}">
       ${agentAvatar(j.agent || state.defaultAgent)}
-      <div class="jmain">
+      <div class="jmain" data-edit-job="${i}" title="Edit">
         <div class="jtitle">${esc(j.name)} ${j.running ? `<span class="badge warn">${dots()} running</span>` : ""}</div>
         <div class="jdesc">${esc(j.description || j.prompt || "")}</div>
         <div class="jsched"><span class="badge">${I("clock")} ${esc(jobWhen(j))}</span>
@@ -166,9 +165,8 @@ function renderRoutines() {
           ${j.last_run ? `<span>last run ${esc(j.last_run)}</span>` : ""}</div>
       </div>
       <div class="jacts">
-        ${j.session ? `<button class="btn btn-ghost btn-sm" data-open-chat="${esc(j.session)}">${I("chat")} Open chat</button>` : ""}
-        <button class="btn btn-ghost btn-sm" data-run="${i}">${I("play")} Run now</button>
-        <button class="icon-btn" data-edit-job="${i}" title="Edit">${I("edit")}</button>
+        ${j.session ? `<button class="icon-btn" data-open-chat="${esc(j.session)}" title="Open its chat" aria-label="Open its chat">${I("chat")}</button>` : ""}
+        <button class="icon-btn" data-run="${i}" title="Run now" aria-label="Run now">${I("play")}</button>
         <button class="switch" role="switch" aria-checked="${j.enabled ? "true" : "false"}" data-toggle="${i}" title="${j.enabled ? "Pause" : "Turn on"}"></button>
       </div></div>`,
     )
@@ -440,57 +438,6 @@ function pollRoutineDone(name, n = 0) {
   }, 4000);
 }
 $("#routineNew").addEventListener("click", () => editRoutine(null));
-$("#routineTemplate").addEventListener("click", openTemplatePicker);
-async function openTemplatePicker() {
-  if (!needLive()) return;
-  let templates = [];
-  try {
-    templates = (await api.get(`job-templates?lang=${uiLang()}`)).templates || [];
-  } catch (_) {}
-  const body = templates.length
-    ? `<div class="tpl-grid">${templates
-        .map(
-          (t) => `<button class="tpl" data-tpl="${esc(t.id)}">
-            <span class="tpl-ico">${esc(t.icon || "🔁")}</span>
-            <strong>${esc(t.label)}</strong>
-            <span>${esc(t.description)}</span></button>`,
-        )
-        .join("")}</div>`
-    : `<p class="hint">No template available.</p>`;
-  modal.open({
-    title: "Start from a template",
-    body,
-    actions: [{ label: "Close" }],
-  });
-  $("#modalBody").addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-tpl]");
-    if (!b) return;
-    const tpl = templates.find((t) => t.id === b.dataset.tpl);
-    if (tpl && tpl.requires === "mail" && !MAIL.configured) {
-      // The routine needs Mail, and Mail is not set up yet.
-      if (
-        !(await confirmDialog(
-          "Mail is not set up",
-          "This routine reads your inbox. Connect your mailbox first? Mav will open Settings → Connections → Mail.",
-          "Set up Mail",
-        ))
-      )
-        return;
-      modal.close();
-      go("settings", "connections");
-      return;
-    }
-    try {
-      const r = await api.post("job/template", { id: b.dataset.tpl, lang: uiLang() });
-      if (!r.job) return toast("Unknown template.", { error: true });
-      modal.close();
-      editRoutine(r.job);
-    } catch (err) {
-      toast(err.message, { error: true });
-    }
-  });
-}
-
 /* Turn "every morning at 7, give me the weather" into a routine draft. */
 const WEEKDAYS = {
   monday: "mon",

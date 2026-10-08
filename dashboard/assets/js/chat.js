@@ -105,13 +105,31 @@ async function openChat(id, { push = true } = {}) {
 }
 
 function updateChatActions() {
-  const has = !!state.chat.id;
-  ["#pinBtn", "#summaryBtn", "#exportBtn", "#deleteChatBtn"].forEach(
-    (s) => ($(s).hidden = !has),
-  );
+  $("#chatActions").hidden = !state.chat.id;
+  closeChatMenu();
   $("#pinBtn").classList.toggle("is-on", !!state.chat.pinned);
-  $("#pinBtn").title = state.chat.pinned ? "Unpin" : "Pin";
+  $("#pinBtn span").textContent = state.chat.pinned ? "Unpin" : "Pin";
 }
+
+/* The chat's options (pin, summarise, download, delete) live in one menu. */
+function closeChatMenu() {
+  $("#chatMenu").hidden = true;
+  $("#chatMenuBtn").setAttribute("aria-expanded", "false");
+}
+$("#chatMenuBtn").addEventListener("click", () => {
+  const open = $("#chatMenu").hidden;
+  $("#chatMenu").hidden = !open;
+  $("#chatMenuBtn").setAttribute("aria-expanded", String(open));
+});
+$("#chatMenu").addEventListener("click", (e) => {
+  if (e.target.closest("[role=menuitem]")) closeChatMenu();
+});
+document.addEventListener("mousedown", (e) => {
+  if (!$("#chatMenu").hidden && !e.target.closest("#chatActions")) closeChatMenu();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#chatMenu").hidden) closeChatMenu();
+});
 
 function setEmpty(on) {
   $("#chat").classList.toggle("is-empty", on);
@@ -133,11 +151,9 @@ function renderThread() {
   const msgs = state.chat.messages;
   if (!msgs.length) {
     setEmpty(true);
-    const a = currentAgent();
     const name = (state.status && state.status.user_name) || "";
     messagesEl.innerHTML = `<div class="welcome">
       <h1>${esc(greet())}${name ? ", " + esc(name) : ""}</h1>
-      <p class="welcome-who">${agentAvatar(a, "sm")} <span>You're talking to <strong>${esc(agentDisplay(a))}</strong>${agentDesc(a) ? " — " + esc(lowerFirst(agentDesc(a))) : ""}</span></p>
     </div>`;
     refreshInbox();
     return;
@@ -185,9 +201,6 @@ function dayStamp(ts) {
   y.setDate(now.getDate() - 1);
   if (same(d, y)) return "Yesterday";
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
-function lowerFirst(s) {
-  return s ? s[0].toLowerCase() + s.slice(1) : s;
 }
 function greet() {
   const h = new Date().getHours();

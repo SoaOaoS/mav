@@ -63,6 +63,7 @@ const ICON_PATHS = {
   square:
     '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
   pin: '<path d="M12 17v5M9 3h6l-1 6 4 4H6l4-4z"/>',
+  dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
   sparkle:
     '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',

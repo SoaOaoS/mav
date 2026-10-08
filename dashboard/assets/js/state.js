@@ -175,7 +175,6 @@ function pillHtml(name, small) {
 }
 function renderAgentPills() {
   const a = currentAgent();
-  $("#chatAgent").innerHTML = pillHtml(a);
   $("#composerAgent").innerHTML = pillHtml(a, true);
 }
 
@@ -227,10 +226,8 @@ document.addEventListener("mousedown", (e) => {
     return;
   closeAgentMenu();
 });
-["#chatAgent", "#composerAgent"].forEach((s) =>
-  $(s).addEventListener("click", (e) =>
-    openAgentMenu(e.currentTarget, currentAgent(), (a) => switchAgent(a)),
-  ),
+$("#composerAgent").addEventListener("click", (e) =>
+  openAgentMenu(e.currentTarget, currentAgent(), (a) => switchAgent(a)),
 );
 
 async function switchAgent(name) {
