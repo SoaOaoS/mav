@@ -254,6 +254,9 @@ def apply(
     """Write the provider config. `api_key=None` keeps the existing key."""
     pid = (pid or "").strip().lower()
     model = (model or "").strip()
+    # "anthropic/claude-…" as well as "claude-…": the provider is given apart.
+    if model.lower().startswith(pid + "/"):
+        model = model[len(pid) + 1:]
     if not ID_RE.match(pid):
         return {"ok": False, "error": "Invalid provider id (a-z, 0-9, - _)."}
     if not model:
@@ -277,7 +280,11 @@ def apply(
         if isinstance(blk, dict) and not (blk.get("options") or {}):
             blocks.pop(pid, None)
         if base_url and base_url.rstrip("/") != preset["base"].rstrip("/"):
-            blocks.setdefault(pid, {}).setdefault("options", {})["baseURL"] = base_url
+            blk = blocks.setdefault(pid, {})
+            blk.setdefault("options", {})["baseURL"] = base_url
+            # Behind another endpoint (Mav Cloud's proxy), the model may be
+            # newer than the engine's catalogue: declare it.
+            blk.setdefault("models", {}).setdefault(model, {"name": model})
     else:
         base = base_url or preset["base"]
         if not base:
