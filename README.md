@@ -14,16 +14,20 @@ pages and prices it keeps an eye on, and a memory of what matters to you.
 [![Release](https://img.shields.io/github/v/release/SoaOaoS/mav?label=release&color=0f7a5c)](https://github.com/SoaOaoS/mav/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/SoaOaoS/mav/total?label=downloads&color=0f7a5c)](https://github.com/SoaOaoS/mav/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-E8962E)](LICENSE)
-[![Website](https://img.shields.io/badge/website-soaoaos.github.io%2Fmav-0F7A5C)](https://soaoaos.github.io/mav/)
+[![Website](https://img.shields.io/badge/website-getmav.dev-0F7A5C)](https://getmav.dev/)
 [![CodeQL](https://github.com/SoaOaoS/mav/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/SoaOaoS/mav/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/SoaOaoS/mav/badge)](https://securityscorecards.dev/viewer/?uri=github.com/SoaOaoS/mav)
 [![Security policy](https://img.shields.io/badge/security-policy-E8962E)](SECURITY.md)
 
-`curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
+**No server? [Start your Mav in the cloud](https://app.getmav.dev)** —
+**MyMav** (9 €/month, your own model key) or **CloudMav** (19 €/month, model
+included). [Compare the plans](https://getmav.dev/#cloud).
 
-**Try it in your browser:** [live demo](https://soaoaos.github.io/mav/demo/) (sample data, nothing to install) ·
-**Website & docs:** <https://soaoaos.github.io/mav/> ·
-[documentation](https://soaoaos.github.io/mav/docs.html)
+**Or run it yourself, free:** `curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`
+
+**Try it in your browser:** [live demo](https://getmav.dev/demo/) (sample data, nothing to install) ·
+**Website & docs:** <https://getmav.dev/> ·
+[documentation](https://getmav.dev/docs.html)
 
 </div>
 
@@ -123,7 +127,7 @@ updates.
   through Tailscale.
 - **Already installed with the installer?** `sudo ./scripts/migrate-to-docker.sh`
   moves everything to Docker: chats, memory, routines, model, keys and
-  password. See [Moving to Docker](https://soaoaos.github.io/mav/docs.html#migrate).
+  password. See [Moving to Docker](https://getmav.dev/docs.html#migrate).
 
 ### With the installer (Linux with systemd)
 

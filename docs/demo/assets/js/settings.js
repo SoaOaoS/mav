@@ -7,7 +7,7 @@
    ================================================================ */
 function currentSettingsTab() {
   const a = $("[data-stab].is-active");
-  return a ? a.dataset.stab : isOwner() ? "model" : "general";
+  return a ? a.dataset.stab : isOwner() && !MODEL_MANAGED ? "model" : "general";
 }
 function openSettingsTab(tab) {
   if (tab === "agents") tab = "helpers";
@@ -17,6 +17,7 @@ function openSettingsTab(tab) {
   }
   if (!$(`#spanel-${tab}`)) tab = "model";
   if (!isOwner()) tab = "general"; // the rest is the owner's
+  if (tab === "model" && MODEL_MANAGED) tab = "general"; // the plan's model
   $$("[data-stab]").forEach((t) =>
     t.classList.toggle("is-active", t.dataset.stab === tab),
   );

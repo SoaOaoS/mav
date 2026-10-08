@@ -554,6 +554,14 @@ function obGo(n) {
 
 /* Step 1 — model */
 async function obLoadModel() {
+  if (MODEL_MANAGED) {
+    // The plan includes the model: nothing to connect, nothing to change.
+    OB.connected = true;
+    $("#obModelReady").hidden = false;
+    $("#obModelReady").innerHTML = `${I("check")}<span>Mav is ready — the model comes with your CloudMav plan.</span>`;
+    $("#obModelForm").hidden = true;
+    return;
+  }
   if (ME.role !== "owner") {
     // The owner chose the model: nothing to connect here.
     OB.connected = true;
@@ -736,6 +744,8 @@ async function boot() {
     return showAuthGate(auth.setup_needed ? "setup" : "login");
   }
   if (auth && auth.user) ME = auth.user;
+  MODEL_MANAGED = !!(auth && auth.model_managed);
+  document.body.dataset.model = MODEL_MANAGED ? "managed" : "own";
   applyRole();
   if (auth && !auth.enabled) $("#accountRow").hidden = true;
   let status = null;

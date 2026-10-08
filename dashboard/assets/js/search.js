@@ -24,7 +24,7 @@ const PAL_ACTIONS = [
       $("#factInput").focus();
     },
   },
-  { text: "Change the model", ico: "cpu", run: () => go("settings", "model") },
+  { text: "Change the model", ico: "cpu", model: true, run: () => go("settings", "model") },
   {
     text: "Custom instructions",
     ico: "edit",
@@ -102,7 +102,7 @@ function renderPalette(q) {
         run: () => newChat(a),
       }),
     );
-  PAL_ACTIONS.filter((a) => !q || a.text.toLowerCase().includes(ql)).forEach(
+  PAL_ACTIONS.filter((a) => !(a.model && MODEL_MANAGED) && (!q || a.text.toLowerCase().includes(ql))).forEach(
     (a) => items.push({ group: "Actions", ...a }),
   );
   palItems = items;

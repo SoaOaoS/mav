@@ -25,7 +25,7 @@ OPENCODE_URL=http://127.0.0.1:4096 MAV_STATIC="$PWD/.." BOT_DIR=/tmp/mav \
 Opened without the server, the app falls back to a **demo mode** with
 sample chats (tool steps included), routines, alerts and memory. Replies are
 canned and nothing leaves the browser. This is the public demo at
-<https://soaoaos.github.io/mav/demo/>: `scripts/build-demo.sh` copies the
+<https://getmav.dev/demo/>: `scripts/build-demo.sh` copies the
 app into `docs/demo/`, and CI fails if that copy is out of date. Run it, and
 commit, after any change in `dashboard/`.
 
@@ -188,6 +188,12 @@ wrong passwords are slowed down. Public routes: `/api/auth/*`, `/api/health`
 and `/api/hooks/*` (webhooks carry their own token). `sudo mav password` resets
 it from the machine; `MAV_AUTH=off` turns sign-in off (only behind your own
 authenticating proxy). Stored in `BOT_DIR/auth.json` (PBKDF2-SHA256).
+
+**A model that comes with the plan.** `MAV_MODEL_MANAGED=1` (set by Mav Cloud
+for CloudMav) makes the model part of the plan, not a setting: the Model tab,
+the background-model setting and the welcome flow's model step are hidden, and
+`POST /api/config/provider`, `/api/config/provider/test` and
+`/api/usage/small-model` answer 403. `/api/auth/state` carries `model_managed`.
 
 **Family accounts.** The owner can add people (Settings → General → Family;
 `/api/family/*`). Members sign in with their name; their chats, memory,
