@@ -248,9 +248,14 @@ def _vapid():
     return _vapid_obj
 
 
-def send_push(title: str, body: str, url: str = "./") -> int:
-    """Send to all subscribers; drop the truly dead ones. 0 if none."""
-    subs = _subs()
+OWNER_ID = int(os.environ.get("MAV_CHAT_ID", "0") or 0)
+
+
+def send_push(title: str, body: str, url: str = "./", chat_id: int | None = None) -> int:
+    """Send to the devices of `chat_id` (None = the owner's); drop the truly
+    dead ones. 0 if none."""
+    want = OWNER_ID if chat_id is None else chat_id
+    subs = [s for s in _subs() if s.get("user", OWNER_ID) == want]
     if not subs or not VAPID_PEM.exists():
         return 0
     try:
@@ -264,7 +269,7 @@ def send_push(title: str, body: str, url: str = "./") -> int:
         log.warning("unreadable VAPID key: %s", exc)
         return 0
     payload = json.dumps({"title": title, "body": body, "url": url})
-    sent, alive = 0, []
+    sent, dead = 0, set()
     for s in subs:
         try:
             webpush(
@@ -277,21 +282,19 @@ def send_push(title: str, body: str, url: str = "./") -> int:
                 timeout=15,
             )
             sent += 1
-            alive.append(s)
         except WebPushException as exc:
             code = getattr(getattr(exc, "response", None), "status_code", None)
             # 404/410 = expired subscription (permanent). Anything else = transient:
             # keep the subscriber and retry later.
             if code in (404, 410):
                 log.info("expired push subscription (removed): %s", code)
+                dead.add(s.get("endpoint"))
             else:
                 log.warning("push failed (code %s): %s", code, str(exc)[:200])
-                alive.append(s)
         except Exception as exc:  # noqa: BLE001
             log.warning("unexpected push error: %s", str(exc)[:200])
-            alive.append(s)
-    if len(alive) != len(subs):
-        _write_subs(alive)
+    if dead:
+        _write_subs([s for s in _subs() if s.get("endpoint") not in dead])
     return sent
 
 
@@ -447,13 +450,15 @@ def notify(
                 channels = None
         except Exception:  # noqa: BLE001
             channels = None
-    n = send_push(title, body, target) if channels is None or "push" in channels else 0
+    n = send_push(title, body, target, chat_id) if channels is None or "push" in channels else 0
     result["push"] = n
     reached = ["push"] if n else []
     try:
         import occhannels  # noqa: PLC0415
 
         only = None if channels is None else [c for c in channels if c != "push"]
+        if chat_id is not None and chat_id != OWNER_ID:
+            only = []  # ntfy, Discord… are the owner's: a member gets their devices
         extra = occhannels.deliver(title, body, target, lvl, only) if only != [] else []
     except Exception as exc:  # noqa: BLE001
         log.warning("channels: %s", exc)
@@ -464,17 +469,20 @@ def notify(
     return result
 
 
-def recent(limit: int = 30) -> list[dict]:
-    """Recent notification history (for the dashboard)."""
+def recent(limit: int = 30, chat_id: int | None = None) -> list[dict]:
+    """Recent notification history of one person (None = the owner, who also
+    gets the notices addressed to nobody)."""
     pg = _pg_get()
     if pg is None:
         return []
+    want = OWNER_ID if chat_id is None else chat_id
     try:
         cur = pg.cursor()
         cur.execute(
             "SELECT ts, topic, title, body, channels, delivered "
-            "FROM notifications ORDER BY ts DESC LIMIT %s",
-            (limit,),
+            "FROM notifications WHERE chat_id = %s OR (chat_id IS NULL AND %s = %s) "
+            "ORDER BY ts DESC LIMIT %s",
+            (want, want, OWNER_ID, limit),
         )
         return [
             {

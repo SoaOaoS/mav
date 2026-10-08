@@ -63,6 +63,32 @@ def drop_session_meta(sid: str) -> None:
                 pass
 
 
+def session_owner(sid: str, title: str | None = None, meta: dict | None = None,
+                  jobs: list | None = None) -> int:
+    """The account a chat belongs to.
+
+    Chats made in the app carry it in their metadata. Older ones are the
+    owner's, except a routine's chat, which belongs to the routine's owner
+    (the worker creates those, by title)."""
+    m = session_meta(sid) if meta is None else meta
+    if "user" in m:
+        try:
+            return int(m["user"])
+        except (TypeError, ValueError):
+            return mav_core.DEFAULT_CHAT_ID
+    if title is None:
+        title = session_title(sid)
+    head = PREFIX + mav_routines.ROUTINE_PREFIX
+    if title.startswith(head):
+        return mav_routines.job_owner(title[len(head):], jobs)
+    return mav_core.DEFAULT_CHAT_ID
+
+
+def can_access(sid: str) -> bool:
+    """May the current user open this chat? (No id: nothing to protect.)"""
+    return not sid or session_owner(sid) == mav_core.uid()
+
+
 def _list_raw_sessions() -> list[dict]:
     try:
         return mav_core.http_json(f"{mav_core.OPENCODE_URL}/session", timeout=8) or []
@@ -84,6 +110,7 @@ def list_sessions() -> list[dict]:
     meta = mav_core.read_json(mav_core.SESSIONS_META, {}) or {}
     jobs = mav_core.read_json(mav_core.JOBS_FILE, []) or []
     active = {r["session"] for r in mav_stream.runs_view() if r["status"] == "running"}
+    me = mav_core.uid()
     out = []
     for s in _list_raw_sessions():
         title = str(s.get("title", ""))
@@ -95,6 +122,8 @@ def list_sessions() -> list[dict]:
             continue
         t = s.get("time", {})
         m = meta.get(s["id"], {})
+        if session_owner(s["id"], title, m, jobs) != me:
+            continue
         routine = title[len(PREFIX):].startswith(mav_routines.ROUTINE_PREFIX)
         agent = m.get("agent", "")
         if routine and not agent:
@@ -118,8 +147,7 @@ def create_session(title: str = "", agent: str = "") -> dict:
     name = (title or DEFAULT_TITLE).strip()[:80] or DEFAULT_TITLE
     res = mav_core.http_json(f"{mav_core.OPENCODE_URL}/session", method="POST", body={"title": PREFIX + name})
     agent = (agent or "").strip()
-    if agent:
-        set_session_meta(res["id"], agent=agent)
+    set_session_meta(res["id"], user=mav_core.uid(), **({"agent": agent} if agent else {}))
     return {"id": res["id"], "title": name, "agent": agent}
 
 
@@ -191,7 +219,7 @@ def save_learned_facts(raw: str) -> int:
         return 0
     if not raw or raw.strip(" :\n").upper().startswith("NONE"):
         return 0
-    known = [f["fact"].lower() for f in mav_core.MEMORY.facts(mav_core.DEFAULT_CHAT_ID, limit=200)]
+    known = [f["fact"].lower() for f in mav_core.MEMORY.facts(mav_core.uid(), limit=200)]
     added = 0
     for line in raw.splitlines():
         line = line.strip()
@@ -203,7 +231,7 @@ def save_learned_facts(raw: str) -> int:
         low = fact.lower()
         if any(low in k or k in low for k in known):
             continue
-        if mav_core.MEMORY.add_fact(mav_core.DEFAULT_CHAT_ID, fact, source="learned"):
+        if mav_core.MEMORY.add_fact(mav_core.uid(), fact, source="learned"):
             known.append(low)
             added += 1
         if added >= 3:
@@ -221,6 +249,8 @@ def learn_interests(prompt: str) -> int:
     """
     if mav_core.INTERESTS is None or not prompt or len(prompt) > 4000:
         return 0
+    if not mav_core.is_owner():
+        return 0  # the interest profile is the owner's
     try:
         return mav_core.INTERESTS.learn_from_text(prompt, source="chat")
     except Exception:  # noqa: BLE001
@@ -286,7 +316,7 @@ def schedule_after_answer(sid: str, prompt: str, answer: str, needs_title: bool)
         return
     global _after_thread
     with _after_cv:
-        _after_q.append((sid, prompt, answer, needs_title, facts))
+        _after_q.append((mav_core.uid(), (sid, prompt, answer, needs_title, facts)))
         if _after_thread is None or not _after_thread.is_alive():
             _after_thread = threading.Thread(target=_after_worker, daemon=True)
             _after_thread.start()
@@ -299,14 +329,15 @@ def _after_worker() -> None:
             while not _after_q:
                 if not _after_cv.wait(timeout=300):
                     return
-            job = _after_q.pop(0)
+            user, job = _after_q.pop(0)
         # Let the engine finish whatever the person is waiting on (bounded).
         waited = 0.0
         while _engine_busy() and waited < AFTER_IDLE_WAIT:
             time.sleep(1.0)
             waited += 1.0
         try:
-            after_answer(*job)
+            with mav_core.as_user(user):
+                after_answer(*job)
         except Exception:  # noqa: BLE001
             pass
 
@@ -515,12 +546,12 @@ def memory_context(prompt: str) -> str:
     blocks = []
     if mav_core.MEMORY and mav_core.MEMORY_ENABLED:
         try:
-            b = mav_core.MEMORY.context_block(mav_core.DEFAULT_CHAT_ID, prompt, mav_core.MEMORY_TOP)
+            b = mav_core.MEMORY.context_block(mav_core.uid(), prompt, mav_core.MEMORY_TOP)
             if b:
                 blocks.append(b)
         except Exception:  # noqa: BLE001
             pass
-    if mav_core.RAG is not None:
+    if mav_core.RAG is not None and mav_core.is_owner():  # indexed documents are the owner's
         try:
             if mav_core._RAG is None:
                 mav_core._RAG = mav_core.RAG()
@@ -535,7 +566,7 @@ def memory_context(prompt: str) -> str:
 def remember_exchange(prompt: str, answer: str, sid: str, agent: str) -> None:
     if mav_core.MEMORY and mav_core.MEMORY_ENABLED and answer:
         try:
-            mav_core.MEMORY.add(mav_core.DEFAULT_CHAT_ID, prompt, answer, sid, source="dashboard", agent=agent)
+            mav_core.MEMORY.add(mav_core.uid(), prompt, answer, sid, source="dashboard", agent=agent)
         except Exception:  # noqa: BLE001
             pass
 
@@ -566,4 +597,4 @@ def save_upload(name: str, data_b64: str, mime: str = "") -> dict:
 INTERRUPTED: set[str] = set()
 
 
-__all__ = ['ABOUT_ME_RE', 'AFTER_IDLE_WAIT', 'DEFAULT_TITLE', 'INTERRUPTED', 'LEGACY_TITLES', 'PREFIX', '_after_cv', '_after_q', '_after_thread', '_after_worker', '_clean_title', '_drop_open_turn', '_engine_busy', '_list_raw_sessions', '_meta_lock', '_migrate_legacy', '_model_body', '_part_text', '_parts', '_ts', 'after_answer', 'create_session', 'delete_session', 'drop_session_meta', 'export_session_markdown', 'generate_title', 'learn_facts', 'learn_interests', 'list_sessions', 'memory_context', 'quick_completion', 'quick_title', 'remember_exchange', 'rename_session', 'save_learned_facts', 'save_upload', 'schedule_after_answer', 'session_messages', 'session_meta', 'session_title', 'set_session_meta', 'summarize_session', 'wants_facts']
+__all__ = ['can_access', 'session_owner', 'ABOUT_ME_RE', 'AFTER_IDLE_WAIT', 'DEFAULT_TITLE', 'INTERRUPTED', 'LEGACY_TITLES', 'PREFIX', '_after_cv', '_after_q', '_after_thread', '_after_worker', '_clean_title', '_drop_open_turn', '_engine_busy', '_list_raw_sessions', '_meta_lock', '_migrate_legacy', '_model_body', '_part_text', '_parts', '_ts', 'after_answer', 'create_session', 'delete_session', 'drop_session_meta', 'export_session_markdown', 'generate_title', 'learn_facts', 'learn_interests', 'list_sessions', 'memory_context', 'quick_completion', 'quick_title', 'remember_exchange', 'rename_session', 'save_learned_facts', 'save_upload', 'schedule_after_answer', 'session_messages', 'session_meta', 'session_title', 'set_session_meta', 'summarize_session', 'wants_facts']

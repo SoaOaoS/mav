@@ -119,7 +119,8 @@ The front-end is plain classic scripts in `assets/js/`, loaded in order by
 | -------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | GET | `/api/usage?days=30` · POST `/api/usage/budget` (`{monthly_usd, action: warn|stop}`) · `/api/usage/small-model` | cost, tokens, budget, background model |
 | GET/POST | `/api/briefing` (`{enabled, time}`), POST `/api/briefing/run` | daily briefing settings / brief me now (returns the chat to open) |
-| GET/POST | `/api/auth/state` · `setup` · `login` · `logout` · `password` | sign-in |
+| GET/POST | `/api/auth/state` · `setup` · `login` · `logout` · `password` | sign-in (login takes an optional `name`) |
+| GET/POST | `/api/family` · `family/add` · `rename` · `password` · `remove` | family accounts (owner only) |
 | GET      | `/api/status`                                                                        | assistant health, model, counters                                                |
 | GET      | `/api/stream?prompt=&session=&agent=`                                                | **SSE** answer (`start`, `delta`, `reset`, `tool`, `done`, `error`); `&from=N` resumes |
 | GET      | `/api/sessions`, `/api/session?id=`                                                  | chats, one chat's messages (one per turn; `running` = answer in progress) |
@@ -187,6 +188,16 @@ wrong passwords are slowed down. Public routes: `/api/auth/*`, `/api/health`
 and `/api/hooks/*` (webhooks carry their own token). `sudo mav password` resets
 it from the machine; `MAV_AUTH=off` turns sign-in off (only behind your own
 authenticating proxy). Stored in `BOT_DIR/auth.json` (PBKDF2-SHA256).
+
+**Family accounts.** The owner can add people (Settings → General → Family;
+`/api/family/*`). Members sign in with their name; their chats, memory,
+routines, watch items, notifications and push devices are kept apart (by
+`chat_id` in Postgres, an `owner` on each routine, a `user` on each chat and
+device). A member reaches only the routes in `MEMBER_GET` / `MEMBER_POST`
+(`mav_api.py`); everything else (model, connections, helpers, mail,
+interests, calendars, channels, usage, backup, updates) is the owner's.
+Removing a member erases their data. Files the assistant writes stay in one
+shared workspace.
 
 ## Install it on a phone (PWA)
 

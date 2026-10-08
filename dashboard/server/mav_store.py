@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import mav_core
+import mav_chat
 import mav_engine
 import mav_routines
 import mav_stream
@@ -30,7 +31,7 @@ def backup_places() -> "mav_backup.Places":
 
 def calendar_view() -> dict:
     """Connected calendars (secrets masked) and what is on today."""
-    if mav_core.occalendar is None:
+    if mav_core.occalendar is None or not mav_core.is_owner():  # the owner's calendars
         return {"sources": [], "today": []}
     today = []
     try:
@@ -136,7 +137,7 @@ def record_notification(topic: str, title: str, body: str, link: str = "") -> in
         rows = mav_core.pg_query(
             "insert into notifications (ts, chat_id, topic, title, body, channels, delivered, link) "
             "values (%s, %s, %s, %s, %s, %s, %s, %s) returning id",
-            (int(time.time()), mav_core.DEFAULT_CHAT_ID, topic, title[:200], body[:2000], ["push"], True, link or None),
+            (int(time.time()), mav_core.uid(), topic, title[:200], body[:2000], ["push"], True, link or None),
         )
         return rows[0]["id"] if rows else None
     except Exception:  # noqa: BLE001
@@ -150,14 +151,15 @@ def get_memory(limit: int = 40) -> dict:
         except Exception:
             return []
 
+    who, args = mav_core.mine()
     return {
         "conversations": q(
             "select id, question, left(answer, 600) as answer, ts, source, agent "
-            "from conversations order by ts desc limit %s",
-            (limit,),
+            f"from conversations where {who} order by ts desc limit %s",
+            (*args, limit),
         ),
-        "facts": q("select id, fact, source, ts from facts order by ts desc limit 200"),
-        "preferences": q("select key, value, ts from preferences order by ts desc limit 20"),
+        "facts": q(f"select id, fact, source, ts from facts where {who} order by ts desc limit 200", args),
+        "preferences": q(f"select key, value, ts from preferences where {who} order by ts desc limit 20", args),
         "backend": mav_core.MEMORY.backend if mav_core.MEMORY else "none",
         "enabled": mav_core.MEMORY_ENABLED,
     }
@@ -169,34 +171,36 @@ def memory_action(action: str, payload: dict) -> dict:
         if not fact:
             return {"ok": False, "error": "Empty fact."}
         if mav_core.MEMORY:
-            return {"ok": mav_core.MEMORY.add_fact(mav_core.DEFAULT_CHAT_ID, fact, source="dashboard")}
+            return {"ok": mav_core.MEMORY.add_fact(mav_core.uid(), fact, source="dashboard")}
         mav_core.pg_exec(
             "insert into facts (chat_id, fact, source, ts) values (%s, %s, %s, %s)",
-            (mav_core.DEFAULT_CHAT_ID, fact[:500], "dashboard", int(time.time())),
+            (mav_core.uid(), fact[:500], "dashboard", int(time.time())),
         )
         return {"ok": True}
+    who, args = mav_core.mine()
     if action == "fact/delete":
-        mav_core.pg_exec("delete from facts where id = %s", (int(payload.get("id") or 0),))
+        mav_core.pg_exec(f"delete from facts where id = %s and {who}", (int(payload.get("id") or 0), *args))
         return {"ok": True}
     if action == "exchange/delete":
-        mav_core.pg_exec("delete from conversations where id = %s", (int(payload.get("id") or 0),))
+        mav_core.pg_exec(f"delete from conversations where id = %s and {who}", (int(payload.get("id") or 0), *args))
         return {"ok": True}
     if action == "forget":
-        mav_core.pg_exec("delete from conversations")
+        mav_core.pg_exec(f"delete from conversations where {who}", args)
         if payload.get("facts"):
-            mav_core.pg_exec("delete from facts")
+            mav_core.pg_exec(f"delete from facts where {who}", args)
         return {"ok": True}
     return {"ok": False, "error": "unknown action"}
 
 
 def get_notifications(limit: int = 30) -> dict:
     """Historique des notifications proactives (veille + jobs)."""
+    who, args = mav_core.mine()
     try:
         rows = mav_core.pg_query(
             "select id, ts, topic, title, body, channels, delivered, link "
-            "from notifications where topic is distinct from 'push_ack' "
+            f"from notifications where topic is distinct from 'push_ack' and {who} "
             "order by ts desc limit %s",
-            (limit,),
+            (*args, limit),
         )
     except Exception:
         rows = []
@@ -205,10 +209,11 @@ def get_notifications(limit: int = 30) -> dict:
 
 def get_notification(nid: int) -> dict:
     """One notification by id (to open its detail from the push)."""
+    who, args = mav_core.mine()
     try:
         rows = mav_core.pg_query(
-            "select id, ts, topic, title, body, delivered, link from notifications where id = %s",
-            (nid,),
+            f"select id, ts, topic, title, body, delivered, link from notifications where id = %s and {who}",
+            (nid, *args),
         )
     except Exception:
         rows = []
@@ -554,7 +559,10 @@ def global_search(query: str) -> dict:
     if not q:
         return {"documents": [], "conversations": [], "facts": []}
     docs, convs, facts = [], [], []
+    who, args = mav_core.mine()
     try:
+        if not mav_core.is_owner():
+            raise PermissionError  # indexed documents are the owner's
         docs = mav_core.pg_query(
             "select title, left(body, 240) as excerpt, source, ts "
             "from documents where tsv @@ plainto_tsquery('french', %s) "
@@ -566,19 +574,53 @@ def global_search(query: str) -> dict:
     try:
         convs = mav_core.pg_query(
             "select question, left(answer, 240) as answer, ts from conversations "
-            "where question ilike %s or answer ilike %s order by ts desc limit 8",
-            (f"%{q}%", f"%{q}%"),
+            f"where (question ilike %s or answer ilike %s) and {who} order by ts desc limit 8",
+            (f"%{q}%", f"%{q}%", *args),
         )
     except Exception:
         pass
     try:
         facts = mav_core.pg_query(
-            "select fact, ts from facts where fact ilike %s order by ts desc limit 8",
-            (f"%{q}%",),
+            f"select fact, ts from facts where fact ilike %s and {who} order by ts desc limit 8",
+            (f"%{q}%", *args),
         )
     except Exception:
         pass
     return {"documents": docs, "conversations": convs, "facts": facts}
+
+
+def forget_account(uid: int) -> dict:
+    """Erase a removed family member's data: chats, routines, memory, watch
+    items, notifications, preferences and devices. Never the owner's."""
+    if uid == mav_core.DEFAULT_CHAT_ID:
+        return {}
+    out = {"chats": 0, "routines": 0, "rows": 0}
+    jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
+    jobs = jobs if isinstance(jobs, list) else []
+    theirs = {j.get("name") for j in jobs if mav_routines.job_owner(j.get("name"), [j]) == uid}
+    if theirs:
+        mav_core.write_json(mav_core.JOBS_FILE, [j for j in jobs if j.get("name") not in theirs])
+        out["routines"] = len(theirs)
+    meta = mav_core.read_json(mav_core.SESSIONS_META, {}) or {}
+    for s_ in mav_chat._list_raw_sessions():
+        title = str(s_.get("title", ""))
+        if mav_chat.session_owner(s_["id"], title, meta.get(s_["id"], {}), jobs) == uid:
+            if mav_chat.delete_session(s_["id"]):
+                out["chats"] += 1
+    for table in ("conversations", "facts", "notifications", "notify_digest", "watch_items", "preferences"):
+        try:
+            rows = mav_core.pg_query(
+                f"with d as (delete from {table} where chat_id = %s returning 1) select count(*) n from d", (uid,))
+            out["rows"] += int(rows[0]["n"]) if rows else 0
+        except Exception:  # noqa: BLE001
+            pass
+    subs = mav_core.read_json(mav_core.PUSH_FILE, [])
+    if isinstance(subs, list) and any(x.get("user") == uid for x in subs):
+        mav_core.write_json(mav_core.PUSH_FILE, [x for x in subs if x.get("user") != uid])
+    data = mav_core.read_json(mav_routines.ONBOARDING_FILE, {})
+    if isinstance(data, dict) and isinstance(data.get("members"), dict) and data["members"].pop(str(uid), None):
+        mav_core.write_json(mav_routines.ONBOARDING_FILE, data)
+    return out
 
 
 def ensure_schema() -> None:
@@ -610,4 +652,4 @@ def ensure_schema() -> None:
         pass
 
 
-__all__ = ['_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_debate', 'get_debates', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']
+__all__ = ['forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_debate', 'get_debates', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']

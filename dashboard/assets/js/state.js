@@ -5,6 +5,11 @@
 /* ================================================================
    2. State
    ================================================================ */
+// Who is signed in: the owner, or a family member (fewer settings).
+let ME = { id: 0, name: "", role: "owner" };
+let AUTH_NAMED = false; // several accounts: sign-in asks for a name
+const isOwner = () => ME.role === "owner";
+
 const state = {
   status: null,
   agents: [],
@@ -56,7 +61,7 @@ const VIEW_TITLES = {
 };
 
 function go(view, sub, { push = true } = {}) {
-  if (!$(`#view-${view}`)) view = "chat";
+  if (!$(`#view-${view}`) || (view === "debates" && !isOwner())) view = "chat";
   state.view = view;
   $$(".nav-item").forEach((b) =>
     b.classList.toggle("is-active", b.dataset.view === view),

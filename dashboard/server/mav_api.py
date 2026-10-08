@@ -85,6 +85,35 @@ class ThreadedHTTPServer(ThreadingHTTPServer):
     protocol_version = "HTTP/1.1"
 
 
+# What a family member may call. Everything else is the owner's: the model,
+# connections, helpers, backup, updates, email, interests, usage, channels…
+MEMBER_GET = frozenset({
+    "/api/auth/state", "/api/health", "/api/status", "/api/version", "/api/agents",
+    "/api/briefing", "/api/onboarding", "/api/jobs", "/api/job-templates", "/api/job-results",
+    "/api/proactivity", "/api/memory", "/api/watch", "/api/notifications", "/api/notification",
+    "/api/sessions", "/api/session", "/api/session/export", "/api/search", "/api/runs",
+    "/api/stream", "/api/push/key", "/api/asset", "/api/chart", "/api/download", "/api/media",
+    "/api/media/find", "/api/media/get", "/api/media/by-name", "/api/channels", "/api/calendar",
+})
+MEMBER_POST = frozenset({
+    "/api/onboarding", "/api/onboarding/profile", "/api/onboarding/routines", "/api/briefing",
+    "/api/briefing/run", "/api/ask", "/api/session/new", "/api/session/rename", "/api/session/agent",
+    "/api/session/pin", "/api/session/delete", "/api/session/abort", "/api/session/interrupt",
+    "/api/session/summary", "/api/run/stop", "/api/job/toggle", "/api/job/run", "/api/job/save",
+    "/api/job/template", "/api/job/snooze", "/api/job/delete", "/api/routine/detect",
+    "/api/proactivity", "/api/watch/add", "/api/watch/remove", "/api/upload", "/api/push/subscribe",
+    "/api/push/unsubscribe", "/api/push/test", "/api/push/ack",
+})
+MEMBER_POST_PREFIXES = ("/api/auth/", "/api/memory/")
+
+# Calls about one chat, and where they carry its id: only its owner may.
+SESSION_GET = {"/api/session": "id", "/api/session/export": "id", "/api/stream": "session"}
+SESSION_POST = {"/api/session/rename": "id", "/api/session/agent": "id", "/api/session/pin": "id",
+                "/api/session/delete": "id", "/api/session/abort": "id",
+                "/api/session/interrupt": "id", "/api/session/summary": "id",
+                "/api/run/stop": "id", "/api/ask": "session"}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "mav-api/0.2"
     protocol_version = "HTTP/1.1"
@@ -113,8 +142,32 @@ class Handler(BaseHTTPRequestHandler):
         """False (and a 401 sent) when this API call needs a session."""
         if mav_core.AUTH.allowed(path, self.headers.get("Cookie", "")):
             return True
+        # A refused request may leave a body unread: never reuse this connection.
+        self.close_connection = True
         self._send(401, {"error": "sign in required", "auth": True})
         return False
+
+    def _who(self) -> int:
+        """The account this request is for (the owner when sign-in is off)."""
+        uid = mav_core.AUTH.current(self.headers.get("Cookie", ""))
+        return mav_core.DEFAULT_CHAT_ID if uid is None else uid
+
+    def _permitted(self, method: str, path: str, params: dict) -> bool:
+        """False (and a 403/404 sent) when the current user may not do this."""
+        if not path.startswith("/api/"):
+            return True
+        if not mav_core.is_owner():
+            allowed = (path in MEMBER_GET) if method == "GET" else (
+                path in MEMBER_POST or path.startswith(MEMBER_POST_PREFIXES))
+            if not allowed:
+                self._send(403, {"error": "Only the owner of this Mav can do that."})
+                return False
+        key = (SESSION_GET if method == "GET" else SESSION_POST).get(path)
+        if key and not mav_chat.can_access(str(params.get(key) or "")):
+            # Someone else's chat looks like one that does not exist.
+            self._send(404, {"error": "not found"})
+            return False
+        return True
 
     def _secure(self) -> bool:
         return bool(getattr(self.server, "is_tls", False)) or (
@@ -140,25 +193,58 @@ class Handler(BaseHTTPRequestHandler):
             wait = mav_core.AUTH.throttled(who)
             if wait:
                 return self._send(429, {"error": f"Too many attempts. Try again in {int(wait) + 1} s."})
-            if not mav_core.AUTH.check_password(payload.get("password", "")):
+            uid = mav_core.AUTH.login(str(payload.get("name") or ""), str(payload.get("password") or ""))
+            if uid is None:
                 mav_core.AUTH.failed(who)
-                return self._send(401, {"error": "Wrong password."})
+                return self._send(401, {"error": "Wrong name or password." if mav_core.AUTH.state("")["named"]
+                                        else "Wrong password."})
             mav_core.AUTH.succeeded(who)
             return self._send(200, {"ok": True}, headers={
-                "Set-Cookie": mav_core.AUTH.set_cookie(mav_core.AUTH.issue(), self._secure())})
+                "Set-Cookie": mav_core.AUTH.set_cookie(mav_core.AUTH.issue(uid), self._secure())})
         if path == "/api/auth/password":
-            if mav_core.AUTH.configured() and not mav_core.AUTH.valid(mav_core.AUTH.cookie_token(cookie)):
+            uid = mav_core.AUTH.user_of(mav_core.AUTH.cookie_token(cookie))
+            if mav_core.AUTH.configured() and uid is None:
                 return self._send(401, {"error": "sign in required", "auth": True})
-            if mav_core.AUTH.configured() and not mav_core.AUTH.check_password(payload.get("current", "")):
-                mav_core.AUTH.failed(who)
-                return self._send(400, {"error": "The current password is wrong."})
+            if mav_core.AUTH.configured():
+                wait = mav_core.AUTH.throttled(who)
+                if wait:
+                    return self._send(429, {"error": f"Too many attempts. Try again in {int(wait) + 1} s."})
+                if not mav_core.AUTH.check_password(str(payload.get("current") or ""), uid):
+                    mav_core.AUTH.failed(who)
+                    return self._send(400, {"error": "The current password is wrong."})
             try:
-                mav_core.AUTH.set_password(payload.get("password", ""))
+                mav_core.AUTH.set_password(str(payload.get("password") or ""), uid)
             except ValueError as exc:
                 return self._send(400, {"error": str(exc)})
             # Every other device is signed out; this one gets a fresh session.
             return self._send(200, {"ok": True}, headers={
-                "Set-Cookie": mav_core.AUTH.set_cookie(mav_core.AUTH.issue(), self._secure())})
+                "Set-Cookie": mav_core.AUTH.set_cookie(mav_core.AUTH.issue(uid), self._secure())})
+        return self._send(404, {"error": "not found"})
+
+    def _family_post(self, path: str, payload: dict):
+        """The owner manages the family: add, rename, reset, remove."""
+        auth = mav_core.AUTH
+        try:
+            uid = int(payload.get("id") or 0)
+        except (TypeError, ValueError):
+            uid = 0
+        try:
+            if path == "/api/family/add":
+                return self._send(200, {"ok": True, "member": auth.add_member(
+                    str(payload.get("name") or ""), str(payload.get("password") or ""))})
+            if path == "/api/family/rename":
+                return self._send(200, {"ok": True, "name": auth.rename(uid, str(payload.get("name") or ""))})
+            if path == "/api/family/password":
+                if uid == mav_core.DEFAULT_CHAT_ID:
+                    return self._send(400, {"error": "Change your own password under Password."})
+                auth.set_password(str(payload.get("password") or ""), uid)
+                return self._send(200, {"ok": True})
+            if path == "/api/family/remove":
+                if not auth.remove_member(uid):
+                    return self._send(404, {"error": "No such member."})
+                return self._send(200, {"ok": True, "removed": mav_store.forget_account(uid)})
+        except ValueError as exc:
+            return self._send(400, {"error": str(exc)})
         return self._send(404, {"error": "not found"})
 
     def _restore(self):
@@ -171,6 +257,8 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         if not self._guard("/api/backup/restore"):
             return
+        if not mav_core.is_owner():
+            return self._send(403, {"error": "Only the owner of this Mav can do that."})
         who = self.client_address[0] if self.client_address else "?"
         if mav_core.AUTH.configured():
             wait = mav_core.AUTH.throttled(who)
@@ -206,9 +294,10 @@ class Handler(BaseHTTPRequestHandler):
     def _body(self) -> dict:
         try:
             n = int(self.headers.get("Content-Length", 0))
-            return json.loads(self.rfile.read(n) or b"{}")
+            data = json.loads(self.rfile.read(n) or b"{}")
         except Exception:
             return {}
+        return data if isinstance(data, dict) else {}
 
     def _params(self) -> dict:
         _, _, query = self.path.partition("?")
@@ -224,6 +313,11 @@ class Handler(BaseHTTPRequestHandler):
         p = self._params()
         if not self._guard(path):
             return
+        with mav_core.as_user(self._who()):
+            if self._permitted("GET", path, p):
+                self._get(path, p)
+
+    def _get(self, path: str, p: dict):
         try:
             if path == "/api/auth/state":
                 return self._send(200, mav_core.AUTH.state(self.headers.get("Cookie", "")))
@@ -352,8 +446,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"copies": mav_core.mav_backup.safety_copies(mav_store.backup_places())})
             if path == "/api/calendar":
                 return self._send(200, mav_store.calendar_view())
+            if path == "/api/family":
+                return self._send(200, {"accounts": mav_core.AUTH.accounts(),
+                                        "enabled": mav_core.AUTH.enabled and mav_core.AUTH.configured()})
             if path == "/api/channels":
-                if mav_core.occhannels is None:
+                if mav_core.occhannels is None or not mav_core.is_owner():
                     return self._send(200, {"channels": [], "types": {}, "public_url": ""})
                 return self._send(200, mav_core.occhannels.public_view())
             if path == "/api/asset":
@@ -468,13 +565,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path, _, _ = self.path.partition("?")
         if path == "/api/backup/restore":
-            return self._restore()
-        payload = self._body()
+            with mav_core.as_user(self._who()):
+                return self._restore()
+        # Nothing is read from a request that is not allowed in.
         if not self._guard(path):
             return
+        payload = self._body()
+        with mav_core.as_user(self._who()):
+            if self._permitted("POST", path, payload):
+                self._post(path, payload)
+
+    def _post(self, path: str, payload: dict):
         try:
             if path.startswith("/api/auth/"):
                 return self._auth_post(path, payload)
+            if path.startswith("/api/family/"):
+                return self._family_post(path, payload)
             if path == "/api/onboarding":
                 return self._send(200, mav_routines.set_onboarding(bool(payload.get("done", True))))
             if path == "/api/onboarding/profile":
@@ -685,7 +791,7 @@ class Handler(BaseHTTPRequestHandler):
                     mav_core.pg_exec(
                         "insert into notifications (ts, chat_id, topic, title, body, channels, delivered) "
                         "values (%s, %s, %s, %s, %s, %s, %s)",
-                        (int(time.time()), None, "push_ack",
+                        (int(time.time()), mav_core.uid(), "push_ack",
                          str(payload.get("title", ""))[:200],
                          str(payload.get("body", ""))[:500],
                          ["ack"], True),

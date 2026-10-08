@@ -240,14 +240,19 @@ function hideSplash() {
    First run: create the password that protects this Mav. Afterwards: sign in.
    The session is an HttpOnly cookie; the server answers 401 without it. */
 let authMode = "";
-function showAuthGate(mode) {
+function showAuthGate(mode, named) {
   if (authMode === mode) return;
   authMode = mode;
   const setup = mode === "setup";
+  // Several people use this Mav: they sign in with their name (none = the owner).
+  const askName = !setup && (named ?? AUTH_NAMED);
+  $("#authName").hidden = !askName;
   $("#authTitle").textContent = setup ? "Protect your Mav" : "Welcome back";
   $("#authLead").textContent = setup
     ? "Choose a password. Anyone who wants to open Mav — from this device or your phone — will need it."
-    : "Enter your password to open Mav.";
+    : askName
+      ? "Your name and password. The owner can leave the name empty."
+      : "Enter your password to open Mav.";
   $("#authPassword").autocomplete = setup ? "new-password" : "current-password";
   $("#authPassword2").hidden = !setup;
   $("#authPassword2").required = setup;
@@ -256,7 +261,7 @@ function showAuthGate(mode) {
   $("#authError").hidden = true;
   $("#authGate").hidden = false;
   hideSplash();
-  setTimeout(() => $("#authPassword").focus(), 50);
+  setTimeout(() => $(askName ? "#authName" : "#authPassword").focus(), 50);
 }
 $("#authForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -273,7 +278,7 @@ $("#authForm").addEventListener("submit", async (e) => {
     const r = await fetch(`/api/auth/${authMode === "setup" ? "setup" : "login"}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pw }),
+      body: JSON.stringify({ password: pw, name: $("#authName").value.trim() }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || "Could not sign in.");
@@ -309,6 +314,122 @@ $("#passwordChange").addEventListener("click", () => {
               password: $("#pwNew").value,
             });
             toast("Password changed.");
+          } catch (ex) {
+            toast(ex.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+});
+
+/* Family: the owner gives each person their own sign-in. Members get their
+   own chats, memory and routines; settings that cost money or reach your
+   accounts (model, connections, helpers, backup) stay with the owner. */
+function applyRole() {
+  document.body.dataset.role = ME.role;
+  $("#accountText").textContent =
+    ME.role === "owner"
+      ? AUTH_NAMED
+        ? `Signed in as ${ME.name || "the owner"}.`
+        : "Only people with the password can open Mav."
+      : `Signed in as ${ME.name}. Your chats, memory and routines are yours alone.`;
+}
+async function loadFamily() {
+  if (!LIVE || ME.role !== "owner") return;
+  let r;
+  try {
+    r = await api.get("family");
+  } catch (_) {
+    return;
+  }
+  $("#familyRow").hidden = !r.enabled;
+  const members = (r.accounts || []).filter((a) => a.role === "member");
+  state.family = members;
+  const box = $("#familyList");
+  box.hidden = !r.enabled || !members.length;
+  box.innerHTML = members
+    .map(
+      (m) => `<div class="chan" data-id="${m.id}">
+        <span class="chan-type">Member</span>
+        <strong>${esc(m.name)}</strong>
+        <span class="chan-acts">
+          <button class="btn btn-ghost btn-sm" data-fam="password">New password</button>
+          <button class="btn btn-ghost btn-sm" data-fam="remove">Remove</button>
+        </span></div>`,
+    )
+    .join("");
+}
+$("#familyAdd").addEventListener("click", () => {
+  if (!needLive()) return;
+  modal.open({
+    title: "Add a person",
+    body: `<div class="field"><label>Name</label><input id="famName" maxlength="32" autocomplete="off" placeholder="e.g. Alex"></div>
+      <div class="field"><label>Their password (8+ characters)</label><input type="password" id="famPw" autocomplete="new-password"></div>
+      <p class="hint">They sign in with this name and password, and can change the password later.</p>`,
+    actions: [
+      { label: "Cancel" },
+      {
+        label: "Add",
+        kind: "btn-primary",
+        run: async () => {
+          try {
+            const r = await api.post("family/add", { name: $("#famName").value, password: $("#famPw").value });
+            AUTH_NAMED = true;
+            applyRole();
+            await loadFamily();
+            toast(`${r.member.name} can now sign in.`);
+          } catch (ex) {
+            toast(ex.message, { error: true });
+            return false;
+          }
+        },
+      },
+    ],
+  });
+});
+$("#familyList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-fam]");
+  if (!b) return;
+  const m = (state.family || []).find((x) => String(x.id) === b.closest("[data-id]").dataset.id);
+  if (!m) return;
+  if (b.dataset.fam === "password")
+    return modal.open({
+      title: `New password for ${m.name}`,
+      body: `<div class="field"><label>New password (8+ characters)</label><input type="password" id="famPw" autocomplete="new-password"></div>
+        <p class="hint">${esc(m.name)} is signed out everywhere and uses this one next time.</p>`,
+      actions: [
+        { label: "Cancel" },
+        {
+          label: "Set password",
+          kind: "btn-primary",
+          run: async () => {
+            try {
+              await api.post("family/password", { id: m.id, password: $("#famPw").value });
+              toast("Password set.");
+            } catch (ex) {
+              toast(ex.message, { error: true });
+              return false;
+            }
+          },
+        },
+      ],
+    });
+  modal.open({
+    title: `Remove ${m.name}?`,
+    size: "small",
+    body: `<p>${esc(m.name)} is signed out, and their chats, memory, routines and notifications are erased. This can't be undone.</p>`,
+    actions: [
+      { label: "Cancel" },
+      {
+        label: "Remove",
+        kind: "btn-danger",
+        run: async () => {
+          try {
+            await api.post("family/remove", { id: m.id });
+            toast(`${m.name} was removed.`);
+            await loadFamily();
           } catch (ex) {
             toast(ex.message, { error: true });
             return false;
@@ -395,6 +516,14 @@ function obGo(n) {
 
 /* Step 1 — model */
 async function obLoadModel() {
+  if (ME.role !== "owner") {
+    // The owner chose the model: nothing to connect here.
+    OB.connected = true;
+    $("#obModelReady").hidden = false;
+    $("#obModelReady").innerHTML = `${I("check")}<span>Mav is ready — the owner has connected it to a model.</span>`;
+    $("#obModelForm").hidden = true;
+    return;
+  }
   try {
     const d = await api.get("config/provider");
     // A custom endpoint needs more fields: that stays in Settings → Model.
@@ -562,11 +691,14 @@ async function boot() {
     const r = await fetch("/api/auth/state", { headers: { Accept: "application/json" } });
     if (r.ok) auth = await r.json();
   } catch (_) {}
+  AUTH_NAMED = !!(auth && auth.named);
   if (auth && auth.enabled && (auth.setup_needed || !auth.authenticated)) {
     LIVE = true;
     document.body.dataset.mode = "live";
     return showAuthGate(auth.setup_needed ? "setup" : "login");
   }
+  if (auth && auth.user) ME = auth.user;
+  applyRole();
   if (auth && !auth.enabled) $("#accountRow").hidden = true;
   let status = null;
   try {
@@ -589,6 +721,7 @@ async function boot() {
     loadBriefing(),
     loadChannels(),
     loadCalendars(),
+    loadFamily(),
   ]);
   route();
   if (!state.chat.id) renderThread();

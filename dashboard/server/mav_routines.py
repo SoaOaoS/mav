@@ -8,7 +8,6 @@ Part of the web app server (see mav_api.py).
 from __future__ import annotations
 
 import re
-import threading
 import time
 import unicodedata
 import urllib.error
@@ -22,8 +21,33 @@ import mav_stream
 import mav_media
 
 
-def get_jobs() -> dict:
+def job_owner(name: str, jobs: list | None = None) -> int:
+    """Who a routine belongs to (routines without an owner are the owner's)."""
+    if jobs is None:
+        jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
+    job = next((j for j in jobs or [] if isinstance(j, dict) and j.get("name") == name), None)
+    try:
+        return int((job or {}).get("owner", mav_core.DEFAULT_CHAT_ID))
+    except (TypeError, ValueError):
+        return mav_core.DEFAULT_CHAT_ID
+
+
+def _mine(job) -> bool:
+    if not isinstance(job, dict):
+        return False
+    try:
+        return int(job.get("owner", mav_core.DEFAULT_CHAT_ID)) == mav_core.uid()
+    except (TypeError, ValueError):
+        return False
+
+
+def my_jobs() -> list[dict]:
     jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
+    return [j for j in jobs if _mine(j)] if isinstance(jobs, list) else []
+
+
+def get_jobs() -> dict:
+    jobs = my_jobs()
     state = mav_core.read_json(mav_core.JOBS_STATE, {})
     # routine name -> its chat, when it ran at least once
     head = mav_chat.PREFIX + ROUTINE_PREFIX
@@ -67,7 +91,7 @@ JOB_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 def delete_job(name: str) -> bool:
     jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
-    keep = [j for j in jobs if j.get("name") != name]
+    keep = [j for j in jobs if not (j.get("name") == name and _mine(j))]
     if len(keep) == len(jobs):
         return False
     mav_core.write_json(mav_core.JOBS_FILE, keep)
@@ -185,6 +209,9 @@ def save_job(payload: dict) -> dict:
     sched = _schedule_from_payload(payload)
     if sched.pop("_error", None):
         return {"ok": False, "error": sched.pop("_error", "Invalid schedule.")}
+    if not mav_core.is_owner() and (sched.get("on_event") or sched.get("before_event")):
+        # Events and calendars are the owner's: a member's routine runs on a schedule.
+        return {"ok": False, "error": "Pick a time or an interval."}
     if not sched.get("every_minutes") and not sched.get("on_event") and not sched.get("before_event"):
         # A timed job needs a valid time; an event job does not.
         if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", str(sched.get("time") or "")):
@@ -201,8 +228,12 @@ def save_job(payload: dict) -> dict:
     cond = _condition_from_payload(payload)
     if cond:
         job["skip_if"] = cond
+    if not mav_core.is_owner():
+        job["owner"] = mav_core.uid()
     chans = payload.get("channels")
-    if isinstance(chans, list) and chans:
+    # Channels (ntfy, Discord…) are the owner's: a member's reports go to
+    # their own devices.
+    if isinstance(chans, list) and chans and mav_core.is_owner():
         # Where its reports go: "push" and/or channel ids (empty = everywhere).
         job["channels"] = [str(c)[:16] for c in chans if isinstance(c, str)][:10]
     try:
@@ -218,9 +249,12 @@ def save_job(payload: dict) -> dict:
     original = str(payload.get("original") or "").strip()
     if name != original and any(j.get("name") == name for j in jobs):
         return {"ok": False, "error": f"An automation named \"{name}\" already exists."}
+    target = original or name
+    if any(j.get("name") == target and not _mine(j) for j in jobs):
+        return {"ok": False, "error": f"An automation named \"{name}\" already exists."}
     replaced = False
     for i, j in enumerate(jobs):
-        if j.get("name") == (original or name):
+        if j.get("name") == target:
             # Keep unknown keys (retries, chat_id…) from hand-edited files.
             keep = {k: v for k, v in j.items() if k not in (
                 "time", "every_minutes", "days", "days_of_month",
@@ -276,21 +310,25 @@ def get_proactivity() -> dict:
     """The user's proactivity preference + what is waiting per level."""
     level = "normal"
     try:
-        rows = mav_core.pg_query("select value from preferences where key = 'notify.proactivity' limit 1")
+        rows = mav_core.pg_query(
+            "select value from preferences where key = 'notify.proactivity' and chat_id = %s limit 1",
+            (mav_core.uid(),))
         if rows and rows[0].get("value"):
             level = rows[0]["value"]
     except Exception:  # noqa: BLE001
         pass
     counts = {"pending": 0, "low": 0}
+    who, args = mav_core.mine()
     try:
-        counts["pending"] = len(mav_core.pg_query(
-            "select 1 from notify_digest where not sent"
-        ))
+        counts["pending"] = int(mav_core.pg_query(
+            f"select count(*) as n from notify_digest where not sent and {who}", args
+        )[0]["n"])
         counts["low"] = counts["pending"]
     except Exception:  # noqa: BLE001
         pass
-    drafts = len(mav_core.DRAFTS.list("pending", limit=200)) if mav_core.DRAFTS else 0
-    actions = mav_core.ACTIONS.list("running", limit=200) if mav_core.ACTIONS else []
+    owner = mav_core.is_owner()  # drafts and actions are the owner's
+    drafts = len(mav_core.DRAFTS.list("pending", limit=200)) if mav_core.DRAFTS and owner else 0
+    actions = mav_core.ACTIONS.list("running", limit=200) if mav_core.ACTIONS and owner else []
     return {"level": level, "digest_pending": counts["pending"],
             "drafts_pending": drafts, "actions_running": len(actions)}
 
@@ -303,7 +341,7 @@ def set_proactivity(level: str) -> dict:
         mav_core.pg_exec(
             "insert into preferences (chat_id, key, value, ts) values (%s, 'notify.proactivity', %s, %s) "
             "on conflict (chat_id, key) do update set value = excluded.value, ts = excluded.ts",
-            (mav_core.DEFAULT_CHAT_ID, level, int(time.time())),
+            (mav_core.uid(), level, int(time.time())),
         )
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)[:200]}
@@ -314,7 +352,7 @@ def snooze_job(name: str, until: int) -> bool:
     jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
     found = False
     for j in jobs:
-        if j.get("name") == name:
+        if j.get("name") == name and _mine(j):
             if until > 0:
                 j["snooze_until"] = until
             else:
@@ -349,7 +387,7 @@ def run_job_now(name: str) -> dict:
 
     It runs as a live answer (the run registry), so opening the routine's chat
     shows it being written instead of an empty chat."""
-    job = next((j for j in mav_core.read_json(mav_core.JOBS_FILE, []) if j.get("name") == name), None)
+    job = next((j for j in my_jobs() if j.get("name") == name), None)
     if not job:
         return {"ok": False, "error": "Unknown routine."}
     if name in _running_jobs:
@@ -380,7 +418,7 @@ def run_job_now(name: str) -> dict:
         finally:
             _running_jobs.discard(name)
 
-    threading.Thread(target=work, daemon=True).start()
+    mav_core.spawn(work)
     return {"ok": True, "session": sid}
 
 
@@ -391,13 +429,16 @@ def briefing_context() -> str:
     facts, notes, drafts, interests = [], [], 0, []
     if mav_core.MEMORY and mav_core.MEMORY_ENABLED:
         try:
-            facts = mav_core.MEMORY.facts(mav_core.DEFAULT_CHAT_ID, limit=30)
+            facts = mav_core.MEMORY.facts(mav_core.uid(), limit=30)
         except Exception:  # noqa: BLE001
             facts = []
     try:
         notes = mav_store.get_notifications(40).get("notifications") or []
     except Exception:  # noqa: BLE001
         notes = []
+    if not mav_core.is_owner():
+        # Drafts, interests and the calendars are the owner's.
+        return mav_core.ocbriefing.build_context(facts=facts, notifications=notes, drafts=0, interests=[])
     try:
         rows = mav_core.pg_query("select count(*) as n from drafts where status = 'pending'")
         drafts = int(rows[0]["n"]) if rows else 0
@@ -420,8 +461,17 @@ def briefing_context() -> str:
 
 
 def briefing_job() -> dict | None:
-    jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
-    return next((j for j in jobs if isinstance(j, dict) and j.get("kind") == "briefing"), None)
+    return next((j for j in my_jobs() if j.get("kind") == "briefing"), None)
+
+
+def _briefing_job_new(time_hm: str = "") -> dict:
+    """A new briefing routine for the current user (names are unique)."""
+    job = mav_core.ocbriefing.default_job(time_hm or mav_core.ocbriefing.DEFAULT_TIME, mav_core.DEFAULT_AGENT)
+    if not mav_core.is_owner():
+        who = (mav_core.AUTH.account(mav_core.uid()) or {}).get("name") or str(mav_core.uid())
+        job["name"] = f"{job['name']} ({who})"
+        job["owner"] = mav_core.uid()
+    return job
 
 
 # A 3-step welcome on the first visit: connect a model, a few facts about
@@ -435,27 +485,43 @@ LANGUAGES = {"en": "English", "fr": "French", "es": "Spanish", "de": "German",
 
 
 def _has_history() -> bool:
-    jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
-    if isinstance(jobs, list) and any(isinstance(j, dict) and j.get("kind") != "briefing" for j in jobs):
+    if any(j.get("kind") != "briefing" for j in my_jobs()):
         return True
+    who, args = mav_core.mine()
     try:
-        return mav_core.pg_query("select count(*) c from facts")[0]["c"] > 0
+        return mav_core.pg_query(f"select count(*) c from facts where {who}", args)[0]["c"] > 0
     except Exception:
         return False
 
 
-def get_onboarding() -> dict:
+def _onboarding_state() -> dict:
+    """The welcome flow's state: the owner's at the top, members' by id."""
     data = mav_core.read_json(ONBOARDING_FILE, {})
-    if not isinstance(data, dict):
-        data = {}
-    done = data.get("done")
+    data = data if isinstance(data, dict) else {}
+    if mav_core.is_owner():
+        return data
+    mine = (data.get("members") or {}).get(str(mav_core.uid()))
+    return mine if isinstance(mine, dict) else {}
+
+
+def get_onboarding() -> dict:
+    done = _onboarding_state().get("done")
     if done is None:
         done = _has_history()
     return {"done": bool(done), "languages": LANGUAGES, "briefing": get_briefing()}
 
 
 def set_onboarding(done: bool) -> dict:
-    mav_core.write_json(ONBOARDING_FILE, {"done": bool(done), "ts": int(time.time())})
+    entry = {"done": bool(done), "ts": int(time.time())}
+    data = mav_core.read_json(ONBOARDING_FILE, {})
+    data = data if isinstance(data, dict) else {}
+    if mav_core.is_owner():
+        data.update(entry)
+    else:
+        members = data.get("members") if isinstance(data.get("members"), dict) else {}
+        members[str(mav_core.uid())] = entry
+        data["members"] = members
+    mav_core.write_json(ONBOARDING_FILE, data)
     mav_core._chown_user(ONBOARDING_FILE)
     return {"ok": True, "done": bool(done)}
 
@@ -484,7 +550,7 @@ def onboarding_profile(payload: dict) -> dict:
         except Exception:
             pass
     added = 0
-    for label in interests:
+    for label in interests if mav_core.is_owner() else []:  # the interest profile is the owner's
         try:
             if mav_store.add_interest({"label": label}).get("ok"):
                 added += 1
@@ -504,6 +570,7 @@ def onboarding_routines(payload: dict) -> dict:
     """Create the routines picked in the welcome flow (skipping duplicates)."""
     ids = [str(i) for i in (payload.get("templates") or []) if str(i)][:8]
     existing = {j.get("name") for j in mav_core.read_json(mav_core.JOBS_FILE, []) if isinstance(j, dict)}
+    taken = existing - {j.get("name") for j in my_jobs()}
     created, errors = [], []
     for tid in ids:
         res = template_to_job(tid, lang=str(payload.get("language") or "en"))
@@ -512,6 +579,9 @@ def onboarding_routines(payload: dict) -> dict:
             continue
         job = res["job"]
         job["name"] = _job_name(job["name"])
+        if job["name"] in taken:  # another person's routine: keep theirs, name this one apart
+            who = (mav_core.AUTH.account(mav_core.uid()) or {}).get("name") or str(mav_core.uid())
+            job["name"] = _job_name(f"{job['name']} {who}")
         if job["name"] in existing:
             continue
         saved = save_job(job)
@@ -547,11 +617,11 @@ def set_briefing(enabled: bool, time_hm: str = "") -> dict:
     jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
     if not isinstance(jobs, list):
         jobs = []
-    job = next((j for j in jobs if isinstance(j, dict) and j.get("kind") == "briefing"), None)
+    job = next((j for j in jobs if _mine(j) and j.get("kind") == "briefing"), None)
     if job is None:
         if not enabled:
             return {"ok": True, **get_briefing()}
-        job = mav_core.ocbriefing.default_job(time_hm or mav_core.ocbriefing.DEFAULT_TIME, mav_core.DEFAULT_AGENT)
+        job = _briefing_job_new(time_hm)
         jobs.append(job)
     job["enabled"] = bool(enabled)
     if time_hm:
@@ -568,7 +638,7 @@ def run_briefing_now() -> dict:
         return {"ok": False, "error": "Briefing unavailable."}
     job = briefing_job()
     if job is None:
-        job = mav_core.ocbriefing.default_job(agent=mav_core.DEFAULT_AGENT)
+        job = _briefing_job_new()
         job["enabled"] = False
         jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
         jobs = jobs if isinstance(jobs, list) else []
@@ -614,7 +684,7 @@ def start_action(prompt: str, name: str = "", agent: str = "") -> dict:
             if mav_core.ACTIONS and aid:
                 mav_core.ACTIONS.update(aid, "failed", result=str(exc)[:500])
 
-    threading.Thread(target=work, daemon=True).start()
+    mav_core.spawn(work)
     return {"ok": True, "id": aid, "session": sid}
 
 
@@ -622,7 +692,7 @@ def set_job_enabled(name: str, enabled: bool) -> bool:
     jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
     found = False
     for j in jobs:
-        if j.get("name") == name:
+        if j.get("name") == name and _mine(j):
             j["enabled"] = bool(enabled)
             found = True
     if found:
@@ -633,10 +703,11 @@ def set_job_enabled(name: str, enabled: bool) -> bool:
 def get_job_results(limit: int = 8) -> dict:
     """Latest report of each routine (the last answer in its chat)."""
     head = mav_chat.PREFIX + ROUTINE_PREFIX
+    mine = {j.get("name") for j in my_jobs()}
     chats = []
     for s_ in mav_chat._list_raw_sessions():
         title = str(s_.get("title", ""))
-        if title.startswith(head):
+        if title.startswith(head) and title[len(head):] in mine:
             t = s_.get("time", {})
             chats.append({"id": s_["id"], "name": title[len(head):], "updated": t.get("updated") or t.get("created") or 0})
     chats.sort(key=lambda x: x["updated"], reverse=True)
@@ -649,9 +720,11 @@ def get_job_results(limit: int = 8) -> dict:
 
 
 def get_watch() -> dict:
+    who, args = mav_core.mine()
     try:
         items = mav_core.pg_query(
-            "select id, kind, target, last_state, last_checked, enabled from watch_items order by id desc"
+            f"select id, kind, target, last_state, last_checked, enabled from watch_items where {who} order by id desc",
+            args,
         )
     except Exception:
         items = []
@@ -723,14 +796,15 @@ def watch_add(kind: str, target: str) -> bool:
         return False
     mav_core.pg_exec(
         "insert into watch_items (chat_id, kind, target, ts) values (%s, %s, %s, %s)",
-        (mav_core.DEFAULT_CHAT_ID, kind, target, int(time.time())),
+        (mav_core.uid(), kind, target, int(time.time())),
     )
     return True
 
 
 def watch_remove(item_id: int) -> bool:
-    mav_core.pg_exec("delete from watch_items where id = %s", (item_id,))
+    who, args = mav_core.mine()
+    mav_core.pg_exec(f"delete from watch_items where id = %s and {who}", (item_id, *args))
     return True
 
 
-__all__ = ['ACTION_PREFIX', 'JOB_DAYS', 'JOB_NAME_RE', 'LANGUAGES', 'ONBOARDING_FILE', 'ROUTINE_PREFIX', 'VALID_WATCH_KINDS', '_condition_from_payload', '_has_history', '_job_name', '_running_jobs', '_schedule_from_payload', 'briefing_context', 'briefing_job', 'delete_job', 'detect_routine', 'get_briefing', 'get_events', 'get_job_results', 'get_jobs', 'get_onboarding', 'get_proactivity', 'get_watch', 'hook_event', 'job_templates', 'onboarding_profile', 'onboarding_routines', 'routine_session', 'run_briefing_now', 'run_job_now', 'save_job', 'set_briefing', 'set_job_enabled', 'set_onboarding', 'set_proactivity', 'snooze_job', 'start_action', 'template_to_job', 'watch_add', 'watch_remove', 'watch_target']
+__all__ = ['_briefing_job_new', '_mine', '_onboarding_state', 'job_owner', 'my_jobs', 'ACTION_PREFIX', 'JOB_DAYS', 'JOB_NAME_RE', 'LANGUAGES', 'ONBOARDING_FILE', 'ROUTINE_PREFIX', 'VALID_WATCH_KINDS', '_condition_from_payload', '_has_history', '_job_name', '_running_jobs', '_schedule_from_payload', 'briefing_context', 'briefing_job', 'delete_job', 'detect_routine', 'get_briefing', 'get_events', 'get_job_results', 'get_jobs', 'get_onboarding', 'get_proactivity', 'get_watch', 'hook_event', 'job_templates', 'onboarding_profile', 'onboarding_routines', 'routine_session', 'run_briefing_now', 'run_job_now', 'save_job', 'set_briefing', 'set_job_enabled', 'set_onboarding', 'set_proactivity', 'snooze_job', 'start_action', 'template_to_job', 'watch_add', 'watch_remove', 'watch_target']

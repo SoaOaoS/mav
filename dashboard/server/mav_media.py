@@ -530,7 +530,8 @@ def push_subscribe(sub: dict) -> bool:
     if not endpoint:
         return False
     subs = [s for s in subs if s.get("endpoint") != endpoint]
-    subs.append(sub)
+    # Each device gets the notifications of the person who turned them on.
+    subs.append({**sub, "user": mav_core.uid()})
     mav_core.write_json(mav_core.PUSH_FILE, subs)
     return True
 
@@ -556,10 +557,14 @@ def send_push(title: str, body: str, url: str = "./") -> int:
     except Exception:
         return 0
     subs = mav_core.read_json(mav_core.PUSH_FILE, [])
+    subs = subs if isinstance(subs, list) else []
+    me = mav_core.uid()
     sent = 0
-    alive = []
+    dead = set()
     payload = json.dumps({"title": title, "body": body, "url": url})
     for s in subs:
+        if s.get("user", mav_core.DEFAULT_CHAT_ID) != me:
+            continue  # another person's device
         try:
             webpush(
                 subscription_info=s,
@@ -571,16 +576,17 @@ def send_push(title: str, body: str, url: str = "./") -> int:
                 timeout=15,
             )
             sent += 1
-            alive.append(s)
         except WebPushException as exc:
             code = getattr(getattr(exc, "response", None), "status_code", None)
             if code in (404, 410):
-                pass  # subscription permanently expired: drop it
-            else:
-                alive.append(s)  # transient error: keep the subscriber
+                dead.add(s.get("endpoint"))  # permanently expired: drop it
+            # anything else is transient: keep the subscriber
         except Exception:
-            alive.append(s)
-    mav_core.write_json(mav_core.PUSH_FILE, alive)
+            pass
+    if dead:
+        # Re-read: a device may have subscribed while we were sending.
+        fresh = mav_core.read_json(mav_core.PUSH_FILE, [])
+        mav_core.write_json(mav_core.PUSH_FILE, [s for s in fresh if s.get("endpoint") not in dead])
     return sent
 
 

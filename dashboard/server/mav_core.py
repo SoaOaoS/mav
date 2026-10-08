@@ -6,9 +6,11 @@ Part of the web app server (see mav_api.py).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -69,6 +71,54 @@ DEFAULT_MODEL = os.environ.get("OPENCODE_MODEL", "").strip()
 # Owner id: memory, facts and watch items are attached to it (kept from the
 # chat id of older installs, so existing memory stays attached).
 DEFAULT_CHAT_ID = int(os.environ.get("MAV_CHAT_ID", "0") or 0)
+
+
+# Who the current request (or the work it started) is for: the owner's id or
+# a family member's (mav_auth). Per thread, set by the HTTP handler; work
+# handed to another thread carries it along through `spawn`.
+_who = threading.local()
+
+
+def uid() -> int:
+    return getattr(_who, "uid", DEFAULT_CHAT_ID)
+
+
+def is_owner() -> bool:
+    return uid() == DEFAULT_CHAT_ID
+
+
+@contextlib.contextmanager
+def as_user(user: int):
+    prev = getattr(_who, "uid", None)
+    _who.uid = int(user)
+    try:
+        yield
+    finally:
+        if prev is None:
+            del _who.uid
+        else:
+            _who.uid = prev
+
+
+def mine(col: str = "chat_id") -> tuple[str, tuple]:
+    """SQL condition for the current user's rows. The owner also keeps rows
+    with no owner (older installs, system notices)."""
+    if is_owner():
+        return f"({col} = %s or {col} is null)", (DEFAULT_CHAT_ID,)
+    return f"{col} = %s", (uid(),)
+
+
+def spawn(target, *args, **kwargs) -> threading.Thread:
+    """Start `target` in a daemon thread, as the current user."""
+    user = uid()
+
+    def run():
+        with as_user(user):
+            target(*args, **kwargs)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
 
 
 SESSIONS_META = BOT_DIR / "dash_sessions.json"
@@ -219,11 +269,12 @@ except Exception:  # noqa: BLE001
 import mav_provider  # noqa: E402
 
 
-# Sign-in (one owner password). MAV_AUTH=off disables it, e.g. behind your own
+# Sign-in (the owner and family members). MAV_AUTH=off disables it, e.g. behind your own
 # authenticating proxy.
 AUTH = mav_auth.Auth(
     Path(os.environ.get("MAV_AUTH_FILE", BOT_DIR / "auth.json")),
     enabled=os.environ.get("MAV_AUTH", "on").lower() not in ("off", "0", "false", "no"),
+    owner_id=DEFAULT_CHAT_ID,
 )
 
 
@@ -418,4 +469,4 @@ def _chown_user(path: Path) -> None:
         pass
 
 
-__all__ = ['inside', 'ACTIONS', 'ATTACH_DIR', 'AUTH', 'Actions', 'BIND', 'BOT_DIR', 'CADENCES', 'CADENCE_DAYS', 'CATALOG_FILE', 'CATEGORIES', 'DEFAULT_AGENT', 'DEFAULT_CHAT_ID', 'DEFAULT_MODEL', 'DOCKER_UPDATE_HINT', 'DRAFTS', 'Drafts', 'ENGINE_STARTED', 'ENV_FILES', 'ENV_SERVER', 'INSTALL_LOG', 'INTERESTS', 'IN_DOCKER', 'Interests', 'JOBS_FILE', 'JOBS_STATE', 'MAV_CLI', 'MAV_REPO', 'MEMORY', 'MEMORY_ENABLED', 'MEMORY_FILE', 'MEMORY_TOP', 'Memory', 'OPENCODE_URL', 'PG_DSN', 'POLARITIES', 'PORT', 'PRIMARY_AGENTS', 'PUSH_FILE', 'RAG', 'RESTART_FLAG', 'ROUTINE_TEMPLATES', 'RUNTIME', 'SESSIONS_META', 'STATIC_DIR', 'TLS_CERT', 'TLS_KEY', 'TLS_PORT', 'USAGE', 'VERSION_FILE', 'WORKER_UNIT', '_RAG', '_chown_user', '_config_dir', '_json_default', '_opencode_config_path', '_p', '_run', 'agents_path', 'http_json', 'mav_auth', 'mav_backup', 'mav_provider', 'ocbriefing', 'occalendar', 'occhannels', 'ocroutine_nl', 'ocroutine_templates', 'ocselfinit', 'ocusage', 'pg_exec', 'pg_query', 'read_json', 'write_json']
+__all__ = ['inside', '_who', 'as_user', 'is_owner', 'mine', 'spawn', 'uid', 'ACTIONS', 'ATTACH_DIR', 'AUTH', 'Actions', 'BIND', 'BOT_DIR', 'CADENCES', 'CADENCE_DAYS', 'CATALOG_FILE', 'CATEGORIES', 'DEFAULT_AGENT', 'DEFAULT_CHAT_ID', 'DEFAULT_MODEL', 'DOCKER_UPDATE_HINT', 'DRAFTS', 'Drafts', 'ENGINE_STARTED', 'ENV_FILES', 'ENV_SERVER', 'INSTALL_LOG', 'INTERESTS', 'IN_DOCKER', 'Interests', 'JOBS_FILE', 'JOBS_STATE', 'MAV_CLI', 'MAV_REPO', 'MEMORY', 'MEMORY_ENABLED', 'MEMORY_FILE', 'MEMORY_TOP', 'Memory', 'OPENCODE_URL', 'PG_DSN', 'POLARITIES', 'PORT', 'PRIMARY_AGENTS', 'PUSH_FILE', 'RAG', 'RESTART_FLAG', 'ROUTINE_TEMPLATES', 'RUNTIME', 'SESSIONS_META', 'STATIC_DIR', 'TLS_CERT', 'TLS_KEY', 'TLS_PORT', 'USAGE', 'VERSION_FILE', 'WORKER_UNIT', '_RAG', '_chown_user', '_config_dir', '_json_default', '_opencode_config_path', '_p', '_run', 'agents_path', 'http_json', 'mav_auth', 'mav_backup', 'mav_provider', 'ocbriefing', 'occalendar', 'occhannels', 'ocroutine_nl', 'ocroutine_templates', 'ocselfinit', 'ocusage', 'pg_exec', 'pg_query', 'read_json', 'write_json']

@@ -264,13 +264,15 @@ class Watch:
         try:
             cur = self._pg.cursor()
             cur.execute(
-                "SELECT id, kind, target, last_state, last_checked, enabled "
+                "SELECT id, kind, target, last_state, last_checked, enabled, chat_id "
                 "FROM watch_items WHERE enabled ORDER BY id"
             )
             return [
                 {
                     "id": r[0], "kind": r[1], "target": r[2],
                     "last_state": r[3], "last_checked": r[4], "enabled": r[5],
+                    # Each item alerts the person who added it.
+                    "chat_id": self.chat_id if r[6] is None else r[6],
                 }
                 for r in cur.fetchall()
                 if r[1] in KINDS
@@ -394,7 +396,7 @@ class Watch:
             notify(
                 f"{emoji} {label}",
                 self._detail.get(item["id"], item["target"])[:600],
-                chat_id=self.chat_id,
+                chat_id=item.get("chat_id", self.chat_id),
                 topic="watch",
                 dedup_key=f"watch:{item['id']}:{hashlib.sha1(self._detail.get(item['id'], '').encode()).hexdigest()[:12]}",
             )
