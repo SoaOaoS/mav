@@ -11,6 +11,7 @@ No authentication: meant for a private host, reachable over VPN.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 import threading
@@ -114,6 +115,18 @@ SESSION_POST = {"/api/session/rename": "id", "/api/session/agent": "id", "/api/s
                 "/api/run/stop": "id", "/api/ask": "session"}
 
 
+# The largest request body read into memory (JSON with base64 uploads); a
+# backup restore has its own, larger limit (mav_backup.MAX_UPLOAD).
+MAX_BODY = int(os.environ.get("MAV_MAX_BODY", str(64 * 1024 * 1024)))
+
+# Who may embed or script the pages: only Mav itself (fonts from Google;
+# images from anywhere, as answers can show them).
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+       "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; "
+       "connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+       "frame-ancestors 'none'")
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "mav-api/0.2"
     protocol_version = "HTTP/1.1"
@@ -132,6 +145,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
+        if ctype.startswith("text/html"):
+            self.send_header("Content-Security-Policy", CSP)
+            self.send_header("X-Frame-Options", "DENY")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -146,6 +162,26 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         self._send(401, {"error": "sign in required", "auth": True})
         return False
+
+    def _cross_site(self, path: str) -> bool:
+        """True (and a 403 sent) for a browser request made from another site.
+
+        The session cookie is SameSite=Lax, which still rides along a
+        top-level GET from another site: enough to start an answer through
+        /api/stream. Browsers say where a request comes from (Sec-Fetch-Site,
+        Origin); webhooks and scripts send neither and are not affected."""
+        if path.startswith("/api/hooks/"):
+            return False
+        site = self.headers.get("Sec-Fetch-Site", "")
+        origin = self.headers.get("Origin", "")
+        foreign = site in ("cross-site", "same-site")
+        if not foreign and origin and origin != "null":
+            host = urllib.parse.urlparse(origin).netloc
+            foreign = host != self.headers.get("Host", "")
+        if foreign:
+            self.close_connection = True
+            self._send(403, {"error": "cross-site request refused"})
+        return foreign
 
     def _who(self) -> int:
         """The account this request is for (the owner when sign-in is off)."""
@@ -313,6 +349,9 @@ class Handler(BaseHTTPRequestHandler):
         p = self._params()
         if not self._guard(path):
             return
+        # The one GET that acts: starting an answer.
+        if path == "/api/stream" and p.get("prompt") and self._cross_site(path):
+            return
         with mav_core.as_user(self._who()):
             if self._permitted("GET", path, p):
                 self._get(path, p)
@@ -446,6 +485,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"copies": mav_core.mav_backup.safety_copies(mav_store.backup_places())})
             if path == "/api/calendar":
                 return self._send(200, mav_store.calendar_view())
+            if path == "/api/webhook":
+                return self._send(200, {"token": mav_routines.hook_token()})
             if path == "/api/family":
                 return self._send(200, {"accounts": mav_core.AUTH.accounts(),
                                         "enabled": mav_core.AUTH.enabled and mav_core.AUTH.configured()})
@@ -565,11 +606,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path, _, _ = self.path.partition("?")
         if path == "/api/backup/restore":
+            if self._cross_site(path):
+                return
             with mav_core.as_user(self._who()):
                 return self._restore()
         # Nothing is read from a request that is not allowed in.
-        if not self._guard(path):
+        if not self._guard(path) or self._cross_site(path):
             return
+        try:
+            size = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            size = 0
+        if size > MAX_BODY:
+            self.close_connection = True
+            return self._send(413, {"error": "Too large."})
         payload = self._body()
         with mav_core.as_user(self._who()):
             if self._permitted("POST", path, payload):
@@ -698,11 +748,15 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/mail/reply-draft":
                 res = mav_store.mail_reply_draft(payload)
                 return self._send(200 if res.get("ok") else 400, res)
+            if path == "/api/webhook/new":
+                res = mav_routines.new_hook_token()
+                return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/hooks/event":
                 res = mav_routines.hook_event(
                     payload.get("kind", "custom"),
                     payload.get("payload") or payload,
                     str(payload.get("token") or ""),
+                    signed_in=mav_core.AUTH.current(self.headers.get("Cookie", "")) is not None,
                 )
                 return self._send(200 if res.get("ok") else 400, res)
             if path == "/api/actions/start":

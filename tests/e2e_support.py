@@ -100,9 +100,17 @@ def launch(pw):
     return pw.chromium.launch(executable_path=chromium_path())
 
 
+def new_context(browser, **ctx):
+    """A browser context for the tests. The page's Content-Security-Policy
+    forbids evaluating strings, which Playwright's wait_for_function("…")
+    does: the tests bypass it (test_e2e_csp checks the app under it)."""
+    ctx.setdefault("bypass_csp", True)
+    return browser.new_context(**ctx)
+
+
 def signed_in(browser, stack: Stack, **ctx):
     """A browser context with a session, the welcome flow already done."""
-    context = browser.new_context(**ctx)
+    context = new_context(browser, **ctx)
     req = context.request
     req.post(stack.url + "api/auth/setup", data={"password": PASSWORD})
     req.post(stack.url + "api/auth/login", data={"password": PASSWORD})

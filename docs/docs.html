@@ -788,12 +788,13 @@ sudo ./scripts/migrate-to-docker.sh --dry-run  # only show what it would move</c
           </p>
           <pre><code>curl -X POST https://&lt;your-mav&gt;/api/hooks/event \
 -H 'Content-Type: application/json' \
--d '{"kind":"github","payload":{"action":"opened"}}'</code></pre>
+-d '{"kind":"github","token":"&lt;your token&gt;","payload":{"action":"opened"}}'</code></pre>
           <p>
             Any routine with a matching <code>on_event</code> (a kind, and
             optionally a <code>contains</code> substring) runs on the worker's
-            next tick. Record a token in the <code>hooks.token</code>
-            preference to require it. Event kinds offered in the form:
+            next tick. Requests from outside need the webhook's token:
+            create it in <em>Settings → General → Webhook</em> and send it
+            as <code>"token"</code> in the body. Event kinds offered in the form:
             <code>github</code>, <code>calendar</code>, <code>form</code>,
             <code>payment</code>, <code>iot</code> — or
             <code>custom</code> for anything else.

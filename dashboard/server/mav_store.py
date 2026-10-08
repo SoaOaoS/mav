@@ -18,7 +18,7 @@ import mav_stream
 import mav_media
 
 
-def backup_places() -> "mav_backup.Places":
+def backup_places() -> "mav_core.mav_backup.Places":
     """Where this install keeps what a backup holds."""
     home = Path(os.environ.get("MAV_USER_HOME") or os.environ.get("BOT_HOME") or Path.home())
     data_home = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")

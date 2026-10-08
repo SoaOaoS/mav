@@ -105,7 +105,13 @@ jobs:
           curl -fsS http://127.0.0.1:8787/api/health
           curl -fsS http://127.0.0.1:8787/api/auth/state | grep -q setup_needed
           curl -fsS http://127.0.0.1:8787/ | grep -q '<title>Mav</title>'
-          docker compose exec -T web python3 -c "import urllib.request; print(urllib.request.urlopen('http://engine:4096/global/health').read())"
+          # The engine wants its password: nothing else reaches the chats...
+          code="$(docker compose exec -T web python3 -c "import urllib.request as r, urllib.error as e
+          try: r.urlopen('http://engine:4096/session'); print(200)
+          except e.HTTPError as x: print(x.code)")"
+          [ "$code" = 401 ] || { echo "::error::the engine answered without its password ($code)"; exit 1; }
+          # ...and the web app has it.
+          curl -fsS http://127.0.0.1:8787/api/status | grep -q '"agent_online": true'
           docker compose exec -T web test -f /data/home/.config/opencode/agent/assistant.md
           docker compose exec -T web test -d /data/home/workspace/mav-files
           docker compose ps

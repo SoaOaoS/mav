@@ -293,7 +293,10 @@ class Auth:
         return max(0.0, recent[-1] + min(2 ** (len(recent) - 5), 300) - now)
 
     def failed(self, who: str) -> None:
-        self._fails.setdefault(who, []).append(time.time())
+        now = time.time()
+        if len(self._fails) > 1000:  # many addresses: forget the stale ones
+            self._fails = {k: v for k, v in self._fails.items() if v and now - v[-1] < 900}
+        self._fails.setdefault(who, []).append(now)
 
     def succeeded(self, who: str) -> None:
         self._fails.pop(who, None)

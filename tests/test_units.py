@@ -19,7 +19,6 @@ sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 import mav_provider  # noqa: E402
 import ocactions  # noqa: E402
 import occonditions  # noqa: E402
-import ocdebates  # noqa: E402
 import ocdrafts  # noqa: E402
 import ocevents  # noqa: E402
 import ocinterests  # noqa: E402
@@ -567,14 +566,12 @@ class DraftsAndActions(unittest.TestCase):
         self.assertIn("<orig@mail.gmail.com>", parsed["References"])
 
     def test_reply_subject(self):
-        import ocmail
 
         self.assertEqual(ocmail.reply_subject("Facture"), "Re: Facture")
         self.assertEqual(ocmail.reply_subject("Re: Facture"), "Re: Facture")
         self.assertEqual(ocmail.reply_subject("RE: x"), "RE: x")
 
     def test_mail_addr_extraction(self):
-        import ocmail
 
         self.assertEqual(ocmail._addr("Ethan <soa@x.fr>"), "soa@x.fr")
         self.assertEqual(ocmail._addr("plain@x.fr"), "plain@x.fr")
