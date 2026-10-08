@@ -3023,3 +3023,10 @@ h3:hover > .anchor,
     font-size: 1.15rem;
   }
 }
+
+/* Plans that are not open yet */
+.btn.is-soon {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
