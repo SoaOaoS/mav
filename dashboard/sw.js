@@ -4,11 +4,22 @@
    /api/* (the agent's live state).
 */
 
-const CACHE = "mav-shell-v34";
+const CACHE = "mav-shell-v35";
 const SHELL = [
   "./",
   "./index.html",
   "./assets/css/style.css",
+  "./assets/js/util.js",
+  "./assets/js/state.js",
+  "./assets/js/chat.js",
+  "./assets/js/stream.js",
+  "./assets/js/markdown.js",
+  "./assets/js/routines.js",
+  "./assets/js/watch.js",
+  "./assets/js/settings.js",
+  "./assets/js/connections.js",
+  "./assets/js/notify.js",
+  "./assets/js/search.js",
   "./assets/js/app.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",

@@ -211,7 +211,11 @@ routines.
 
 ## Phase 3 — Codebase health (ongoing, alongside)
 
-### 3.1 Split the big files · M
+### 3.1 Split the big files · M · ✅ done
+
+> **Shipped:**
+> - **Server:** `mav_api.py` (5,212 lines) became eight modules, from 411 to 1,025 lines each: core, engine, routines, store, chat, stream, media, and the HTTP handler. The split was done by a tool, so no logic was rewritten: every name has one owner, references across modules are qualified, and `mav_api` forwards reads and writes to the owner. The 219 existing tests pass unchanged.
+> - **Web app:** `app.js` (6,842 lines) became 12 classic scripts, from 255 to 1,049 lines each, that share one scope, with no bundler.
 
 `dashboard/server/mav_api.py` (~4,800 lines) and `dashboard/assets/js/app.js`
 (~6,000 lines) do too much. Split them by area, with no change in behaviour:

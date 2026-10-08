@@ -58,10 +58,32 @@ Shortcuts: `⌘K` search & commands, `Alt+N` new chat, `/` focus the message
 box, `Esc` stop. Commands: `/new`, `/helper`, `/remember`, `/routine`,
 `/watch`, `/rename`, `/summary`, `/export`, `/help`.
 
-## Server (`server/mav_api.py`)
+## Server (`server/`)
 
 Python stdlib HTTP server + `psycopg2` + `pywebpush`. It serves the front-end,
-talks to the opencode engine, and reads/writes Postgres.
+talks to the opencode engine, and reads/writes Postgres. `mav_api.py` is the
+entry point and the HTTP handler; the rest is split by area, each name in
+exactly one module:
+
+| Module | What it holds |
+| --- | --- |
+| `mav_core.py` | configuration, optional modules, Postgres/JSON/subprocess helpers |
+| `mav_engine.py` | the engine as a service: status, restart, connections (MCP), provider, helper files, versions |
+| `mav_routines.py` | routines, schedules, templates, briefing, welcome, actions, keep an eye on, events |
+| `mav_store.py` | memory, notifications, drafts, mail, interests, search, usage, channels, calendars, backups |
+| `mav_chat.py` | sessions, titles, learned facts, the after-answer queue, messages, uploads |
+| `mav_stream.py` | the engine's event stream, the run registry, the streamed answer |
+| `mav_media.py` | media archive, assets and downloads, charts, Web Push |
+| `mav_auth.py`, `mav_backup.py`, `mav_mail.py`, `mav_provider.py` | sign-in, backup/restore, mail, model providers |
+
+Modules call each other as `mav_chat.session_title(…)`, so circular imports
+are safe. `mav_api.<name>` still reaches any name, for reading and for
+assigning (tests set `mav_api.JOBS_FILE`), because it forwards to the owner.
+
+The front-end is plain classic scripts in `assets/js/`, loaded in order by
+`index.html` and sharing one global scope: `util`, `state`, `chat`, `stream`,
+`markdown`, `routines`, `watch`, `settings`, `connections`, `notify`,
+`search`, then `app` (start-up, demo, PWA). No bundler.
 
 - Chats are opencode sessions titled `dash: …`; their helper, pin and title
   lock live in `BOT_DIR/dash_sessions.json`.

@@ -24,7 +24,7 @@ The CI runs the same checks; run them locally first:
 ```bash
 shellcheck -S warning install.sh get.sh run-opencode.sh scripts/mav scripts/next-version.sh tests/*.sh
 python3 -m py_compile bot/*.py dashboard/server/*.py dashboard/tools/*.py
-node --check dashboard/assets/js/app.js
+for f in dashboard/assets/js/*.js; do node --check "$f"; done
 bash tests/test_next_version.sh && bash tests/test_cli.sh
 python3 -m unittest discover -s tests -v
 ```
