@@ -14,6 +14,7 @@
     },
     {
       "id": "browser",
+      "self_only": true,
       "name": "Web browser",
       "description": "A real browser Mav can drive: click, fill forms, read pages that need JavaScript.",
       "category": "Web",
@@ -65,6 +66,7 @@
     },
     {
       "id": "files",
+      "self_only": true,
       "name": "Your files",
       "description": "Read and organise files in a folder of your server (documents, notes, exports).",
       "category": "Everyday",

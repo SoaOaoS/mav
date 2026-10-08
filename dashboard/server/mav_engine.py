@@ -19,6 +19,7 @@ import urllib.request
 from pathlib import Path
 
 import mav_core
+import mav_edition
 import mav_routines
 
 
@@ -706,6 +707,8 @@ def mcp_catalog() -> dict:
         cat = {"items": []}
     installed = set((read_mcp().get("mcp") or {}).keys())
     runtimes = {r: bool(find_runtime(r)) for r in ("npx", "uvx")}
+    if mav_edition.EDITION != "self":  # your server's files, a local browser…
+        cat["items"] = [i for i in cat.get("items", []) if not i.get("self_only")]
     for it in cat.get("items", []):
         it["installed"] = it["id"] in installed
         rt = it.get("runtime")
@@ -789,6 +792,7 @@ def provider_snapshot() -> dict:
     presets = [
         {"id": k, **{x: v[x] for x in ("label", "hint", "native", "base", "key", "model")}}
         for k, v in mav_core.mav_provider.PRESETS.items()
+        if mav_edition.EDITION == "self" or not v.get("self_only")
     ]
     return {"current": cur, "presets": presets, "model": mav_core.DEFAULT_MODEL}
 
@@ -809,6 +813,8 @@ def provider_save(payload: dict) -> dict:
     pid = (payload.get("provider") or "").strip().lower()
     if pid == "custom":
         pid = (payload.get("custom_id") or "").strip().lower()
+    if mav_edition.EDITION != "self" and mav_core.mav_provider.PRESETS.get(pid, {}).get("self_only"):
+        return {"ok": False, "error": "This provider runs on your own machine: use a cloud provider or a custom endpoint."}
     key = payload.get("api_key")
     key = key if isinstance(key, str) and key.strip() else None  # blank = keep
     res = mav_core.mav_provider.apply(

@@ -36,6 +36,33 @@ class ModelManagedE2E(unittest.TestCase):
             self.assertFalse(page.locator("#smallModel").is_visible())
             res = page.request.post(stack.url + "api/config/provider", data={"preset": "openai", "key": "x"})
             self.assertEqual(res.status, 403)
+            # Nor costs, debates, or what the platform does (family, backup,
+            # updates, advanced); the Mav Cloud account is one click away.
+            self.assertFalse(page.locator("[data-stab='usage']").is_visible())
+            self.assertFalse(page.locator(".nav-item[data-view='debates']").is_visible())
+            for sel in ("#familyRow", "#backupRestore", "#versionCheck", "#advanced", "#codeRow"):
+                self.assertFalse(page.locator(sel).is_visible(), sel)
+            self.assertTrue(page.locator("a[href='/account']").is_visible())
+            self.assertEqual(errors, [])
+            browser.close()
+
+    def test_mymav_keeps_its_model_but_not_the_home_parts(self):
+        with Stack(env={"MAV_EDITION": "mymav", "MAV_AUTH": "off"}) as stack, sync_playwright() as pw:
+            try:
+                browser = launch(pw)
+            except Exception as exc:  # noqa: BLE001
+                self.skipTest(f"no Chromium: {exc}")
+            page = new_context(browser).new_page()
+            errors = watch_errors(page)
+            page.goto(stack.url + "#settings/general")
+            page.wait_for_selector("#spanel-general.is-active", timeout=10000)
+            if page.locator("#onboarding:not([hidden])").count():
+                page.click("#obSkip")
+            self.assertTrue(page.locator("[data-stab='model']").is_visible())
+            self.assertTrue(page.locator("[data-stab='usage']").is_visible())
+            for sel in ("#backupRestore", "#versionCheck", "#advanced", "#accountRow"):
+                self.assertFalse(page.locator(sel).is_visible(), sel)
+            self.assertEqual(page.request.get(stack.url + "api/backup").status, 404)
             self.assertEqual(errors, [])
             browser.close()
 

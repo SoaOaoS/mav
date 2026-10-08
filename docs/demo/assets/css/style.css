@@ -4580,3 +4580,18 @@ body.has-onboarding {
 #advanced .setting-row {
   margin-bottom: 0.8rem;
 }
+
+/* Parts of the app this version of Mav does not have (mav_edition.py). */
+body.no-model .f-model,
+body.no-usage .f-usage,
+body.no-debates .f-debates,
+body.no-family .f-family,
+body.no-password .f-password,
+body.no-backup .f-backup,
+body.no-updates .f-updates,
+body.no-advanced .f-advanced,
+body.no-webhook .f-webhook,
+body.no-code_setting .f-code_setting,
+body:not(.is-cloud) .cloud-only {
+  display: none !important;
+}

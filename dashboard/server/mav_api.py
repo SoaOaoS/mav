@@ -30,6 +30,7 @@ import mav_store
 import mav_chat
 import mav_stream
 import mav_media
+import mav_edition
 
 # The server is split by area (mav_core, mav_engine, mav_routines, mav_store,
 # mav_chat, mav_stream, mav_media); this module is its entry point and HTTP
@@ -109,7 +110,7 @@ MEMBER_POST_PREFIXES = ("/api/auth/", "/api/memory/")
 
 # Mav Cloud's included plan: the platform gives Mav its model and pays for
 # it, so nobody here may change the model, the key or the background model.
-MODEL_MANAGED = os.environ.get("MAV_MODEL_MANAGED", "").lower() in ("1", "true", "yes")
+MODEL_MANAGED = not mav_edition.FEATURES["model"]
 MODEL_POST = frozenset({"/api/config/provider", "/api/config/provider/test", "/api/usage/small-model"})
 
 # Calls about one chat, and where they carry its id: only its owner may.
@@ -199,6 +200,10 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if MODEL_MANAGED and method == "POST" and path in MODEL_POST:
             self._send(403, {"error": "The model is included in your plan and managed by Mav Cloud."})
+            return False
+        # A part of the app this version of Mav does not have (mav_edition).
+        if mav_edition.off_feature(method, path):
+            self._send(404, {"error": "Not part of this version of Mav."})
             return False
         if not mav_core.is_owner():
             allowed = (path in MEMBER_GET) if method == "GET" else (
@@ -368,7 +373,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/auth/state":
                 return self._send(200, {**mav_core.AUTH.state(self.headers.get("Cookie", "")),
-                                        "model_managed": MODEL_MANAGED})
+                                        "model_managed": MODEL_MANAGED,
+                                        "edition": mav_edition.EDITION,
+                                        "features": mav_edition.FEATURES})
             if path == "/api/health":
                 return self._send(200, {"ok": True})
             if path == "/api/briefing":

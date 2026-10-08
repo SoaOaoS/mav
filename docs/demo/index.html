@@ -143,7 +143,7 @@
           <button class="nav-item" data-view="memory">
             <i data-i="brain"></i> Memory
           </button>
-          <button class="nav-item owner-only" data-view="debates">
+          <button class="nav-item owner-only f-debates" data-view="debates">
             <i data-i="chat"></i> Debates
           </button>
           <button class="nav-item" data-view="settings">
@@ -171,7 +171,7 @@
         </div>
 
 
-        <button class="update-pill" id="updatePill" hidden>
+        <button class="update-pill f-updates" id="updatePill" hidden>
           <i data-i="download"></i>
           <span id="updatePillText">Update available</span>
         </button>
@@ -577,7 +577,7 @@
         </section>
 
         <!-- ---------- DEBATES ---------- -->
-        <section class="view" id="view-debates">
+        <section class="view f-debates" id="view-debates">
           <div class="page">
             <header class="view-head">
               <div>
@@ -603,18 +603,18 @@
             <header class="view-head">
               <div>
                 <h1>Settings</h1>
-                <p>Your model, your helpers, and how Mav behaves.</p>
+                <p>How Mav works for you: helpers, connections, notifications and more.</p>
               </div>
             </header>
 
             <div class="tabs" role="tablist">
-              <button class="tab is-active owner-only model-only" data-stab="model">Model</button>
+              <button class="tab is-active owner-only model-only f-model" data-stab="model">Model</button>
               <button class="tab owner-only" data-stab="instructions">
                 Custom instructions
               </button>
               <button class="tab owner-only" data-stab="helpers">Helpers</button>
               <button class="tab owner-only" data-stab="connections">Connections</button>
-              <button class="tab owner-only" data-stab="usage">Usage</button>
+              <button class="tab owner-only f-usage" data-stab="usage">Usage</button>
               <button class="tab" data-stab="general">General</button>
             </div>
 
@@ -935,7 +935,7 @@
                     Manage
                   </button>
                 </div>
-                <div class="setting-row owner-only" id="codeRow" hidden>
+                <div class="setting-row owner-only f-code_setting" id="codeRow" hidden>
                   <div>
                     <strong>Run code and commands</strong>
                     <span id="codeText">Lets Mav run Python and shell commands to compute, convert and build files for you.</span>
@@ -975,9 +975,9 @@
                   <button class="btn btn-ghost btn-sm" id="obReopen">Open</button>
                 </div>
               </div>
-              <h3 class="set-group">Account and data</h3>
-              <div class="card">
-                <div class="setting-row" id="accountRow">
+              <h3 class="set-group f-backup">Account and data</h3>
+              <div class="card f-backup">
+                <div class="setting-row f-password" id="accountRow">
                   <div>
                     <strong>Password</strong>
                     <span id="accountText">Only people with the password can open Mav.</span>
@@ -987,15 +987,15 @@
                     <button class="btn btn-ghost btn-sm" id="signOut">Sign out</button>
                   </div>
                 </div>
-                <div class="setting-row owner-only" id="familyRow" hidden>
+                <div class="setting-row owner-only f-family" id="familyRow" hidden>
                   <div>
                     <strong>Family</strong>
                     <span>Give each person their own sign-in. Their chats, memory and routines stay theirs; the model, connections and helpers stay yours.</span>
                   </div>
                   <button class="btn btn-ghost btn-sm" id="familyAdd">Add a person</button>
                 </div>
-                <div class="chan-list owner-only" id="familyList" hidden></div>
-                <div class="setting-row owner-only">
+                <div class="chan-list owner-only f-family" id="familyList" hidden></div>
+                <div class="setting-row owner-only f-backup">
                   <div>
                     <strong>Backup</strong>
                     <span>Memory, routines, chats, helpers and settings in one file. Restoring replaces everything.</span>
@@ -1006,7 +1006,7 @@
                     <input type="file" id="backupFile" accept=".gz,.tgz,application/gzip" hidden />
                   </div>
                 </div>
-                <div class="setting-row owner-only">
+                <div class="setting-row owner-only f-updates">
                   <div>
                     <strong>Version</strong>
                     <span id="versionText">—</span>
@@ -1016,10 +1016,20 @@
                   </button>
                 </div>
               </div>
+              <h3 class="set-group cloud-only">Your account</h3>
+              <div class="card cloud-only">
+                <div class="setting-row">
+                  <div>
+                    <strong>Mav Cloud</strong>
+                    <span>Your plan, invoices and card; export everything or delete your account.</span>
+                  </div>
+                  <a class="btn btn-ghost btn-sm" href="/account">Open my account</a>
+                </div>
+              </div>
 
-              <details class="card advanced owner-only" id="advanced">
+              <details class="card advanced owner-only f-advanced" id="advanced">
                 <summary>Advanced</summary>
-                <div class="setting-row owner-only">
+                <div class="setting-row owner-only f-webhook">
                   <div>
                     <strong>Webhook</strong>
                     <span>Let other services start a routine (a form, a payment, GitHub…). They need the address and its token.</span>
