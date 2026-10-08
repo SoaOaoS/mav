@@ -150,7 +150,8 @@ function renderRoutines() {
   if (!jobs.length) {
     box.innerHTML = `<div class="empty-state"><strong>No routine yet</strong>
       Mav can do things for you on a schedule — a morning briefing, a weekly meal plan, a reminder every Friday.
-      <div class="suggest">${ROUTINE_IDEAS.map((r, i) => `<button class="chip" data-idea="${i}">${esc(r.label)}</button>`).join("")}</div></div>`;
+      <div class="suggest">${ROUTINE_IDEAS.map((r, i) => `<button class="chip" data-idea="${i}">${esc(r.label)}</button>`).join("")}
+      <button class="chip chip-accent" data-goto="ideas">${I("sparkle")} More ideas</button></div></div>`;
     return;
   }
   box.innerHTML = jobs

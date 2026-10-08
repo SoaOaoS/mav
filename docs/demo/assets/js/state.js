@@ -56,6 +56,7 @@ function agentDesc(name) {
    ================================================================ */
 const VIEW_TITLES = {
   chat: "Mav",
+  ideas: "Ideas",
   routines: "Routines",
   memory: "Memory",
   debates: "Debates",
@@ -76,6 +77,7 @@ function go(view, sub, { push = true } = {}) {
   closeDrawer();
   if (view === "settings") openSettingsTab(sub || currentSettingsTab());
   if (view === "memory") loadMemory();
+  if (view === "ideas") renderIdeas();
   if (view === "routines") openRoutinesTab(sub || currentRoutinesTab());
   if (view === "debates") loadDebates();
   if (view === "chat" && !state.chat.id) refreshInbox();

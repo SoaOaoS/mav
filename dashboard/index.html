@@ -152,6 +152,9 @@
         </div>
 
         <nav class="nav" aria-label="Main">
+          <button class="nav-item" data-view="ideas">
+            <i data-i="sparkle"></i> Ideas
+          </button>
           <button class="nav-item" data-view="routines">
             <i data-i="bolt"></i> Routines
             <span class="nav-count" id="navRoutinesCount"></span>
@@ -345,6 +348,9 @@
                 >
                   <i data-i="brain"></i> What do you remember about me?
                 </button>
+                <button class="chip chip-accent" data-goto="ideas">
+                  <i data-i="sparkle"></i> More ideas
+                </button>
               </div>
               <section class="inbox" id="inboxWrap" hidden>
                 <div class="inbox-head">
@@ -354,6 +360,27 @@
                 <ul class="inbox-list" id="inbox"></ul>
               </section>
             </div>
+          </div>
+        </section>
+
+        <!-- ---------- IDEAS ---------- -->
+        <section class="view" id="view-ideas">
+          <div class="page">
+            <header class="view-head">
+              <div>
+                <h1>What Mav can do for you</h1>
+                <p>
+                  Pick one, check it, done. Routines run on their own and only
+                  speak up when there's something worth telling you.
+                </p>
+              </div>
+            </header>
+            <div class="tabs" role="tablist" id="ideaTabs" aria-label="Kinds of ideas"></div>
+            <div class="idea-grid" id="ideaGrid"></div>
+            <p class="hint idea-foot">
+              Anything else? Just ask in a chat, in your own words — “every
+              Friday, remind me to…” becomes a routine.
+            </p>
           </div>
         </section>
 
@@ -1201,6 +1228,7 @@
     <script src="assets/js/connections.js"></script>
     <script src="assets/js/notify.js"></script>
     <script src="assets/js/search.js"></script>
+    <script src="assets/js/ideas.js"></script>
     <script src="assets/js/app.js"></script>
   </body>
 </html>
