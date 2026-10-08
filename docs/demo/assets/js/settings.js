@@ -36,6 +36,7 @@ function openSettingsTab(tab) {
       usage: loadUsage,
       general: () => {
         if (!isOwner()) return;
+        loadCode();
         loadAdvanced();
         checkVersion();
         loadFamily();
@@ -580,4 +581,49 @@ $("#agentsEditor").addEventListener("keydown", (e) => {
     e.preventDefault();
     $("#agentsSave").click();
   }
+});
+
+/* Code and commands: Mav's code tools (the "code" connection). Self-hosted,
+   the owner turns them on knowingly; in Mav Cloud they run in the person's
+   own sandbox and are always on. */
+async function loadCode() {
+  if (!LIVE) return;
+  let c;
+  try {
+    c = await api.get("config/code");
+  } catch (_) {
+    return;
+  }
+  $("#codeRow").hidden = false;
+  const sw = $("#codeSwitch");
+  sw.setAttribute("aria-checked", String(!!c.enabled));
+  sw.disabled = !!c.managed;
+  $("#codeText").textContent = c.managed
+    ? "On: Mav runs Python and shell commands in your own sandbox, which holds none of your keys or data."
+    : c.enabled
+      ? `On: Mav runs Python and shell commands on this machine, in ${c.dir}.`
+      : "Lets Mav run Python and shell commands on this machine, to compute, convert and build files for you.";
+}
+$("#codeSwitch").addEventListener("click", async () => {
+  const sw = $("#codeSwitch");
+  if (sw.disabled) return;
+  const on = sw.getAttribute("aria-checked") !== "true";
+  if (
+    on &&
+    !(await confirmDialog(
+      "Let Mav run code on this machine?",
+      "Mav will run commands as its own user, in its own folder, without your keys in their environment. A page or e-mail Mav reads could still try to make it run something: only turn this on if you trust what Mav reads, or run Mav in its own container or VM.",
+      "Turn on",
+    ))
+  )
+    return;
+  sw.disabled = true;
+  try {
+    await api.post("config/code", { enabled: on });
+    toast(on ? "Code tools on. Mav restarts for a few seconds." : "Code tools off. Mav restarts for a few seconds.");
+  } catch (ex) {
+    toast(ex.message, { error: true });
+  }
+  sw.disabled = false;
+  loadCode();
 });

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import threading
 import time
 import urllib.error
@@ -447,6 +448,48 @@ def write_mcp(mcp: dict) -> dict:
         return {"ok": False, "error": str(exc)}
     mark_pending("Connections")
     return {"ok": True, "path": str(p)}
+
+
+# Code and commands: the "code" connection (dashboard/tools/mav_code.py). In
+# Mav Cloud the platform sets it up, pointing at the person's sandbox.
+CODE_TOOL = Path(__file__).resolve().parents[1] / "tools" / "mav_code.py"
+CODE_IN_CLOUD = bool(os.environ.get("MAV_CODE_URL")) or os.environ.get("MAV_MODE") == "cloud"
+
+
+def _raw_mcp() -> dict:
+    p = mav_core._opencode_config_path()
+    try:
+        cfg = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+    return dict(cfg.get("mcp", {}) or {})
+
+
+def code_state() -> dict:
+    entry = _raw_mcp().get("code") or {}
+    return {
+        "enabled": bool(entry) and entry.get("enabled", True) is not False,
+        "managed": CODE_IN_CLOUD,
+        "where": "sandbox" if CODE_IN_CLOUD else "this machine",
+        "dir": "" if CODE_IN_CLOUD else os.environ.get("MAV_CODE_DIR", str(Path.home() / "workspace" / "code")),
+    }
+
+
+def code_set(enabled: bool) -> dict:
+    """Turn Mav's code tools on or off on a self-hosted Mav, then restart the
+    engine so the assistant gets (or loses) them."""
+    if CODE_IN_CLOUD:
+        return {"ok": False, "error": "Code runs in your Mav Cloud sandbox: it is always on."}
+    mcp = _raw_mcp()
+    if enabled:
+        mcp["code"] = {"type": "local", "command": [sys.executable, str(CODE_TOOL)], "enabled": True}
+    else:
+        mcp.pop("code", None)
+    res = write_mcp(mcp)
+    if not res.get("ok"):
+        return res
+    restart = restart_engine()
+    return {"ok": True, **code_state(), "restarting": bool(restart.get("ok"))}
 
 
 def restart_engine() -> dict:
