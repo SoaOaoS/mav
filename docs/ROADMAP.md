@@ -192,7 +192,17 @@ clock time.
 **Done when**
 - A feed with 3 new items gives one grouped alert, not three.
 
-### 2.5 Family accounts · L
+### 2.5 Family accounts · L · ✅ done
+
+> **Shipped:**
+> - **Accounts.** The owner adds people in Settings → General → Family. Each person signs in with their name and password. Every account has its own sessions, and changing one person's password signs out only that person.
+> - **Isolation.** Chats, memory (facts and past exchanges), routines, watch items, notifications, push devices, proactivity and the welcome flow are kept per person.
+>   - Someone else's chat is "not found".
+>   - Each person's routines run with their own memory and notify their own devices.
+> - **What stays the owner's** (members never reach it; the API checks an allow-list): the model, connections, helpers, email, interests, calendars, channels, usage, backup and updates.
+> - **Removing a person** also erases their data.
+> - **Tests.** `tests/test_family.py` proves two accounts never see each other's chats, memory or routines, over HTTP and Postgres. `tests/test_e2e_family.py` runs the same check in the browser.
+> - **Known limit:** files the assistant writes live in one shared workspace.
 
 **Why.** One server, several people: each with their own chats, memory and
 routines.

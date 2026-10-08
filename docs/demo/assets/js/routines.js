@@ -115,7 +115,7 @@ function currentRoutinesTab() {
   return a ? a.dataset.rtab : "routines";
 }
 function openRoutinesTab(tab) {
-  if (!$(`#rpanel-${tab}`)) tab = "routines";
+  if (!$(`#rpanel-${tab}`) || (!isOwner() && (tab === "drafts" || tab === "interests"))) tab = "routines";
   $$("[data-rtab]").forEach((t) =>
     t.classList.toggle("is-active", t.dataset.rtab === tab),
   );

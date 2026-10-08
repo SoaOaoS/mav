@@ -2515,6 +2515,10 @@ a.btn,
 a.btn:hover {
   text-decoration: none;
 }
+/* A family member's app: the owner's settings are not shown. */
+body[data-role="member"] .owner-only {
+  display: none !important;
+}
 /* Other notification channels (ntfy, Gotify, Discord, Slack). */
 .chan-list {
   display: flex;

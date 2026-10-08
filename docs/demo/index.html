@@ -84,7 +84,8 @@
         <span class="splash-orb auth-orb" aria-hidden="true"></span>
         <h1 id="authTitle">Welcome back</h1>
         <p id="authLead">Enter your password to open Mav.</p>
-        <input type="text" name="username" value="mav" autocomplete="username" hidden />
+        <input class="input" type="text" id="authName" name="username" placeholder="Your name"
+          autocomplete="username" maxlength="32" hidden />
         <input class="input" type="password" id="authPassword" placeholder="Password"
           autocomplete="current-password" required minlength="8" />
         <input class="input" type="password" id="authPassword2" placeholder="Repeat the password"
@@ -171,7 +172,7 @@
           <button class="nav-item" data-view="memory">
             <i data-i="brain"></i> Memory
           </button>
-          <button class="nav-item" data-view="debates">
+          <button class="nav-item owner-only" data-view="debates">
             <i data-i="chat"></i> Debates
           </button>
           <button class="nav-item" data-view="settings">
@@ -386,10 +387,10 @@
                 Routines
               </button>
               <button class="tab" data-rtab="watch">Keep an eye on</button>
-              <button class="tab" data-rtab="drafts">
+              <button class="tab owner-only" data-rtab="drafts">
                 Drafts <span class="count" id="draftCount"></span>
               </button>
-              <button class="tab" data-rtab="interests">
+              <button class="tab owner-only" data-rtab="interests">
                 Interests <span class="count" id="interestCount"></span>
               </button>
             </div>
@@ -614,13 +615,13 @@
             </header>
 
             <div class="tabs" role="tablist">
-              <button class="tab is-active" data-stab="model">Model</button>
-              <button class="tab" data-stab="instructions">
+              <button class="tab is-active owner-only" data-stab="model">Model</button>
+              <button class="tab owner-only" data-stab="instructions">
                 Custom instructions
               </button>
-              <button class="tab" data-stab="helpers">Helpers</button>
-              <button class="tab" data-stab="connections">Connections</button>
-              <button class="tab" data-stab="usage">Usage</button>
+              <button class="tab owner-only" data-stab="helpers">Helpers</button>
+              <button class="tab owner-only" data-stab="connections">Connections</button>
+              <button class="tab owner-only" data-stab="usage">Usage</button>
               <button class="tab" data-stab="general">General</button>
             </div>
 
@@ -888,23 +889,23 @@
                     ></button>
                   </div>
                 </div>
-                <div class="setting-row">
+                <div class="setting-row owner-only">
                   <div>
                     <strong>Other channels</strong>
                     <span>Also send reports and alerts to ntfy, Gotify, Discord or Slack.</span>
                   </div>
                   <button class="btn btn-ghost btn-sm" id="chanAdd">Add a channel</button>
                 </div>
-                <div class="chan-list" id="chanList" hidden></div>
-                <div class="setting-row">
+                <div class="chan-list owner-only" id="chanList" hidden></div>
+                <div class="setting-row owner-only">
                   <div>
                     <strong>Calendars</strong>
                     <span>Today's events in your briefing, and routines that run before a meeting. CalDAV (Nextcloud, iCloud, Fastmail…) or a private iCal link (Google, Outlook).</span>
                   </div>
                   <button class="btn btn-ghost btn-sm" id="calAdd">Add a calendar</button>
                 </div>
-                <div class="chan-list" id="calList" hidden></div>
-                <div class="setting-row">
+                <div class="chan-list owner-only" id="calList" hidden></div>
+                <div class="setting-row owner-only">
                   <div>
                     <strong>Backup</strong>
                     <span>Memory, routines, chats, helpers and settings in one file. Restoring replaces everything.</span>
@@ -957,7 +958,7 @@
                     aria-label="Read aloud"
                   ></button>
                 </div>
-                <div class="setting-row">
+                <div class="setting-row owner-only">
                   <div>
                     <strong>Version</strong>
                     <span id="versionText">—</span>
@@ -987,6 +988,14 @@
                     <button class="btn btn-ghost btn-sm" id="signOut">Sign out</button>
                   </div>
                 </div>
+                <div class="setting-row owner-only" id="familyRow" hidden>
+                  <div>
+                    <strong>Family</strong>
+                    <span>Give each person their own sign-in. Their chats, memory and routines stay theirs; the model, connections and helpers stay yours.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="familyAdd">Add a person</button>
+                </div>
+                <div class="chan-list owner-only" id="familyList" hidden></div>
                 <div class="setting-row">
                   <div>
                     <strong>Theme</strong>
@@ -1000,7 +1009,7 @@
                 </div>
               </div>
 
-              <details class="card advanced" id="advanced">
+              <details class="card advanced owner-only" id="advanced">
                 <summary>Advanced</summary>
                 <div class="engine-head">
                   <div class="engine-title">

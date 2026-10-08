@@ -7,7 +7,7 @@
    ================================================================ */
 function currentSettingsTab() {
   const a = $("[data-stab].is-active");
-  return a ? a.dataset.stab : "model";
+  return a ? a.dataset.stab : isOwner() ? "model" : "general";
 }
 function openSettingsTab(tab) {
   if (tab === "agents") tab = "helpers";
@@ -16,6 +16,7 @@ function openSettingsTab(tab) {
     $("#advanced").open = true;
   }
   if (!$(`#spanel-${tab}`)) tab = "model";
+  if (!isOwner()) tab = "general"; // the rest is the owner's
   $$("[data-stab]").forEach((t) =>
     t.classList.toggle("is-active", t.dataset.stab === tab),
   );
@@ -33,8 +34,10 @@ function openSettingsTab(tab) {
       },
       usage: loadUsage,
       general: () => {
+        if (!isOwner()) return;
         loadAdvanced();
         checkVersion();
+        loadFamily();
       },
     })[tab] || (() => {})
   )();

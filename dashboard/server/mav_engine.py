@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 import mav_core
+import mav_routines
 
 
 def sys_metrics() -> dict:
@@ -920,16 +921,17 @@ def get_status() -> dict:
 
     pg = False
     n_watch = n_conv = n_facts = 0
+    who, args = mav_core.mine()  # each person counts their own
     try:
         mav_core.pg_query("select 1")
         pg = True
-        n_watch = mav_core.pg_query("select count(*) c from watch_items")[0]["c"]
-        n_conv = mav_core.pg_query("select count(*) c from conversations")[0]["c"]
-        n_facts = mav_core.pg_query("select count(*) c from facts")[0]["c"]
+        n_watch = mav_core.pg_query(f"select count(*) c from watch_items where {who}", args)[0]["c"]
+        n_conv = mav_core.pg_query(f"select count(*) c from conversations where {who}", args)[0]["c"]
+        n_facts = mav_core.pg_query(f"select count(*) c from facts where {who}", args)[0]["c"]
     except Exception:
         pass
 
-    jobs = mav_core.read_json(mav_core.JOBS_FILE, [])
+    jobs = mav_routines.my_jobs()
     prov = provider_current()
     return {
         "mode": "live",

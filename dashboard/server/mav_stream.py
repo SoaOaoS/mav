@@ -52,12 +52,13 @@ class Run:
         self.updated = self.started
         self._cv = threading.Condition()
         self._thread: threading.Thread | None = None
+        self.user = mav_core.uid()
 
     # ---- producer side -------------------------------------------------
     def start(self) -> None:
-        # Built here (not in __init__) so a caller/test can swap `_work`.
-        self._thread = threading.Thread(target=self._work, daemon=True)
-        self._thread.start()
+        # Looked up here (not in __init__) so a caller/test can swap `_work`;
+        # the answer is written as the person who asked for it.
+        self._thread = mav_core.spawn(lambda: self._work())
 
     def _emit(self, event: str, data: dict) -> None:
         with self._cv:
@@ -194,8 +195,9 @@ def get_run(sid: str) -> Run | None:
 
 def runs_view() -> list[dict]:
     _run_cleanup()
+    me = mav_core.uid()
     with _runs_lock:
-        runs = list(RUNS.values())
+        runs = [r for r in RUNS.values() if r.user == me]
     out = []
     for r in runs:
         out.append({
@@ -664,10 +666,8 @@ def stream_answer(
         # Cheap, local work right away; model calls (title, learned facts) go
         # through one queue that waits for the engine to be idle, so they never
         # slow down the answer the person is waiting for.
-        threading.Thread(
-            target=mav_chat.remember_exchange, args=(prompt, final, sid, ag), daemon=True
-        ).start()
-        threading.Thread(target=mav_chat.learn_interests, args=(prompt,), daemon=True).start()
+        mav_core.spawn(mav_chat.remember_exchange, prompt, final, sid, ag)
+        mav_core.spawn(mav_chat.learn_interests, prompt)
         mav_chat.schedule_after_answer(sid, prompt, final, needs_title)
 
 

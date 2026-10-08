@@ -93,7 +93,7 @@ class WorkerRoutineTest(unittest.TestCase):
         self.assertTrue(kw["url"].startswith("./#chat/"))
 
     def test_scheduled_briefing_has_its_context(self):
-        mav_worker.briefing_context = lambda: "<daily-briefing>\nctx\n</daily-briefing>"
+        mav_worker.briefing_context = lambda *_: "<daily-briefing>\nctx\n</daily-briefing>"
         import ocbriefing
 
         asyncio.run(self._run(ocbriefing.default_job()))

@@ -139,8 +139,16 @@ async def last_assistant_text(session_id: str) -> str:
     return ""
 
 
+def job_owner(job: dict) -> int:
+    """Who a routine works for (routines without an owner are the owner's)."""
+    try:
+        return int(job.get("owner", OWNER_ID))
+    except (TypeError, ValueError):
+        return OWNER_ID
+
+
 async def run_prompt(session_id: str, prompt: str, agent: str,
-                     context: str = "") -> tuple[str, ProgressTracker]:
+                     context: str = "", chat_id: int = OWNER_ID) -> tuple[str, ProgressTracker]:
     """Send the prompt, follow the session until idle, return the answer."""
     queue = bus.subscribe(session_id)
     tracker = ProgressTracker(agent)
@@ -149,7 +157,7 @@ async def run_prompt(session_id: str, prompt: str, agent: str,
         body["parts"].insert(0, {"type": "text", "text": context, "synthetic": True})
     # Routines know what Mav remembers about you (facts + related exchanges).
     try:
-        ctx = memory.context_block(OWNER_ID, prompt)
+        ctx = memory.context_block(chat_id, prompt)
         if ctx:
             body["parts"].insert(0, {"type": "text", "text": ctx, "synthetic": True})
     except Exception as exc:  # noqa: BLE001
@@ -287,12 +295,13 @@ async def run_job(job: dict, extra_context: str = "") -> None:
     if not await agent_known(agent):
         agent = ""
     session_id = await routine_session(name)
-    log.info("routine %s -> chat %s (helper %s)", name, session_id, agent or "default")
+    owner = job_owner(job)
+    log.info("routine %s -> chat %s (helper %s, for %s)", name, session_id, agent or "default", owner)
 
     briefing = ocbriefing.is_briefing(job)
-    context = await asyncio.to_thread(briefing_context) if briefing else ""
+    context = await asyncio.to_thread(briefing_context, owner) if briefing else ""
     context = "\n\n".join(c for c in (context, extra_context) if c)
-    answer, tracker = await run_prompt(session_id, job["prompt"], agent, context)
+    answer, tracker = await run_prompt(session_id, job["prompt"], agent, context, owner)
 
     if tracker.error:
         retries = int(job.get("retries", JOB_RETRIES))
@@ -304,7 +313,7 @@ async def run_job(job: dict, extra_context: str = "") -> None:
         notify(
             f"⚠️ {name} failed",
             str(tracker.error)[:200],
-            chat_id=OWNER_ID,
+            chat_id=owner,
             topic="routine",
             url=f"./#chat/{session_id}",
             dedup_key=f"routine-fail:{name}:{time.strftime('%Y-%m-%d')}",
@@ -322,7 +331,7 @@ async def run_job(job: dict, extra_context: str = "") -> None:
     notify(
         "☀️ Your briefing" if briefing else f"🔁 {name}",
         summary,
-        chat_id=OWNER_ID,
+        chat_id=owner,
         topic="briefing" if briefing else "routine",
         # The briefing is the point of the day: push it whatever the level.
         level="important" if briefing else None,
@@ -332,13 +341,17 @@ async def run_job(job: dict, extra_context: str = "") -> None:
     )
 
 
-def briefing_context() -> str:
+def briefing_context(chat_id: int = OWNER_ID) -> str:
     """What the daily briefing should know (blocking: run in a thread)."""
     facts, drafts, items = [], 0, []
     try:
-        facts = memory.facts(OWNER_ID, limit=30)
+        facts = memory.facts(chat_id, limit=30)
     except Exception:  # noqa: BLE001
         facts = []
+    if chat_id != OWNER_ID:
+        # A family member's briefing: their memory and notifications only
+        # (drafts, interests and the calendars are the owner's).
+        return ocbriefing.build_context(facts=facts, notifications=recent(40, chat_id), drafts=0, interests=[])
     try:
         from ocdrafts import Drafts  # noqa: PLC0415
 
@@ -350,7 +363,7 @@ def briefing_context() -> str:
     except Exception:  # noqa: BLE001
         items = []
     return ocbriefing.build_context(
-        facts=facts, notifications=recent(40), drafts=drafts, interests=items,
+        facts=facts, notifications=recent(40, chat_id), drafts=drafts, interests=items,
         events=calendar_today(),
     )
 
@@ -371,7 +384,8 @@ def calendar_today() -> list[str] | None:
 
 async def calendar_once(now: datetime | None = None) -> int:
     """Fire the "N minutes before an event" routines whose moment is now."""
-    jobs = [j for j in load_jobs(JOBS_FILE) if occalendar.before_rule(j)]
+    # The calendars are the owner's: only their routines may follow them.
+    jobs = [j for j in load_jobs(JOBS_FILE) if occalendar.before_rule(j) and job_owner(j) == OWNER_ID]
     if not jobs or not occalendar.load():
         return 0
     now = (now or datetime.now()).astimezone()
@@ -419,7 +433,8 @@ async def run_events_once() -> int:
     fired = 0
     for event in events:
         for job in jobs:
-            if job.get("enabled", True) and ocevents.matches(job, event):
+            # Events (webhooks, mail…) are the owner's, like the calendars.
+            if job.get("enabled", True) and job_owner(job) == OWNER_ID and ocevents.matches(job, event):
                 log.info("event %s/%s -> routine %s", event.get("kind"), event.get("id"), job["name"])
                 _spawn(_safe_run_job(job))
                 fired += 1
