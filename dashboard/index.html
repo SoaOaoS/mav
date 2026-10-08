@@ -132,6 +132,25 @@
           <kbd class="kbd-hint">⌥N</kbd>
         </button>
 
+        <nav class="nav" aria-label="Main">
+          <button class="nav-item" data-view="ideas">
+            <i data-i="sparkle"></i> Ideas
+          </button>
+          <button class="nav-item" data-view="routines">
+            <i data-i="bolt"></i> Routines
+            <span class="nav-count" id="navRoutinesCount"></span>
+          </button>
+          <button class="nav-item" data-view="memory">
+            <i data-i="brain"></i> Memory
+          </button>
+          <button class="nav-item owner-only" data-view="debates">
+            <i data-i="chat"></i> Debates
+          </button>
+          <button class="nav-item" data-view="settings">
+            <i data-i="settings"></i> Settings
+          </button>
+        </nav>
+
         <div class="recents">
           <div class="recents-head">
             <span>Chats</span>
@@ -151,21 +170,6 @@
           <a href="https://github.com/SoaOaoS/mav#install" target="_blank" rel="noopener">Install Mav</a>
         </div>
 
-        <nav class="nav" aria-label="Main">
-          <button class="nav-item" data-view="routines">
-            <i data-i="bolt"></i> Routines
-            <span class="nav-count" id="navRoutinesCount"></span>
-          </button>
-          <button class="nav-item" data-view="memory">
-            <i data-i="brain"></i> Memory
-          </button>
-          <button class="nav-item owner-only" data-view="debates">
-            <i data-i="chat"></i> Debates
-          </button>
-          <button class="nav-item" data-view="settings">
-            <i data-i="settings"></i> Settings
-          </button>
-        </nav>
 
         <button class="update-pill" id="updatePill" hidden>
           <i data-i="download"></i>
@@ -218,29 +222,17 @@
                   New chat
                 </h1>
               </div>
-              <div class="chat-actions">
-                <button
-                  type="button"
-                  class="agent-pill agent-pill-lg"
-                  id="chatAgent"
-                  title="Choose who you talk to"
-                ></button>
-                <button class="icon-btn" id="pinBtn" title="Pin">
-                  <i data-i="pin"></i>
+              <div class="chat-actions" id="chatActions">
+                <button class="icon-btn" id="chatMenuBtn" title="More"
+                  aria-label="Chat options" aria-haspopup="menu" aria-expanded="false">
+                  <i data-i="dots"></i>
                 </button>
-                <button class="icon-btn" id="summaryBtn" title="Summarise">
-                  <i data-i="sparkle"></i>
-                </button>
-                <button
-                  class="icon-btn"
-                  id="exportBtn"
-                  title="Download as Markdown"
-                >
-                  <i data-i="download"></i>
-                </button>
-                <button class="icon-btn" id="deleteChatBtn" title="Delete chat">
-                  <i data-i="trash"></i>
-                </button>
+                <div class="menu" id="chatMenu" role="menu" hidden>
+                  <button role="menuitem" id="pinBtn"><i data-i="pin"></i><span>Pin</span></button>
+                  <button role="menuitem" id="summaryBtn"><i data-i="sparkle"></i><span>Summarise</span></button>
+                  <button role="menuitem" id="exportBtn"><i data-i="download"></i><span>Download</span></button>
+                  <button role="menuitem" class="danger" id="deleteChatBtn"><i data-i="trash"></i><span>Delete</span></button>
+                </div>
               </div>
             </header>
 
@@ -269,7 +261,7 @@
                 <textarea
                   id="chatInput"
                   rows="1"
-                  placeholder="Ask Mav anything…"
+                  placeholder="Ask Mav anything — type / for shortcuts"
                   aria-label="Message"
                 ></textarea>
                 <div class="composer-bar">
@@ -283,7 +275,6 @@
                     id="composerAgent"
                     title="Choose who you talk to"
                   ></button>
-                  <span class="composer-hint"><kbd>/</kbd> commands</span>
                   <span class="grow"></span>
                   <button
                     type="button"
@@ -336,14 +327,8 @@
                 >
                   <i data-i="edit"></i> Draft a message
                 </button>
-                <button class="chip" data-fill="Summarise this link: ">
-                  <i data-i="globe"></i> Summarise a link
-                </button>
-                <button
-                  class="chip"
-                  data-prompt="What do you remember about me?"
-                >
-                  <i data-i="brain"></i> What do you remember about me?
+                <button class="chip chip-accent" data-goto="ideas">
+                  <i data-i="sparkle"></i> More ideas
                 </button>
               </div>
               <section class="inbox" id="inboxWrap" hidden>
@@ -354,6 +339,27 @@
                 <ul class="inbox-list" id="inbox"></ul>
               </section>
             </div>
+          </div>
+        </section>
+
+        <!-- ---------- IDEAS ---------- -->
+        <section class="view" id="view-ideas">
+          <div class="page">
+            <header class="view-head">
+              <div>
+                <h1>What Mav can do for you</h1>
+                <p>
+                  Pick one, check it, done. Routines run on their own and only
+                  speak up when there's something worth telling you.
+                </p>
+              </div>
+            </header>
+            <div class="tabs" role="tablist" id="ideaTabs" aria-label="Kinds of ideas"></div>
+            <div class="idea-grid" id="ideaGrid"></div>
+            <p class="hint idea-foot">
+              Anything else? Just ask in a chat, in your own words — “every
+              Friday, remind me to…” becomes a routine.
+            </p>
           </div>
         </section>
 
@@ -386,11 +392,11 @@
               <div class="panel-bar">
                 <p class="hint">
                   Each routine has its own chat, so you can follow up on any
-                  report. Start from a template or build your own.
+                  report. Start from an idea or write your own.
                 </p>
                 <div class="row">
-                  <button class="btn btn-ghost" id="routineTemplate">
-                    <i data-i="bolt"></i> Templates
+                  <button class="btn btn-ghost" data-goto="ideas">
+                    <i data-i="sparkle"></i> Ideas
                   </button>
                   <button class="btn btn-primary" id="routineNew">
                     <i data-i="plus"></i> New routine
@@ -847,13 +853,35 @@
             </div>
 
             <div class="spanel" id="spanel-general">
+              <h3 class="set-group">Your day</h3>
               <div class="card">
+                <div class="setting-row" id="briefingRow">
+                  <div>
+                    <strong>Daily briefing</strong>
+                    <span>Weather, what happened, what needs you — every day at this time.</span>
+                  </div>
+                  <div class="row">
+                    <input type="time" id="briefingTime" value="07:30" aria-label="Briefing time" />
+                    <button class="switch" id="briefingToggle" role="switch" aria-checked="false"
+                      aria-label="Daily briefing"></button>
+                  </div>
+                </div>
                 <div class="setting-row">
                   <div>
-                    <strong>Welcome setup</strong>
-                    <span>Run the three-step setup again: model, a few facts about you, starter routines.</span>
+                    <strong>How proactive is Mav?</strong>
+                    <span
+                      >Quiet only interrupts for what's critical. Chatty also
+                      sends the small stuff (and collects the rest into a daily
+                      recap).</span
+                    >
                   </div>
-                  <button class="btn btn-ghost btn-sm" id="obReopen">Open</button>
+                  <div class="segmented" id="proactivitySeg">
+                    <button data-proactivity="quiet">Quiet</button>
+                    <button data-proactivity="normal" class="is-active">
+                      Normal
+                    </button>
+                    <button data-proactivity="chatty">Chatty</button>
+                  </div>
                 </div>
                 <div class="setting-row">
                   <div>
@@ -892,34 +920,9 @@
                   <button class="btn btn-ghost btn-sm" id="calAdd">Add a calendar</button>
                 </div>
                 <div class="chan-list owner-only" id="calList" hidden></div>
-                <div class="setting-row owner-only">
-                  <div>
-                    <strong>Backup</strong>
-                    <span>Memory, routines, chats, helpers and settings in one file. Restoring replaces everything.</span>
-                  </div>
-                  <div class="row">
-                    <a class="btn btn-ghost btn-sm" id="backupDownload" href="/api/backup" download>Download</a>
-                    <button class="btn btn-ghost btn-sm" id="backupRestore">Restore…</button>
-                    <input type="file" id="backupFile" accept=".gz,.tgz,application/gzip" hidden />
-                  </div>
-                </div>
-                <div class="setting-row">
-                  <div>
-                    <strong>How proactive is Mav?</strong>
-                    <span
-                      >Quiet only interrupts for what's critical. Chatty also
-                      sends the small stuff (and collects the rest into a daily
-                      recap).</span
-                    >
-                  </div>
-                  <div class="segmented" id="proactivitySeg">
-                    <button data-proactivity="quiet">Quiet</button>
-                    <button data-proactivity="normal" class="is-active">
-                      Normal
-                    </button>
-                    <button data-proactivity="chatty">Chatty</button>
-                  </div>
-                </div>
+              </div>
+              <h3 class="set-group">How Mav works</h3>
+              <div class="card">
                 <div class="setting-row">
                   <div>
                     <strong>Memory</strong>
@@ -931,6 +934,14 @@
                   <button class="btn btn-ghost btn-sm" data-goto="memory">
                     Manage
                   </button>
+                </div>
+                <div class="setting-row owner-only" id="codeRow" hidden>
+                  <div>
+                    <strong>Run code and commands</strong>
+                    <span id="codeText">Lets Mav run Python and shell commands to compute, convert and build files for you.</span>
+                  </div>
+                  <button class="switch" id="codeSwitch" role="switch" aria-checked="false"
+                    aria-label="Run code and commands"></button>
                 </div>
                 <div class="setting-row">
                   <div>
@@ -945,59 +956,6 @@
                     aria-label="Read aloud"
                   ></button>
                 </div>
-                <div class="setting-row owner-only">
-                  <div>
-                    <strong>Version</strong>
-                    <span id="versionText">—</span>
-                  </div>
-                  <button class="btn btn-ghost btn-sm" id="versionCheck">
-                    Check for updates
-                  </button>
-                </div>
-                <div class="setting-row" id="briefingRow">
-                  <div>
-                    <strong>Daily briefing</strong>
-                    <span>Weather, what happened, what needs you — every day at this time.</span>
-                  </div>
-                  <div class="row">
-                    <input type="time" id="briefingTime" value="07:30" aria-label="Briefing time" />
-                    <button class="switch" id="briefingToggle" role="switch" aria-checked="false"
-                      aria-label="Daily briefing"></button>
-                  </div>
-                </div>
-                <div class="setting-row" id="accountRow">
-                  <div>
-                    <strong>Password</strong>
-                    <span id="accountText">Only people with the password can open Mav.</span>
-                  </div>
-                  <div class="row">
-                    <button class="btn btn-ghost btn-sm" id="passwordChange">Change</button>
-                    <button class="btn btn-ghost btn-sm" id="signOut">Sign out</button>
-                  </div>
-                </div>
-                <div class="setting-row owner-only" id="codeRow" hidden>
-                  <div>
-                    <strong>Run code and commands</strong>
-                    <span id="codeText">Lets Mav run Python and shell commands to compute, convert and build files for you.</span>
-                  </div>
-                  <button class="switch" id="codeSwitch" role="switch" aria-checked="false"
-                    aria-label="Run code and commands"></button>
-                </div>
-                <div class="setting-row owner-only">
-                  <div>
-                    <strong>Webhook</strong>
-                    <span>Let other services start a routine (a form, a payment, GitHub…). They need the address and its token.</span>
-                  </div>
-                  <button class="btn btn-ghost btn-sm" id="hookShow">Show</button>
-                </div>
-                <div class="setting-row owner-only" id="familyRow" hidden>
-                  <div>
-                    <strong>Family</strong>
-                    <span>Give each person their own sign-in. Their chats, memory and routines stay theirs; the model, connections and helpers stay yours.</span>
-                  </div>
-                  <button class="btn btn-ghost btn-sm" id="familyAdd">Add a person</button>
-                </div>
-                <div class="chan-list owner-only" id="familyList" hidden></div>
                 <div class="setting-row">
                   <div>
                     <strong>Theme</strong>
@@ -1009,10 +967,65 @@
                     <button data-theme-set="dark">Dark</button>
                   </div>
                 </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>Welcome setup</strong>
+                    <span>Run the three-step setup again: model, a few facts about you, starter routines.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="obReopen">Open</button>
+                </div>
+              </div>
+              <h3 class="set-group">Account and data</h3>
+              <div class="card">
+                <div class="setting-row" id="accountRow">
+                  <div>
+                    <strong>Password</strong>
+                    <span id="accountText">Only people with the password can open Mav.</span>
+                  </div>
+                  <div class="row">
+                    <button class="btn btn-ghost btn-sm" id="passwordChange">Change</button>
+                    <button class="btn btn-ghost btn-sm" id="signOut">Sign out</button>
+                  </div>
+                </div>
+                <div class="setting-row owner-only" id="familyRow" hidden>
+                  <div>
+                    <strong>Family</strong>
+                    <span>Give each person their own sign-in. Their chats, memory and routines stay theirs; the model, connections and helpers stay yours.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="familyAdd">Add a person</button>
+                </div>
+                <div class="chan-list owner-only" id="familyList" hidden></div>
+                <div class="setting-row owner-only">
+                  <div>
+                    <strong>Backup</strong>
+                    <span>Memory, routines, chats, helpers and settings in one file. Restoring replaces everything.</span>
+                  </div>
+                  <div class="row">
+                    <a class="btn btn-ghost btn-sm" id="backupDownload" href="/api/backup" download>Download</a>
+                    <button class="btn btn-ghost btn-sm" id="backupRestore">Restore…</button>
+                    <input type="file" id="backupFile" accept=".gz,.tgz,application/gzip" hidden />
+                  </div>
+                </div>
+                <div class="setting-row owner-only">
+                  <div>
+                    <strong>Version</strong>
+                    <span id="versionText">—</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="versionCheck">
+                    Check for updates
+                  </button>
+                </div>
               </div>
 
               <details class="card advanced owner-only" id="advanced">
                 <summary>Advanced</summary>
+                <div class="setting-row owner-only">
+                  <div>
+                    <strong>Webhook</strong>
+                    <span>Let other services start a routine (a form, a payment, GitHub…). They need the address and its token.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="hookShow">Show</button>
+                </div>
                 <div class="engine-head">
                   <div class="engine-title">
                     <span class="dot" id="engineDot"></span>
@@ -1201,6 +1214,7 @@
     <script src="assets/js/connections.js"></script>
     <script src="assets/js/notify.js"></script>
     <script src="assets/js/search.js"></script>
+    <script src="assets/js/ideas.js"></script>
     <script src="assets/js/app.js"></script>
   </body>
 </html>

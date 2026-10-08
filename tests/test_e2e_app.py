@@ -117,6 +117,29 @@ class AppE2E(unittest.TestCase):
         self.assertEqual(job["prompt"], "Tell me if I need an umbrella today.")
         self.assertNotIn("channels", job)  # no other channel set up: reports go everywhere
 
+    def test_3b_ideas_are_one_click_away(self):
+        """Ideas: a routine opens filled in and is saved as is; a one-off
+        request lands in the message box, its first blank selected."""
+        page = self.page()
+        page.click("#suggestions [data-goto='ideas']")
+        page.wait_for_selector("#ideaGrid .idea", timeout=5000)
+        self.assertGreaterEqual(page.locator("#ideaGrid .idea").count(), 15)
+        page.click("#ideaTabs [data-icat='home']")
+        page.locator(".idea", has_text="Meal plan and shopping list").locator("[data-idea-use]").click()
+        page.wait_for_selector("textarea[name=prompt]", timeout=3000)
+        self.assertIn("shopping list", page.input_value("textarea[name=prompt]"))
+        self.assertEqual(page.input_value("input[name=name]"), "Weekly meal plan")
+        page.click("#modalFoot .btn-primary")
+        page.wait_for_selector("#routineList :text('Weekly meal plan')", timeout=8000)
+
+        page.goto(self.stack.url + "#ideas")
+        page.click("#ideaTabs [data-icat='travel']")
+        page.locator(".idea", has_text="A cheaper flight alert").locator("[data-idea-use]").click()
+        page.wait_for_function("document.querySelector('#chatInput').value.startsWith('/watch')", timeout=3000)
+        selected = page.evaluate("(() => { const t = document.querySelector('#chatInput');"
+                                 " return t.value.slice(t.selectionStart, t.selectionEnd); })()")
+        self.assertEqual(selected, "[city]")
+
     def test_4_reload_keeps_the_history(self):
         page = self.page()
         self.send(page, "remember the word pistachio")

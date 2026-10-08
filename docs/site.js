@@ -419,6 +419,18 @@
     steps.forEach((s) => so.observe(s));
   }
 
+  /* ------------------------------------------------------------ tasks filter */
+  const taskBtns = $$("#taskFilters button");
+  taskBtns.forEach((b) =>
+    b.addEventListener("click", () => {
+      taskBtns.forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+      $$("#taskGrid .task").forEach((t) => {
+        t.hidden = b.dataset.tcat !== "all" && t.dataset.tcat !== b.dataset.tcat;
+        t.classList.add("in"); // a card revealed by the filter shows at once
+      });
+    }),
+  );
+
   /* ------------------------------------------------------------ showcase */
   const showTabs = $$("#showTabs button");
   if (showTabs.length) {
