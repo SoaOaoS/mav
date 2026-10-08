@@ -90,6 +90,15 @@ class Routines(unittest.TestCase):
         self.assertFalse(ocjobs.due(job, datetime(2026, 1, 6, 8, 0), None))
         self.assertFalse(ocjobs.due(job, datetime(2026, 1, 5, 8, 0), "2026-01-05 08:00"))
 
+    def test_a_missed_minute_is_caught_up_once(self):
+        job = {"name": "x", "prompt": "p", "time": "08:00"}
+        late = datetime(2026, 1, 5, 8, 3, 20)  # the worker was busy or restarting at 08:00
+        self.assertTrue(ocjobs.due(job, late, "2026-01-04 08:00"))
+        self.assertEqual(ocjobs.run_slot(job, late), datetime(2026, 1, 5, 8, 0))
+        self.assertFalse(ocjobs.due(job, late, "2026-01-05 08:00"))  # already ran for 08:00
+        self.assertFalse(ocjobs.due(job, datetime(2026, 1, 5, 8, 5), None))  # too late
+        self.assertFalse(ocjobs.due(job, datetime(2026, 1, 5, 7, 59), None))  # not yet
+
     def test_validation(self):
         self.assertTrue(ocjobs.validate({"name": "a", "prompt": "p", "every_minutes": 30}))
         self.assertFalse(ocjobs.validate({"name": "a", "prompt": "p"}))

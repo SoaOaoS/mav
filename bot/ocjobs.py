@@ -39,10 +39,14 @@ import json
 import logging
 import re
 import time as _time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 log = logging.getLogger("ocjobs")
+
+# A timed routine still runs if its exact minute was missed (a busy or
+# restarting worker), as long as it is at most this late.
+CATCH_UP_MINUTES = 5
 
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
@@ -186,9 +190,19 @@ def due(job: dict, now: datetime, last_run: str | None) -> bool:
         except ValueError:
             return True
         return (now - last).total_seconds() >= every * 60 - 30
-    if now.strftime("%H:%M") != job["time"]:
+    slot = run_slot(job, now)
+    if not slot <= now.replace(second=0, microsecond=0) < slot + timedelta(minutes=CATCH_UP_MINUTES):
         return False
-    return last_run != now.strftime("%Y-%m-%d %H:%M")
+    return last_run != slot.strftime("%Y-%m-%d %H:%M")
+
+
+def run_slot(job: dict, now: datetime) -> datetime:
+    """The moment this run belongs to: today at the job's time for a timed
+    routine (also when it starts a little late), now for an interval one."""
+    if interval(job) or not job.get("time"):
+        return now.replace(second=0, microsecond=0)
+    hh, mm = (int(x) for x in str(job["time"]).split(":", 1))
+    return now.replace(hour=hh, minute=mm, second=0, microsecond=0)
 
 
 class Scheduler:
@@ -226,7 +240,7 @@ class Scheduler:
         for job in load_jobs(self.jobs_path):
             name = job["name"]
             if due(job, now, state.get(name)):
-                self._mark(name, now.strftime("%Y-%m-%d %H:%M"))
+                self._mark(name, run_slot(job, now).strftime("%Y-%m-%d %H:%M"))
                 log.info("firing job %s", name)
                 task = asyncio.create_task(self._safe_run(job))
                 self._tasks.add(task)  # keep a reference until it finishes
