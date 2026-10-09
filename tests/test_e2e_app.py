@@ -172,6 +172,22 @@ class AppE2E(unittest.TestCase):
         self.assertEqual(page.locator(".msg.me").count(), 1)
         self.assertEqual(texts.count("You said"), 1)
 
+    def test_4b_a_short_window_still_reaches_the_bottom(self):
+        # The new-chat screen taller than the window scrolls, from its top to
+        # its bottom, instead of being cut at both ends.
+        page = self.page(viewport={"width": 1100, "height": 380})
+        page.wait_for_selector("#chat.is-empty #chatInput", state="visible", timeout=8000)
+        page.evaluate("document.querySelector('#chat').scrollTop = 1e6")
+        cut = page.evaluate("""(() => {
+            const chat = document.querySelector('#chat').getBoundingClientRect();
+            const kids = [...document.querySelectorAll('#chat > *')].filter(e => e.offsetParent && getComputedStyle(e).position !== 'absolute');
+            const last = kids[kids.length - 1].getBoundingClientRect();
+            const first = kids[0];
+            return { bottom: last.bottom - chat.bottom, top: first.offsetTop };
+        })()""")
+        self.assertLessEqual(cut["bottom"], 1, "the bottom of the new-chat screen is out of reach")
+        self.assertGreaterEqual(cut["top"], 0, "the top of the new-chat screen is cut")
+
     def test_5_phone_layout(self):
         page = self.page(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
         self.assertTrue(page.locator("#menuBtn").is_visible())
