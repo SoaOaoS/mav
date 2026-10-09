@@ -182,6 +182,34 @@ def add_exchange(sid: str, body: dict, delay: float) -> dict:
     return answer
 
 
+MODEL_FILES = ("image/", "application/pdf", "text/plain")
+
+
+def add_refusal(sid: str, body: dict, mime: str) -> None:
+    """What the engine does when the provider refuses the request: the step
+    ends with an error and a completion time, but no finish."""
+    user = {
+        "info": {"id": uuid.uuid4().hex, "role": "user", "time": {"created": now_ms()}},
+        "parts": body.get("parts", []),
+    }
+    answer = {
+        "info": {"id": uuid.uuid4().hex, "role": "assistant", "agent": body.get("agent") or "assistant",
+                 "time": {"created": now_ms()}},
+        "parts": [],
+    }
+    with LOCK:
+        MESSAGES.setdefault(sid, []).extend([user, answer])
+    _touch(sid, answer)
+    time.sleep(0.2)
+    with LOCK:
+        answer["info"]["time"]["completed"] = now_ms()
+        answer["info"]["error"] = {"name": "APIError", "data": {
+            "message": f"messages.0.content.1: media type {mime} is not supported", "isRetryable": False}}
+    _touch(sid, answer)
+    publish({"type": "session.error", "properties": {"sessionID": sid, "error": answer["info"]["error"]}})
+    idle(sid)
+
+
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -263,6 +291,10 @@ class H(BaseHTTPRequestHandler):
                 visible = " ".join(x.get("text", "") for x in body.get("parts", []) if not x.get("synthetic"))
                 multi = OPTS["multi"] or "research" in visible.lower()
                 target, args = (add_multi_step, (sid, body)) if multi else (add_exchange, (sid, body, 1.0))
+                refused = [x.get("mime", "") for x in body.get("parts", [])
+                           if x.get("type") == "file" and not str(x.get("mime", "")).startswith(MODEL_FILES)]
+                if refused:
+                    target, args = add_refusal, (sid, body, refused[0])
                 threading.Thread(target=target, args=args, daemon=True).start()
                 return self.send(200, {})
             if p[2] == "message":

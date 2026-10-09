@@ -7,9 +7,11 @@ twice; live updates come from the engine's event stream.
 Run: python3 -m unittest discover -s tests -v
 """
 
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 import urllib.request
@@ -19,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "bot"), str(ROOT / "dashboard" / "server")]
 
 import mav_api  # noqa: E402
+import mav_chat  # noqa: E402
 
 
 def free_port() -> int:
@@ -91,6 +94,35 @@ class GroupingTest(unittest.TestCase):
         self.assertEqual(mav_api._tool_detail(task), "researcher")
         self.assertEqual(mav_api._tool_detail(fetch), "example.org")
         self.assertEqual(mav_api._tool_detail({"tool": "read"}), "")
+
+
+class AttachmentTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+
+    def part(self, name, mime, size=10):
+        path = self.dir / name
+        path.write_bytes(b"x" * size)
+        return mav_chat._parts("look", [{"url": f"file://{path}", "mime": mime, "filename": name}])[1]
+
+    def test_the_model_gets_only_what_it_takes(self):
+        self.assertEqual(self.part("a.png", "image/png")["type"], "file")
+        self.assertEqual(self.part("a.pdf", "application/pdf")["mime"], "application/pdf")
+        # Text goes in as text, whatever its exact type.
+        csv = self.part("a.csv", "text/csv")
+        self.assertEqual((csv["type"], csv["mime"]), ("file", "text/plain"))
+        self.assertEqual(self.part("a.json", "application/json")["mime"], "text/plain")
+
+    def test_what_it_refuses_is_described_instead(self):
+        docx = self.part("a.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        self.assertEqual(docx["type"], "text")
+        self.assertTrue(docx["synthetic"])
+        self.assertIn(str(self.dir / "a.docx"), docx["text"])
+        self.assertIn("load_from_chat", docx["text"])
+        big = self.part("big.jpg", "image/jpeg", size=mav_chat.MAX_IMAGE_BYTES + 1)
+        self.assertEqual(big["type"], "text")
+        self.assertEqual(self.part("huge.txt", "text/plain", size=mav_chat.MAX_TEXT_BYTES + 1)["type"], "text")
 
 
 class StreamTest(unittest.TestCase):
@@ -172,6 +204,18 @@ class StreamTest(unittest.TestCase):
         self.assertEqual([m["role"] for m in msgs], ["me", "mav", "me", "mav"])
         self.assertEqual(msgs[1]["text"], done)
         self.assertEqual(msgs[3]["text"], events2[-1][1]["text"])
+
+    def test_a_refused_attachment_is_an_error_at_once(self):
+        # The provider refuses the file: the step ends with an error and no
+        # finish. The person sees why within seconds, not after the idle limit.
+        sid = self.session()
+        t = time.monotonic()
+        events = [mav_api._parse_sse(c) for c in mav_api.stream_answer(
+            "what is in it?", sid, "assistant", raw_session=True,
+            files=[{"url": "https://example.org/a.zip", "mime": "application/zip", "filename": "a.zip"}])]
+        self.assertLess(time.monotonic() - t, 15)
+        self.assertEqual(events[-1][0], "error")
+        self.assertIn("not supported", events[-1][1]["message"])
 
     def test_limit_window_is_detected(self):
         sid = self.session()

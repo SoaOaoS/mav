@@ -636,8 +636,12 @@ def stream_answer(
         if finish is not None and finish != "tool-calls":
             finished_text = text or last_text
             break
-        # Terminal error with no usable answer.
-        if engine_error and finish is not None and not last_has_text:
+        # Terminal error with no usable answer. A request the provider refused
+        # (an attachment it does not take, a payload too large…) ends with an
+        # error and a completion time but no finish: stop there and say so,
+        # instead of waiting for the idle limit with nothing on screen.
+        completed = bool((linfo.get("time") or {}).get("completed"))
+        if engine_error and (completed or (finish is not None and not last_has_text)):
             break
 
     if turn_info:
