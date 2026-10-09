@@ -12,6 +12,7 @@ import os
 import re
 import threading
 import time
+from pathlib import Path
 
 import mav_core
 import mav_engine
@@ -539,15 +540,40 @@ def _model_body(small: bool = False) -> dict:
     return {}
 
 
+# What a model takes as an attachment: images (up to ~5 MB once encoded) and
+# PDFs. Text files go in as text. Anything else (Word, Excel, archives, big
+# images) is refused by the model, so the turn would fail: it is described
+# instead, with its path, for the assistant to open with its tools.
+MODEL_IMAGES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+MAX_IMAGE_BYTES = 3_750_000
+MAX_TEXT_BYTES = 400_000
+TEXT_MIMES = {"application/json", "application/xml", "application/yaml", "application/javascript",
+              "application/x-sh", "application/sql", "image/svg+xml"}
+
+
+def _attachment_part(f: dict) -> dict:
+    url = f.get("url") or ""
+    mime = (f.get("mime") or "application/octet-stream").split(";")[0].strip().lower()
+    name = f.get("filename") or "fichier"
+    path = Path(url[len("file://"):]) if url.startswith("file://") else None
+    try:
+        size = path.stat().st_size if path else None
+    except OSError:
+        size = None
+    if path is None or mime == "application/pdf" or (mime in MODEL_IMAGES and (size or 0) <= MAX_IMAGE_BYTES):
+        return {"type": "file", "url": url, "mime": mime, "filename": name}
+    if (mime.startswith("text/") or mime in TEXT_MIMES) and (size or 0) <= MAX_TEXT_BYTES:
+        return {"type": "file", "url": url, "mime": "text/plain", "filename": name}
+    kb = f", {round(size / 1024)} KB" if size is not None else ""
+    return {"type": "text", "synthetic": True, "text": (
+        f"[The user attached the file \"{name}\" ({mime}{kb}). It is saved at {path} and cannot be "
+        "shown to you directly: open or convert it with your tools (with the code sandbox, copy it in "
+        f"first with load_from_chat, name \"{path.name}\") before answering about its content.]")}
+
+
 def _parts(prompt: str, files: list) -> list:
     parts: list[dict] = [{"type": "text", "text": prompt}]
-    for f in files or []:
-        parts.append({
-            "type": "file",
-            "url": f.get("url"),
-            "mime": f.get("mime") or "application/octet-stream",
-            "filename": f.get("filename") or "fichier",
-        })
+    parts += [_attachment_part(f) for f in files or []]
     return parts
 
 
