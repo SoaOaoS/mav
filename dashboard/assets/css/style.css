@@ -1347,6 +1347,72 @@ h3.sub {
 .thinking-dots span:nth-child(3) {
   animation-delay: 0.3s;
 }
+/* Waiting for the first word: the helper's avatar pulses in its colour, the
+   dots bounce in it, and a light sweeps across what it is doing. */
+.msg.is-waiting .agent-av {
+  animation: wait-pulse 1.6s ease-out infinite;
+}
+.msg .thinking-row.is-wait {
+  min-height: 1.6rem;
+  animation: fade 0.3s var(--ease);
+}
+.msg .thinking-row.is-wait .thinking-dots {
+  color: var(--agent, var(--accent));
+}
+.msg .thinking-row.is-wait .thinking-dots span {
+  width: 7px;
+  height: 7px;
+}
+.msg.is-streaming .bubble > .thinking-row.is-wait:last-child::after {
+  content: none;
+}
+.wait-label {
+  background: linear-gradient(
+      90deg,
+      var(--ink-3) 0%,
+      var(--ink-3) 35%,
+      var(--ink) 50%,
+      var(--ink-3) 65%,
+      var(--ink-3) 100%
+    )
+    0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: wait-sweep 2s linear infinite;
+}
+.wait-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  opacity: 0.75;
+}
+@keyframes wait-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@keyframes wait-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent, var(--accent)) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg.is-waiting .agent-av,
+  .wait-label,
+  .msg .thinking-row.is-wait .thinking-dots span {
+    animation: none;
+  }
+  .wait-label {
+    color: var(--ink-3);
+  }
+}
 .divider {
   display: flex;
   align-items: center;

@@ -94,6 +94,18 @@ class AppE2E(unittest.TestCase):
         page.locator(".tool-step summary").first.click()
         page.wait_for_selector(".tool-step[open] .tool-body", timeout=3000)
 
+    def test_2b_a_reply_shows_it_is_working_before_its_first_word(self):
+        page = self.page()
+        self.send(page, "hello, how are you?")
+        # The fake engine waits a second before answering: the reply is there
+        # at once, saying it is thinking, then the answer replaces it.
+        page.wait_for_selector(".msg.is-waiting .thinking-row.is-wait .wait-label", timeout=3000)
+        self.assertIn("Thinking", page.locator(".msg.is-waiting .wait-label").inner_text())
+        page.wait_for_function(
+            "[...document.querySelectorAll('.bubble')].some(b => b.textContent.includes('You said'))",
+            timeout=20000)
+        self.assertEqual(page.locator(".thinking-row.is-wait").count(), 0)
+
     def test_3_create_a_routine(self):
         page = self.page()
         page.goto(self.stack.url + "#routines")

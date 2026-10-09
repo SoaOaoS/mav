@@ -312,6 +312,7 @@ async function send(raw, opts = {}) {
     sid,
     reply: { role: "mav", text: "", agent, ts: Date.now() },
     tools: [],
+    files: files.length,
     thinking: null,
     el: null,
     raf: 0,
@@ -334,7 +335,49 @@ async function send(raw, opts = {}) {
       ),
     );
 
+  showWaiting(st);
   attachStream(st, qs, { wasNew, prompt: text, routineDraft });
+}
+
+/* Before the first word: the reply is already on screen, with its helper,
+   and says what is going on (and for how long), so a slow start never looks
+   like a crash. */
+const WAIT_LINES = [
+  [0, "Thinking"],
+  [8, "Still thinking"],
+  [25, "Working on it, this one takes a moment"],
+  [90, "Taking longer than usual"],
+];
+function waitLabel(st, s) {
+  let label = st.files ? "Reading your file" : WAIT_LINES[0][1];
+  for (const [at, l] of WAIT_LINES) if (at && s >= at) label = l;
+  if (st.tools.some((t) => t.status === "running" || t.status === "pending"))
+    label = s >= 90 ? "Taking longer than usual" : "Working";
+  return label;
+}
+function paintWaiting(st, bubble) {
+  const s = Math.floor((Date.now() - st.reply.ts) / 1000);
+  let row = bubble.querySelector(".thinking-row.is-wait");
+  if (!row) {
+    bubble.innerHTML = `<div class="thinking-row is-wait">${dots()}<span class="wait-label"></span><span class="wait-time"></span></div>`;
+    row = bubble.firstElementChild;
+  }
+  // Updated in place: the animations keep running smoothly.
+  const label = `${waitLabel(st, s)}…`;
+  const time = s >= 3 ? fmtSeconds(s * 1000) : "";
+  const lab = row.querySelector(".wait-label");
+  const tim = row.querySelector(".wait-time");
+  if (lab.textContent !== label) lab.textContent = label;
+  if (tim.textContent !== time) tim.textContent = time;
+}
+function showWaiting(st) {
+  refreshStreamingUI();
+  paintStream(st);
+  clearInterval(st.tick);
+  st.tick = setInterval(() => {
+    if (st.done || st.reply.text) return clearInterval(st.tick);
+    paintStream(st);
+  }, 1000);
 }
 
 /* Render one buffered event into the stream's reply + DOM (if on screen). */
@@ -351,7 +394,11 @@ function paintStream(st) {
     }
     if (st.el) {
       const stick = nearBottom();
-      st.el.querySelector(".bubble").innerHTML = mdToHtml(st.reply.text || "");
+      const bubble = st.el.querySelector(".bubble");
+      const waiting = !st.reply.text && !st.done;
+      st.el.classList.toggle("is-waiting", waiting);
+      if (waiting) paintWaiting(st, bubble);
+      else bubble.innerHTML = mdToHtml(st.reply.text || "");
       hydrateCharts(st.el);
       renderToolSteps(st.el.querySelector(".msg-tools"), st.tools);
       if (stick) scrollToBottom(true);
@@ -540,7 +587,7 @@ async function reattach(sid) {
     error: null,
   };
   streams.set(sid, st);
-  refreshStreamingUI();
+  showWaiting(st);
   const url = `/api/stream?session=${encodeURIComponent(sid)}&from=0`;
   try {
     await consume(st, url, null);
@@ -574,6 +621,7 @@ async function finalizeStream(st, opts = {}) {
   const { wasNew = false, prompt = "", routineDraft = null } = opts;
   st.done = true;
   if (st.raf) cancelAnimationFrame(st.raf);
+  clearInterval(st.tick);
   st.raf = 0;
   if (st.thinking) st.thinking.remove();
   streams.delete(st.sid);
