@@ -3276,8 +3276,25 @@ body.is-loading .topbar {
 .chat .below {
   display: none;
 }
+/* Centred when it fits; when it does not (a phone, a short window, a full
+   inbox) it scrolls from the top instead of being cut at both ends: the two
+   spacers share the free space, and shrink to nothing without any. */
 .chat.is-empty {
-  justify-content: center;
+  overflow-y: auto;
+  padding-top: 3.4rem; /* room under the floating chat head */
+}
+.chat.is-empty::before,
+.chat.is-empty::after {
+  content: "";
+  flex: 1 0 0;
+}
+.chat.is-empty > * {
+  flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  .chat.is-empty {
+    padding-top: 0; /* the chat head is hidden there */
+  }
 }
 .chat.is-empty .chat-head {
   position: absolute;
