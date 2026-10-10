@@ -960,3 +960,16 @@ class RunRegistry(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EngineVersion(unittest.TestCase):
+    """The engine is pinned, to the same version everywhere it is installed."""
+
+    def test_docker_and_installer_agree(self):
+        root = Path(__file__).resolve().parents[1]
+        docker = re.search(r"^ARG OPENCODE_VERSION=(\S+)$", (root / "Dockerfile").read_text(), re.M)
+        installer = re.search(r'^OPENCODE_VERSION="\$\{MAV_OPENCODE_VERSION:-([^}]+)\}"$',
+                              (root / "install.sh").read_text(), re.M)
+        self.assertTrue(docker and installer)
+        self.assertRegex(docker.group(1), r"^\d+\.\d+\.\d+$")  # never "latest"
+        self.assertEqual(docker.group(1), installer.group(1))

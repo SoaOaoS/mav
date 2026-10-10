@@ -195,8 +195,8 @@ authenticating proxy). Stored in `BOT_DIR/auth.json` (PBKDF2-SHA256).
 (Mav Cloud with your own key) has no family, password, backup, updates,
 advanced section, webhook or "Run code" switch: the platform does those
 (e-mail sign-in, nightly backups and export, updates, a sandbox that is always
-on). CloudMav also has no model settings, costs and budget, or debates. Parts
-that are off are hidden (`/api/auth/state` carries `edition` and `features`)
+on). CloudMav also has no model settings, or costs and budget. Parts that
+are off are hidden (`/api/auth/state` carries `edition` and `features`)
 and their routes answer 404; in the cloud, Ollama (local) and the "Your files"
 and "Web browser" connections are not offered.
 

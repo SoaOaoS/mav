@@ -416,10 +416,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, mav_store.get_notifications())
             if path == "/api/notification":
                 return self._send(200, mav_store.get_notification(int(p.get("id", 0) or 0)))
-            if path == "/api/debates":
-                return self._send(200, mav_store.get_debates())
-            if path == "/api/debate":
-                return self._send(200, mav_store.get_debate(p.get("id", "")))
             if path == "/api/agents":
                 return self._send(200, mav_engine.get_agents())
             if path == "/api/connections":

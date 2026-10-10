@@ -36,10 +36,9 @@ class ModelManagedE2E(unittest.TestCase):
             self.assertFalse(page.locator("#smallModel").is_visible())
             res = page.request.post(stack.url + "api/config/provider", data={"preset": "openai", "key": "x"})
             self.assertEqual(res.status, 403)
-            # Nor costs, debates, or what the platform does (family, backup,
+            # Nor costs, or what the platform does (family, backup,
             # updates, advanced); the Mav Cloud account is one click away.
             self.assertFalse(page.locator("[data-stab='usage']").is_visible())
-            self.assertFalse(page.locator(".nav-item[data-view='debates']").is_visible())
             for sel in ("#familyRow", "#backupRestore", "#versionCheck", "#advanced", "#codeRow"):
                 self.assertFalse(page.locator(sel).is_visible(), sel)
             self.assertTrue(page.locator("a[href='/account']").is_visible())

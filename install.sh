@@ -39,6 +39,8 @@ ENV_SERVER="${MAV_ENV_SERVER:-/etc/mav-server.env}"
 COMPOSE_FILE="${MAV_COMPOSE_FILE:-/etc/mav/docker-compose.yml}"
 PG_VOLUME="${MAV_PG_VOLUME:-mav_pgdata}"
 PG_CONTAINER="${MAV_PG_CONTAINER:-mav-postgres}"
+# The agent engine, pinned (same as the Dockerfile): taken up on purpose, once tested.
+OPENCODE_VERSION="${MAV_OPENCODE_VERSION:-1.18.35}"
 OPENCODE_PORT="${MAV_OPENCODE_PORT:-4096}"
 LOG="${MAV_INSTALL_LOG:-/var/log/mav-install.log}"
 # Where `mav update` downloads new versions from, and which ones.
@@ -564,12 +566,13 @@ install_engine() {
     ok "Agent engine already installed ($("$bin" --version 2>/dev/null || echo '?'))"
     return
   fi
-  TASK_SOFT=1 task "Installing the agent engine (opencode)" \
-    su - "$user" -c 'curl -fsSL https://opencode.ai/install | bash'
+  [[ "$OPENCODE_VERSION" =~ ^[0-9A-Za-z.+-]+$ ]] || { warn "MAV_OPENCODE_VERSION is not a version: $OPENCODE_VERSION"; return 0; }
+  TASK_SOFT=1 task "Installing the agent engine (opencode $OPENCODE_VERSION)" \
+    su - "$user" -c "curl -fsSL https://opencode.ai/install | bash -s -- --version $OPENCODE_VERSION"
   [[ $DRY_RUN -eq 1 ]] && return
   bin="$(resolve_opencode_bin "$home" "$user")"
   if [[ -z "$bin" ]]; then
-    warn "opencode not found — install it with: curl -fsSL https://opencode.ai/install | bash"
+    warn "opencode not found — install it with: curl -fsSL https://opencode.ai/install | bash -s -- --version $OPENCODE_VERSION"
   fi
   return 0
 }

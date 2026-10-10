@@ -1,4 +1,4 @@
-"""What Mav keeps: memory, notifications, drafts and mail, debates, interests,
+"""What Mav keeps: memory, notifications, drafts and mail, interests,
 search, usage and speed, channels, calendars and backups.
 
 Part of the web app server (see mav_api.py).
@@ -382,30 +382,6 @@ def draft_notify(draft_id: int) -> dict:
         return {"ok": False, "error": str(exc)[:200]}
 
 
-# Multi-agent debate threads are written by the opencode debate tools; the web
-# app shows them live. Reading is best-effort: an absent file just means no
-# debate has been opened yet.
-def get_debates() -> dict:
-    try:
-        from ocdebates import list_threads  # noqa: PLC0415
-
-        return {"debates": list_threads()}
-    except Exception:  # noqa: BLE001
-        return {"debates": []}
-
-
-def get_debate(thread_id: str) -> dict:
-    if not thread_id:
-        return {"error": "missing id"}
-    try:
-        from ocdebates import get_thread  # noqa: PLC0415
-
-        thread = get_thread(thread_id)
-    except Exception:  # noqa: BLE001
-        thread = None
-    return {"debate": thread}
-
-
 def interests_autonomy() -> str:
     """How much latitude Mav has to spawn its own watchdogs."""
     level = "suggest"
@@ -652,4 +628,4 @@ def ensure_schema() -> None:
         pass
 
 
-__all__ = ['forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_debate', 'get_debates', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']
+__all__ = ['forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']

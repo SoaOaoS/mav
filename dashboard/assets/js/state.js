@@ -69,12 +69,11 @@ const VIEW_TITLES = {
   ideas: "Ideas",
   routines: "Routines",
   memory: "Memory",
-  debates: "Debates",
   settings: "Settings",
 };
 
 function go(view, sub, { push = true } = {}) {
-  if (!$(`#view-${view}`) || (view === "debates" && (!isOwner() || !feature("debates")))) view = "chat";
+  if (!$(`#view-${view}`)) view = "chat";
   state.view = view;
   $$(".nav-item").forEach((b) =>
     b.classList.toggle("is-active", b.dataset.view === view),
@@ -89,7 +88,6 @@ function go(view, sub, { push = true } = {}) {
   if (view === "memory") loadMemory();
   if (view === "ideas") renderIdeas();
   if (view === "routines") openRoutinesTab(sub || currentRoutinesTab());
-  if (view === "debates") loadDebates();
   if (view === "chat" && !state.chat.id) refreshInbox();
   if (push) {
     const h =

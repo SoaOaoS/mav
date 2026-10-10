@@ -285,8 +285,17 @@ function nearBottom() {
   );
 }
 function scrollToBottom(force = false) {
-  if (force || nearBottom()) messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (!(force || nearBottom())) return;
+  // At once: a smooth scroll is still on its way when the answer grows or a
+  // chart is drawn, and stops short of the bottom.
+  messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "instant" });
 }
+// What is drawn after the thread (images, charts) makes it taller: a reader
+// who was at the bottom stays there.
+let atBottom = true;
+messagesEl.addEventListener("scroll", () => (atBottom = nearBottom()), { passive: true });
+messagesEl.addEventListener("load", () => atBottom && scrollToBottom(true), true);
+new ResizeObserver(() => atBottom && scrollToBottom(true)).observe(messagesEl);
 
 /* Message actions + code copy */
 messagesEl.addEventListener("click", async (e) => {

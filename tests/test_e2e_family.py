@@ -69,8 +69,7 @@ class FamilyE2E(unittest.TestCase):
         self.assertNotIn("Owner secret plans", page.locator("#convList").inner_text())
         page.goto(self.stack.url + "#settings/model")
         page.wait_for_selector("#spanel-general.is-active", timeout=5000)
-        for sel in ("[data-stab='model']", "[data-stab='helpers']", "#backupDownload", "#familyRow",
-                    "[data-view='debates']"):
+        for sel in ("[data-stab='model']", "[data-stab='helpers']", "#backupDownload", "#familyRow"):
             self.assertFalse(page.locator(sel).is_visible(), sel)
         self.assertIn("Alex", page.locator("#accountText").inner_text())
 
