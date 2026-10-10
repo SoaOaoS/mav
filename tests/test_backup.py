@@ -119,6 +119,31 @@ class BackupFilesTest(unittest.TestCase):
         mav_backup.restore(target, data)
         self.assertEqual(len(mav_backup.safety_copies(target)), mav_backup.KEEP_SAFETY)
 
+    def test_the_engines_chat_database_comes_back(self):
+        # Current engines keep chats in SQLite next to storage/, in WAL mode:
+        # the backup copies it through SQLite (WAL included), the restore
+        # drops a stale journal so it is not replayed over the restored file.
+        import sqlite3
+
+        db = self.places.storage_dir.parent / "opencode.db"
+        live = sqlite3.connect(db)
+        live.execute("PRAGMA journal_mode=WAL")
+        live.execute("CREATE TABLE session (id TEXT, title TEXT)")
+        with live:
+            live.execute("INSERT INTO session VALUES ('s1', 'Trip to Lisbon')")
+        data = self.backup()  # while the engine still holds it open
+        live.close()
+        self.assertIn("opencode-db/opencode.db", self.names(data))
+        self.assertFalse(any(n.startswith("opencode-db/") for n in self.names(self.backup(include_chats=False))))
+
+        target = self.make_places(self.tmp / "e", NO_DB)
+        tdb = target.storage_dir.parent / "opencode.db"
+        tdb.with_name("opencode.db-wal").write_bytes(b"stale journal")
+        mav_backup.restore(target, data)
+        self.assertFalse(tdb.with_name("opencode.db-wal").exists())
+        rows = sqlite3.connect(tdb).execute("SELECT title FROM session").fetchall()
+        self.assertEqual(rows, [("Trip to Lisbon",)])
+
     def test_hostile_archives_are_refused(self):
         bad = [
             {"../../etc/passwd": b"x"},
@@ -128,6 +153,7 @@ class BackupFilesTest(unittest.TestCase):
             {"config/other.env": b"x"},
             {"db/pg_authid.csv": b"x"},
             {"db/sub/facts.csv": b"x"},
+            {"opencode-db/other.db": b"x"},
         ]
         target = self.make_places(self.tmp / "d", NO_DB)
         for entries in bad:

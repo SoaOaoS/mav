@@ -6,7 +6,8 @@ A backup is one ``.tar.gz``::
     db/<table>.csv             every Mav table (COPY … CSV HEADER)
     bot/…                      routines, password, keys, usage, media…
     opencode-config/…          model, helpers, connections, instructions
-    opencode-storage/…         chat history (optional)
+    opencode-storage/…         chat history, older engines (optional)
+    opencode-db/opencode.db    chat history, current engines (optional)
     config/server.env          API keys
 
 It works the same with the installer and with Docker: the database goes
@@ -29,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
-FORMAT = 1
+FORMAT = 2  # 2: the engine's chat database (opencode-db/)
 TABLES = (
     "conversations", "facts", "preferences", "watch_items", "documents",
     "notifications", "events", "notify_digest", "drafts", "actions", "interests",
@@ -40,7 +41,35 @@ KEEP_SAFETY = 3                      # pre-restore backups kept in bot/backups
 _SKIP_DIRS = {"venv", "__pycache__", "node_modules", "backups", ".git"}
 _SKIP_SUFFIX = {".py", ".pyc", ".log", ".tmp"}
 _SKIP_NAMES = {"requirements.txt", "README.md"}
-ROOTS = ("db", "bot", "opencode-config", "opencode-storage", "config")
+ROOTS = ("db", "bot", "opencode-config", "opencode-storage", "opencode-db", "config")
+ENGINE_DB = "opencode.db"  # next to storage/: where current engines keep chats
+
+
+def _engine_db(places: "Places") -> Path:
+    return places.storage_dir.parent / ENGINE_DB
+
+
+def _engine_db_copy(src: Path) -> bytes | None:
+    """A consistent copy of the engine's SQLite database, even while it is
+    written to (its WAL included): SQLite's own backup, never a file copy."""
+    import sqlite3  # noqa: PLC0415
+
+    if not src.is_file():
+        return None
+    fd, tmp = tempfile.mkstemp(prefix=".mav-enginedb-", suffix=".db")
+    os.close(fd)
+    try:
+        source = sqlite3.connect(f"file:{src}?mode=ro", uri=True, timeout=10)
+        try:
+            dest = sqlite3.connect(tmp)
+            with dest:
+                source.backup(dest)
+            dest.close()
+        finally:
+            source.close()
+        return Path(tmp).read_bytes()
+    finally:
+        Path(tmp).unlink(missing_ok=True)
 
 
 @dataclass
@@ -142,6 +171,14 @@ def create(places: Places, out, *, include_chats: bool = True) -> dict:
         add_tree(places.config_dir, "opencode-config")
         if include_chats:
             add_tree(places.storage_dir, "opencode-storage")
+            try:
+                db = _engine_db_copy(_engine_db(places))
+            except Exception as exc:  # noqa: BLE001
+                db = None
+                manifest["engine_db_error"] = str(exc)[:200]
+            if db is not None:
+                _add_bytes(tar, f"opencode-db/{ENGINE_DB}", db)
+                manifest["parts"].append("opencode-db")
         if places.env_server.is_file():
             tar.add(str(places.env_server), arcname="config/server.env", recursive=False)
             manifest["parts"].append("config")
@@ -168,6 +205,8 @@ def _safe_members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
         if path.parts[0] not in ROOTS and m.name != "manifest.json":
             raise BackupError(f"Unknown part in the backup: {m.name}")
         if path.parts[0] == "config" and m.name != "config/server.env":
+            raise BackupError(f"Unknown file in the backup: {m.name}")
+        if path.parts[0] == "opencode-db" and m.name != f"opencode-db/{ENGINE_DB}":
             raise BackupError(f"Unknown file in the backup: {m.name}")
         if path.parts[0] == "db" and (len(path.parts) != 2 or path.stem not in TABLES or path.suffix != ".csv"):
             raise BackupError(f"Unknown table in the backup: {m.name}")
@@ -269,11 +308,17 @@ def restore(places: Places, data: bytes) -> dict:
                 tables[path.stem] = blob
             elif path.parts[0] == "config":
                 writes.append((places.env_server, blob))
+            elif path.parts[0] == "opencode-db":
+                writes.append((_engine_db(places), blob))
             elif path.parts[0] in targets:
                 writes.append((targets[path.parts[0]].joinpath(*path.parts[1:]), blob))
     # The database first, in one transaction: if it fails, no file has moved.
     counts = _restore_tables(places, tables) if tables else {}
     for dest, blob in writes:
+        if dest == _engine_db(places):
+            # The restored database is whole: an old journal must not be replayed on it.
+            for side in ("-wal", "-shm"):
+                dest.with_name(dest.name + side).unlink(missing_ok=True)
         _write(dest, blob, places)
     return {
         "ok": True, "files": len(writes), "tables": counts, "safety": safety.name,
