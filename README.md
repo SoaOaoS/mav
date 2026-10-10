@@ -216,20 +216,6 @@ Static analysis (**CodeQL**) and a supply-chain posture check
 protection are enabled. To report a vulnerability privately, see
 [SECURITY.md](SECURITY.md).
 
-## Upgrading from the Telegram version
-
-Telegram support was removed: Mav is now a web app (installable on your phone)
-with push notifications. Older versions of `mav update` only reinstalled the
-local copy, so run the one-line installer once
-(`curl -fsSL https://raw.githubusercontent.com/SoaOaoS/mav/main/get.sh | sudo bash`)
-and choose **Update**; from then on `mav update` downloads new versions by
-itself. The update migrates for you — it replaces the
-`mav-bot` service with `mav-worker`, keeps your memory (it now lives in
-Postgres; the old `memory.json` is imported automatically), your routines, your
-model and your settings. Helper files you already had in
-`~/.config/opencode/agent/` are left untouched; the new everyday helpers are
-added next to them.
-
 ## Versions
 
 Every push to `main` is tagged with a [semantic version](https://semver.org)
@@ -265,7 +251,7 @@ mav/
 ├── scripts/            # database schema, version helper
 ├── tests/              # unit and script tests (run by CI)
 ├── systemd/            # service templates
-└── docs/               # website, docs, roadmap (ROADMAP.md, PLAN.md), brand (BRAND.md), screenshots
+└── docs/               # website, docs, roadmap (ROADMAP.md), brand (BRAND.md), screenshots
 ```
 
 Hacking on the web app without a model: run

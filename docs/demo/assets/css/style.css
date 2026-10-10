@@ -1347,6 +1347,72 @@ h3.sub {
 .thinking-dots span:nth-child(3) {
   animation-delay: 0.3s;
 }
+/* Waiting for the first word: the helper's avatar pulses in its colour, the
+   dots bounce in it, and a light sweeps across what it is doing. */
+.msg.is-waiting .agent-av {
+  animation: wait-pulse 1.6s ease-out infinite;
+}
+.msg .thinking-row.is-wait {
+  min-height: 1.6rem;
+  animation: fade 0.3s var(--ease);
+}
+.msg .thinking-row.is-wait .thinking-dots {
+  color: var(--agent, var(--accent));
+}
+.msg .thinking-row.is-wait .thinking-dots span {
+  width: 7px;
+  height: 7px;
+}
+.msg.is-streaming .bubble > .thinking-row.is-wait:last-child::after {
+  content: none;
+}
+.wait-label {
+  background: linear-gradient(
+      90deg,
+      var(--ink-3) 0%,
+      var(--ink-3) 35%,
+      var(--ink) 50%,
+      var(--ink-3) 65%,
+      var(--ink-3) 100%
+    )
+    0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: wait-sweep 2s linear infinite;
+}
+.wait-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  opacity: 0.75;
+}
+@keyframes wait-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@keyframes wait-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent, var(--accent)) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg.is-waiting .agent-av,
+  .wait-label,
+  .msg .thinking-row.is-wait .thinking-dots span {
+    animation: none;
+  }
+  .wait-label {
+    color: var(--ink-3);
+  }
+}
 .divider {
   display: flex;
   align-items: center;
@@ -3210,8 +3276,25 @@ body.is-loading .topbar {
 .chat .below {
   display: none;
 }
+/* Centred when it fits; when it does not (a phone, a short window, a full
+   inbox) it scrolls from the top instead of being cut at both ends: the two
+   spacers share the free space, and shrink to nothing without any. */
 .chat.is-empty {
-  justify-content: center;
+  overflow-y: auto;
+  padding-top: 3.4rem; /* room under the floating chat head */
+}
+.chat.is-empty::before,
+.chat.is-empty::after {
+  content: "";
+  flex: 1 0 0;
+}
+.chat.is-empty > * {
+  flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  .chat.is-empty {
+    padding-top: 0; /* the chat head is hidden there */
+  }
 }
 .chat.is-empty .chat-head {
   position: absolute;
@@ -3598,136 +3681,6 @@ button.memory-updated:hover {
 }
 #spanel-connections .mcp-cards .empty {
   padding: 0;
-}
-
-/* ---------- Debates ---------- */
-.debates {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  margin-top: 0.4rem;
-}
-.deb-card {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.9rem 1rem;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-.deb-card:hover {
-  border-color: var(--accent);
-  background: var(--bg-hover);
-}
-.deb-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-.deb-card-head strong {
-  font-size: 0.98rem;
-  font-weight: 600;
-}
-.deb-meta {
-  flex: none;
-  font-size: 0.76rem;
-  color: var(--ink-3);
-}
-.deb-q {
-  margin: 0.35rem 0 0;
-  font-size: 0.86rem;
-  color: var(--ink-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.deb-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.6rem;
-}
-.deb-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #fff;
-  background: var(--ac);
-  border: 2px solid var(--bg-elev);
-  margin-left: -6px;
-}
-.deb-avatar:first-child {
-  margin-left: 0;
-}
-.deb-open {
-  margin-left: auto;
-  font-size: 0.78rem;
-  color: var(--ink-3);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-.deb-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  max-height: min(64vh, 620px);
-  overflow-y: auto;
-  padding: 0.1rem 0.2rem;
-}
-.deb-question {
-  background: var(--bg-sunk);
-  border-radius: var(--radius-sm);
-  padding: 0.7rem 0.9rem;
-}
-.deb-tag {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-}
-.deb-question p {
-  margin: 0.25rem 0 0;
-  font-weight: 500;
-}
-.deb-msg {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.deb-who {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.8rem;
-  color: var(--ink-2);
-}
-.deb-who .deb-avatar {
-  margin-left: 0;
-  border-color: transparent;
-}
-.deb-who time {
-  margin-left: auto;
-  color: var(--ink-3);
-  font-size: 0.74rem;
-}
-.deb-body {
-  margin-left: 1.9rem;
-  border-left: 3px solid var(--ac);
-  border-radius: var(--radius-sm);
-  padding: 0.15rem 0.2rem 0.15rem 0.1rem;
-  background: transparent;
 }
 
 /* ---------- Message queue (typed while Mav is answering) ---------- */
@@ -4584,7 +4537,6 @@ body.has-onboarding {
 /* Parts of the app this version of Mav does not have (mav_edition.py). */
 body.no-model .f-model,
 body.no-usage .f-usage,
-body.no-debates .f-debates,
 body.no-family .f-family,
 body.no-password .f-password,
 body.no-backup .f-backup,

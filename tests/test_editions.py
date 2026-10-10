@@ -1,7 +1,7 @@
 """Each version of Mav has only its own parts (dashboard/server/mav_edition.py):
 self-hosted has everything; MyMav (Mav Cloud, your key) has no family,
 password, backup, updates, advanced or webhook; CloudMav has neither those
-nor the model settings, costs and debates.
+nor the model settings and costs.
 
 Run: python3 -m unittest tests.test_editions -v
 """
@@ -34,7 +34,7 @@ class TableTest(unittest.TestCase):
         for part in ("family", "password", "backup", "updates", "advanced", "webhook", "code_setting"):
             self.assertFalse(t["mymav"][part], part)
             self.assertFalse(t["cloudmav"][part], part)
-        for part in ("model", "usage", "debates"):
+        for part in ("model", "usage"):
             self.assertTrue(t["mymav"][part], part)
             self.assertFalse(t["cloudmav"][part], part)
 

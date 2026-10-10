@@ -6,8 +6,8 @@
                e-mail sign-in, nightly backups and export, updates, one
                account per subscription).
   cloudmav   — Mav Cloud with the model included: as MyMav, and no model
-               settings, no costs and budget (the plan's allowance is on the
-               account page) and no debates (they burn the allowance).
+               settings and no costs and budget (the plan's allowance is on
+               the account page).
 
 Set by Mav Cloud with MAV_EDITION; MAV_MODEL_MANAGED=1 alone (older Mav
 Cloud) means cloudmav. One table below decides; the API refuses the routes of
@@ -24,7 +24,6 @@ EDITIONS = ("self", "mymav", "cloudmav")
 _TABLE: dict[str, tuple[bool, bool, bool]] = {
     "model":    (True,  True,  False),   # choose the model, its key, the background model
     "usage":    (True,  True,  False),   # costs per chat and routine, monthly budget
-    "debates":  (True,  True,  False),   # multi-helper debates
     "family":   (True,  False, False),   # other people's accounts
     "password": (True,  False, False),   # Mav's own sign-in
     "backup":   (True,  False, False),   # download / restore in the app
@@ -39,7 +38,6 @@ _ROUTES: dict[str, tuple[tuple[str, str], ...]] = {
     "model": (("POST", "/api/config/provider"), ("POST", "/api/config/provider/test"),
               ("POST", "/api/usage/small-model")),
     "usage": (("POST", "/api/usage/budget"),),
-    "debates": (("*", "/api/debates"), ("*", "/api/debate")),
     "family": (("*", "/api/family"), ("*", "/api/family/")),
     "password": (("POST", "/api/auth/password"),),
     "backup": (("*", "/api/backup"), ("*", "/api/backup/")),

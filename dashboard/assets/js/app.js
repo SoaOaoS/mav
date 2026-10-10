@@ -819,7 +819,6 @@ setInterval(() => {
   if (!LIVE || document.hidden) return;
   refreshStatus();
   if (state.view === "chat" && !state.chat.id) refreshInbox();
-  if (state.view === "debates" && !debateOpenId) loadDebates();
 }, 30000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && LIVE) {
