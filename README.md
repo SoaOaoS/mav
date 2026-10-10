@@ -71,10 +71,12 @@ included). [Compare the plans](https://getmav.dev/#cloud).
   alerts, each with _Tell me more_.
 - **Your model** — Anthropic, OpenAI, Ollama (local or cloud), OpenRouter or
   any OpenAI-compatible API. Switch anytime from Settings → Model: no terminal.
-- **Connections** — plug in other apps and services from Settings →
-  Connections: pick one from the catalog (read web pages, web browser, Brave
-  search, time zones, your files, Notion, Home Assistant, GitHub) and fill in
-  its key, or add any MCP server yourself.
+- **Connections** — 60+ apps and services ready in Settings → Connections,
+  each with a step-by-step guide: web search, Wikipedia, weather, maps and
+  flights, Notion, Todoist, Linear, Slack, Jira, HubSpot, Zapier, GitHub,
+  Stripe, stock and crypto prices, Home Assistant and more. Fill in a key, or
+  just sign in for the services that support it — or add any MCP server
+  yourself.
 - **Know what it costs** — Settings → Usage shows this month's spend, tokens
   and a 30-day chart, split between chats, routines and background work. Set a
   monthly budget (warn at 80 % / 100 %, or stop), and pick a cheap model for

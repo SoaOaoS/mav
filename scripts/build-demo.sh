@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 out=docs/demo
 rm -rf "$out"
 mkdir -p "$out"
-cp -r dashboard/assets dashboard/icons dashboard/manifest.webmanifest "$out/"
+cp -r dashboard/assets dashboard/icons dashboard/manifest.webmanifest dashboard/mcp-catalog.json "$out/"
 # data-demo: no service worker on the static copy, and the page says it is
 # a demo before any request is made.
 sed -e 's|<html lang="en">|<html lang="en" data-demo="1">|' \

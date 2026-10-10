@@ -263,7 +263,21 @@ def mcp_oauth_remove(name: str) -> dict:
     return {"ok": True}
 
 
-SECRET_HINTS = ("token", "key", "secret", "password", "authorization", "auth")
+SECRET_HINTS = ("token", "key", "secret", "password", "authorization", "auth", "uri", "connection")
+MASK = "••••••••"
+# A path segment that looks like a credential: long, and mixing letters and digits.
+_URL_SECRET = re.compile(r"(?=[\w-]*\d)(?=[\w-]*[A-Za-z])[\w-]{20,}")
+
+
+def _mask_url(url: str) -> str:
+    """An address that carries a credential (Zapier, Make, n8n, an API key in
+    the query, a password before the host) shows as its host only."""
+    u = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qsl(u.query)
+    if (u.password or any(any(h in k.lower() for h in SECRET_HINTS) for k, _ in query)
+            or any(_URL_SECRET.fullmatch(s) for s in u.path.split("/"))):
+        return f"{u.scheme}://{u.hostname or ''}/{MASK}"
+    return url
 
 
 def _mask_secrets(obj):
@@ -272,7 +286,9 @@ def _mask_secrets(obj):
         out = {}
         for k, v in obj.items():
             if isinstance(v, str) and any(h in k.lower() for h in SECRET_HINTS):
-                out[k] = "••••••••" if v else ""
+                out[k] = MASK if v else ""
+            elif k == "url" and isinstance(v, str):
+                out[k] = _mask_url(v)
             else:
                 out[k] = _mask_secrets(v)
         return out
@@ -286,12 +302,11 @@ def _merge_secrets(new_obj, old_obj):
     if isinstance(new_obj, dict) and isinstance(old_obj, dict):
         out = {}
         for k, v in new_obj.items():
-            if (
-                isinstance(v, str)
-                and v == "••••••••"
-                and isinstance(old_obj.get(k), str)
+            prev = old_obj.get(k)
+            if isinstance(v, str) and isinstance(prev, str) and (
+                v == MASK or (k == "url" and v != prev and v == _mask_url(prev))
             ):
-                out[k] = old_obj[k]
+                out[k] = prev
             else:
                 out[k] = _merge_secrets(v, old_obj.get(k))
         return out
@@ -713,7 +728,7 @@ def mcp_catalog() -> dict:
         it["installed"] = it["id"] in installed
         rt = it.get("runtime")
         it["ready"] = not rt or runtimes.get(rt, False)
-    return {"items": cat.get("items", []), "runtimes": runtimes}
+    return {"items": cat.get("items", []), "categories": cat.get("categories", []), "runtimes": runtimes}
 
 
 def _fill(value, values: dict):
@@ -1074,4 +1089,4 @@ def valid_agents() -> set:
     return names or _agents_cache["names"]
 
 
-__all__ = ['AGENT_NAME_RE', 'AGENT_TEMPLATE', 'DEFAULT_SERVER_UNITS', 'SECRET_HINTS', 'SERVER_UNIT_EXPLICIT', '_agents_cache', '_config_files', '_cpu_lock', '_cpu_prev', '_engine_error', '_engine_mcp_names', '_extract_oauth_code', '_fill', '_install_home', '_mask_secrets', '_merge_secrets', '_normalize_mcp_entry', '_parse_frontmatter', '_pending', '_release_cache', '_semver', '_stored_key', '_unit_active', '_validate_mcp', 'add_mcp_entry', 'agents_dir', 'config_snapshot', 'cpu_pct', 'delete_agent_file', 'engine_started_at', 'engine_status', 'find_runtime', 'get_agents', 'get_connections', 'get_status', 'install_from_catalog', 'installed_version', 'latest_release', 'list_agent_files', 'mark_pending', 'mcp_catalog', 'mcp_oauth_callback', 'mcp_oauth_remove', 'mcp_oauth_start', 'mcp_status', 'pending_changes', 'provider_current', 'provider_save', 'provider_snapshot', 'provider_test', 'read_agent_file', 'read_agents', 'read_mcp', 'restart_engine', 'server_unit', 'start_update', 'sys_metrics', 'update_running', 'update_status', 'valid_agents', 'version_info', 'write_agent_file', 'write_agents', 'write_mcp']
+__all__ = ['AGENT_NAME_RE', 'AGENT_TEMPLATE', 'DEFAULT_SERVER_UNITS', 'SECRET_HINTS', 'SERVER_UNIT_EXPLICIT', '_agents_cache', '_config_files', '_cpu_lock', '_cpu_prev', '_engine_error', '_engine_mcp_names', '_extract_oauth_code', '_fill', '_install_home', '_mask_secrets', '_mask_url', '_merge_secrets', '_normalize_mcp_entry', '_parse_frontmatter', '_pending', '_release_cache', '_semver', '_stored_key', '_unit_active', '_validate_mcp', 'add_mcp_entry', 'agents_dir', 'config_snapshot', 'cpu_pct', 'delete_agent_file', 'engine_started_at', 'engine_status', 'find_runtime', 'get_agents', 'get_connections', 'get_status', 'install_from_catalog', 'installed_version', 'latest_release', 'list_agent_files', 'mark_pending', 'mcp_catalog', 'mcp_oauth_callback', 'mcp_oauth_remove', 'mcp_oauth_start', 'mcp_status', 'pending_changes', 'provider_current', 'provider_save', 'provider_snapshot', 'provider_test', 'read_agent_file', 'read_agents', 'read_mcp', 'restart_engine', 'server_unit', 'start_update', 'sys_metrics', 'update_running', 'update_status', 'valid_agents', 'version_info', 'write_agent_file', 'write_agents', 'write_mcp']

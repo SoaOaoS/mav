@@ -1,15 +1,38 @@
 {
-  "version": 1,
+  "version": 2,
+  "categories": [
+    "Web & search",
+    "Knowledge",
+    "Everyday",
+    "Travel & places",
+    "Notes & tasks",
+    "Team & work",
+    "Automation",
+    "Developers",
+    "Data",
+    "Money",
+    "Home",
+    "Media"
+  ],
   "items": [
     {
       "id": "fetch",
       "name": "Read web pages",
       "description": "Lets Mav open a link and read the page — to summarise articles, check a recipe, compare offers.",
-      "category": "Web",
+      "category": "Web & search",
+      "cost": "free",
       "type": "local",
       "runtime": "uvx",
-      "command": ["uvx", "mcp-server-fetch"],
+      "command": [
+        "uvx",
+        "mcp-server-fetch"
+      ],
       "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Summarise this article: <link>”."
+      ],
       "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
     },
     {
@@ -17,42 +40,465 @@
       "self_only": true,
       "name": "Web browser",
       "description": "A real browser Mav can drive: click, fill forms, read pages that need JavaScript.",
-      "category": "Web",
+      "category": "Web & search",
+      "cost": "free",
       "type": "local",
       "runtime": "npx",
-      "command": ["npx", "-y", "@playwright/mcp@latest", "--headless"],
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless"
+      ],
       "inputs": [],
       "note": "Downloads a browser the first time it is used (about 150 MB).",
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "The first use downloads the browser (about 150 MB), so give it a minute.",
+        "Try it: “Open <site>, find the opening hours and tell me”."
+      ],
       "docs": "https://github.com/microsoft/playwright-mcp"
     },
     {
       "id": "brave-search",
       "name": "Web search (Brave)",
-      "description": "Private web and news search through the Brave Search API (free tier available).",
-      "category": "Web",
+      "description": "Private web and news search through the Brave Search API.",
+      "category": "Web & search",
+      "cost": "free tier",
       "type": "local",
       "runtime": "npx",
-      "command": ["npx", "-y", "@brave/brave-search-mcp-server"],
-      "environment": { "BRAVE_API_KEY": "{{api_key}}" },
+      "command": [
+        "npx",
+        "-y",
+        "@brave/brave-search-mcp-server"
+      ],
+      "environment": {
+        "BRAVE_API_KEY": "{{api_key}}"
+      },
       "inputs": [
         {
           "key": "api_key",
           "label": "Brave Search API key",
           "secret": true,
           "required": true,
-          "link": "https://brave.com/search/api/"
+          "link": "https://api-dashboard.search.brave.com/app/keys"
         }
       ],
+      "steps": [
+        "Open the Brave Search API page and create a free account.",
+        "Subscribe to the free plan (a card may be asked for verification; nothing is charged on the free plan).",
+        "In API Keys, create a key and copy it.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
       "docs": "https://github.com/brave/brave-search-mcp-server"
+    },
+    {
+      "id": "duckduckgo",
+      "name": "Web search (DuckDuckGo)",
+      "description": "Web search with no account and no key — good enough for everyday lookups.",
+      "category": "Web & search",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "duckduckgo-mcp-server"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Search the web for the best-rated bakeries near the Bastille”.",
+        "For heavy use, prefer Brave or Tavily: DuckDuckGo may slow down repeated searches."
+      ],
+      "docs": "https://github.com/nickclyde/duckduckgo-mcp-server"
+    },
+    {
+      "id": "tavily",
+      "name": "Web search (Tavily)",
+      "description": "Search built for AI assistants: fresh results with the page content already extracted.",
+      "category": "Web & search",
+      "cost": "free tier",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "tavily-mcp@latest"
+      ],
+      "environment": {
+        "TAVILY_API_KEY": "{{api_key}}"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Tavily API key",
+          "secret": true,
+          "required": true,
+          "placeholder": "tvly-…",
+          "link": "https://app.tavily.com/home"
+        }
+      ],
+      "steps": [
+        "Sign up at tavily.com (1,000 free searches a month).",
+        "Your API key is on the dashboard's home page (it starts with tvly-). Copy it.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/tavily-ai/tavily-mcp"
+    },
+    {
+      "id": "exa",
+      "name": "Web search (Exa)",
+      "description": "Search by meaning: find companies, people, papers or code that match a description.",
+      "category": "Web & search",
+      "cost": "free tier",
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Exa API key",
+          "secret": true,
+          "required": true,
+          "link": "https://dashboard.exa.ai/api-keys"
+        }
+      ],
+      "steps": [
+        "Sign up at exa.ai (free credits on sign-up).",
+        "Open API Keys in the dashboard and copy your key.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://docs.exa.ai/reference/exa-mcp"
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "description": "Ask Perplexity: researched answers with sources, for questions that need several searches.",
+      "category": "Web & search",
+      "cost": "paid",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@perplexity-ai/mcp-server"
+      ],
+      "environment": {
+        "PERPLEXITY_API_KEY": "{{api_key}}"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Perplexity API key",
+          "secret": true,
+          "required": true,
+          "placeholder": "pplx-…",
+          "link": "https://www.perplexity.ai/account/api/keys"
+        }
+      ],
+      "steps": [
+        "Sign in at perplexity.ai and open Settings → API.",
+        "Add credit (the API is pay-as-you-go), then generate a key.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/perplexityai/modelcontextprotocol"
+    },
+    {
+      "id": "kagi",
+      "name": "Web search (Kagi)",
+      "description": "Kagi's ad-free search and its summariser (videos, PDFs, long pages).",
+      "category": "Web & search",
+      "cost": "paid",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "kagimcp"
+      ],
+      "environment": {
+        "KAGI_API_KEY": "{{api_key}}"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Kagi API token",
+          "secret": true,
+          "required": true,
+          "link": "https://kagi.com/settings?p=api"
+        }
+      ],
+      "steps": [
+        "You need a Kagi account with API access (the Search API is in closed beta — ask Kagi support for access).",
+        "In Settings → API, add API credit and create a token.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/kagisearch/kagimcp"
+    },
+    {
+      "id": "firecrawl",
+      "name": "Firecrawl",
+      "description": "Turns whole websites into clean text: crawl a site, extract prices or listings, map its pages.",
+      "category": "Web & search",
+      "cost": "free tier",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "firecrawl-mcp"
+      ],
+      "environment": {
+        "FIRECRAWL_API_KEY": "{{api_key}}"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Firecrawl API key",
+          "secret": true,
+          "required": true,
+          "placeholder": "fc-…",
+          "link": "https://www.firecrawl.dev/app/api-keys"
+        }
+      ],
+      "steps": [
+        "Sign up at firecrawl.dev (free credits each month).",
+        "Copy your API key from the dashboard (it starts with fc-).",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/firecrawl/firecrawl-mcp-server"
+    },
+    {
+      "id": "apify",
+      "name": "Apify",
+      "description": "Thousands of ready-made scrapers: Google Maps reviews, Instagram, Amazon, job boards…",
+      "category": "Web & search",
+      "cost": "free tier",
+      "type": "remote",
+      "url": "https://mcp.apify.com",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Apify API token",
+          "secret": true,
+          "required": true,
+          "placeholder": "apify_api_…",
+          "link": "https://console.apify.com/settings/integrations"
+        }
+      ],
+      "steps": [
+        "Sign up at apify.com (a monthly free credit is included).",
+        "Open Settings → API & Integrations and copy your personal API token.",
+        "Paste it below. Click Add, then Apply changes when Mav asks.",
+        "Try it: “Use Apify to get the latest 20 Google reviews of <place>”."
+      ],
+      "docs": "https://docs.apify.com/platform/integrations/mcp"
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube transcripts",
+      "description": "Reads the transcript of a YouTube video, to summarise it or find the passage you need.",
+      "category": "Web & search",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@kimtaeyoon83/mcp-server-youtube-transcript"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Summarise this video in five points: <YouTube link>”."
+      ],
+      "docs": "https://github.com/kimtaeyoon83/mcp-server-youtube-transcript"
+    },
+    {
+      "id": "wikipedia",
+      "name": "Wikipedia",
+      "description": "Search and read Wikipedia articles, with summaries and key facts.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "wikipedia-mcp"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “What does Wikipedia say about the Edict of Nantes?”."
+      ],
+      "docs": "https://github.com/rudra-ravi/wikipedia-mcp"
+    },
+    {
+      "id": "arxiv",
+      "name": "arXiv papers",
+      "description": "Search scientific papers on arXiv, download them and read them with you.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "arxiv-mcp-server"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Find the three most cited recent papers on battery recycling and summarise them”."
+      ],
+      "docs": "https://github.com/blazickjp/arxiv-mcp-server"
+    },
+    {
+      "id": "zotero",
+      "name": "Zotero",
+      "description": "Your Zotero library: search your references, read notes and annotations.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "zotero-mcp"
+      ],
+      "environment": {
+        "ZOTERO_API_KEY": "{{api_key}}",
+        "ZOTERO_LIBRARY_ID": "{{user_id}}",
+        "ZOTERO_LOCAL": "false"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Zotero API key",
+          "secret": true,
+          "required": true,
+          "link": "https://www.zotero.org/settings/security#applications"
+        },
+        {
+          "key": "user_id",
+          "label": "Your Zotero user ID",
+          "required": true,
+          "placeholder": "1234567"
+        }
+      ],
+      "steps": [
+        "Sign in at zotero.org and open Settings → Security → Applications.",
+        "Create a private key with “Allow library access” (read-only is enough). Copy it.",
+        "On the same page, note “Your user ID for use in API calls” (a number).",
+        "Paste both below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/kujenga/zotero-mcp"
+    },
+    {
+      "id": "context7",
+      "name": "Context7 (code docs)",
+      "description": "Up-to-date documentation and examples for thousands of programming libraries.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Using the latest Next.js docs, how do I add a middleware?”."
+      ],
+      "docs": "https://github.com/upstash/context7"
+    },
+    {
+      "id": "deepwiki",
+      "name": "DeepWiki",
+      "description": "Ask questions about any public GitHub repository: how it works, where things are.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.deepwiki.com/mcp",
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Using DeepWiki, how does the opencode project handle sessions?”."
+      ],
+      "docs": "https://docs.devin.ai/work-with-devin/deepwiki-mcp"
+    },
+    {
+      "id": "microsoft-learn",
+      "name": "Microsoft Learn",
+      "description": "Official Microsoft documentation: Azure, Microsoft 365, Windows, .NET, PowerShell.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “How do I set an out-of-office reply for a shared mailbox in Microsoft 365?”."
+      ],
+      "docs": "https://learn.microsoft.com/training/support/mcp"
+    },
+    {
+      "id": "aws-docs",
+      "name": "AWS documentation",
+      "description": "Search and read the official AWS documentation.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “What are the S3 storage classes and when should I use each?”."
+      ],
+      "docs": "https://awslabs.github.io/mcp/servers/aws-documentation-mcp-server"
+    },
+    {
+      "id": "cloudflare-docs",
+      "name": "Cloudflare documentation",
+      "description": "Search the Cloudflare documentation: DNS, Workers, Pages, security settings.",
+      "category": "Knowledge",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://docs.mcp.cloudflare.com/mcp",
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “How do I redirect www to my bare domain on Cloudflare?”."
+      ],
+      "docs": "https://github.com/cloudflare/mcp-server-cloudflare"
     },
     {
       "id": "time",
       "name": "Time & time zones",
       "description": "Current time anywhere and time-zone conversions — handy for calls and trips.",
       "category": "Everyday",
+      "cost": "free",
       "type": "local",
       "runtime": "uvx",
-      "command": ["uvx", "mcp-server-time", "--local-timezone", "{{timezone}}"],
+      "command": [
+        "uvx",
+        "mcp-server-time",
+        "--local-timezone",
+        "{{timezone}}"
+      ],
       "inputs": [
         {
           "key": "timezone",
@@ -62,7 +508,32 @@
           "default_from": "browser_timezone"
         }
       ],
+      "steps": [
+        "Nothing to sign up for.",
+        "Check your time zone below (it is filled in from your browser). Click Add, then Apply changes when Mav asks."
+      ],
       "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/time"
+    },
+    {
+      "id": "weather",
+      "name": "Weather",
+      "description": "Forecasts, current conditions, rain and air quality anywhere in the world (Open-Meteo, NOAA).",
+      "category": "Everyday",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@dangahagan/weather-mcp@latest"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Will it rain in Lyon tomorrow afternoon?”."
+      ],
+      "docs": "https://github.com/dgahagan/weather-mcp"
     },
     {
       "id": "files",
@@ -70,56 +541,1134 @@
       "name": "Your files",
       "description": "Read and organise files in a folder of your server (documents, notes, exports).",
       "category": "Everyday",
+      "cost": "free",
       "type": "local",
       "runtime": "npx",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "{{folder}}"],
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "{{folder}}"
+      ],
       "inputs": [
         {
           "key": "folder",
           "label": "Folder Mav may use",
-          "placeholder": "/home/you/Documents",
           "required": true,
+          "placeholder": "/home/you/Documents",
           "help": "Mav can read and write only inside this folder."
         }
       ],
+      "steps": [
+        "Choose the folder Mav may use — Mav cannot see anything outside it.",
+        "Type its full path below (for example /home/you/Documents). Click Add, then Apply changes when Mav asks."
+      ],
       "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem"
+    },
+    {
+      "id": "lara-translate",
+      "name": "Translation (Lara)",
+      "description": "Professional-grade translation that keeps tone and context, in 200+ languages.",
+      "category": "Everyday",
+      "cost": "free tier",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@translated/lara-mcp"
+      ],
+      "environment": {
+        "LARA_ACCESS_KEY_ID": "{{key_id}}",
+        "LARA_ACCESS_KEY_SECRET": "{{key_secret}}"
+      },
+      "inputs": [
+        {
+          "key": "key_id",
+          "label": "Access Key ID",
+          "required": true
+        },
+        {
+          "key": "key_secret",
+          "label": "Access Key Secret",
+          "secret": true,
+          "required": true,
+          "link": "https://laratranslate.com/"
+        }
+      ],
+      "steps": [
+        "Sign up at laratranslate.com and open the API section of your account (a free plan exists).",
+        "Create an access key: you get an Access Key ID and an Access Key Secret.",
+        "Paste both below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/translated/lara-mcp"
+    },
+    {
+      "id": "google-maps",
+      "name": "Google Maps",
+      "description": "Places, addresses, opening hours, travel times and directions.",
+      "category": "Travel & places",
+      "cost": "free tier",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-google-maps"
+      ],
+      "environment": {
+        "GOOGLE_MAPS_API_KEY": "{{api_key}}"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Google Maps API key",
+          "secret": true,
+          "required": true,
+          "placeholder": "AIza…",
+          "link": "https://console.cloud.google.com/apis/credentials"
+        }
+      ],
+      "steps": [
+        "Open the Google Cloud console and create a project (a billing account is required; Google gives a monthly free credit).",
+        "In APIs & Services → Library, enable the Places API, the Geocoding API and the Directions API.",
+        "In APIs & Services → Credentials, create an API key, then restrict it to those three APIs.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/modelcontextprotocol/servers-archived/tree/main/src/google-maps"
+    },
+    {
+      "id": "kiwi",
+      "name": "Flights (Kiwi.com)",
+      "description": "Search flights with flexible dates and get booking links.",
+      "category": "Travel & places",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.kiwi.com",
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “Cheapest return flight Paris → Lisbon, a weekend in March, ±3 days”."
+      ],
+      "docs": "https://mcp.kiwi.com"
     },
     {
       "id": "notion",
       "name": "Notion",
       "description": "Search, read and update your Notion pages and databases.",
       "category": "Notes & tasks",
+      "cost": "free",
       "type": "local",
       "runtime": "npx",
-      "command": ["npx", "-y", "@notionhq/notion-mcp-server"],
-      "environment": { "NOTION_TOKEN": "{{token}}" },
+      "command": [
+        "npx",
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
+      "environment": {
+        "NOTION_TOKEN": "{{token}}"
+      },
       "inputs": [
         {
           "key": "token",
           "label": "Notion integration token",
-          "placeholder": "ntn_…",
           "secret": true,
           "required": true,
+          "placeholder": "ntn_…",
           "help": "Create an internal integration, then share the pages Mav may use with it.",
           "link": "https://www.notion.so/profile/integrations"
         }
       ],
+      "steps": [
+        "Open Notion's integrations page and click New integration (type: Internal), name it Mav.",
+        "Copy the Internal Integration Secret (it starts with ntn_).",
+        "In Notion, open each page Mav may use → ⋯ → Connections → add Mav. Mav sees only those pages.",
+        "Paste the secret below. Click Add, then Apply changes when Mav asks."
+      ],
       "docs": "https://github.com/makenotion/notion-mcp-server"
+    },
+    {
+      "id": "todoist",
+      "name": "Todoist",
+      "description": "Your tasks and projects: add, reschedule, complete, plan the week.",
+      "category": "Notes & tasks",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://ai.todoist.net/mcp",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Todoist uses a sign-in.",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Todoist and approve, then paste the code (or the whole address) the page shows.",
+        "Try it: “Add ‘call the plumber’ to my Todoist for tomorrow 9 am”."
+      ],
+      "docs": "https://github.com/Doist/todoist-ai"
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "description": "Issues, projects and cycles in Linear: create, update and search.",
+      "category": "Notes & tasks",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Linear API key",
+          "secret": true,
+          "required": true,
+          "placeholder": "lin_api_…",
+          "link": "https://linear.app/settings/account/security"
+        }
+      ],
+      "steps": [
+        "In Linear, open Settings → Security & access → Personal API keys.",
+        "Create a key (Read is enough to only look; add Write to let Mav create issues). Copy it.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://linear.app/docs/mcp"
+    },
+    {
+      "id": "monday",
+      "name": "monday.com",
+      "description": "Your monday.com boards and items: read, create and update.",
+      "category": "Notes & tasks",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.monday.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "monday.com personal token",
+          "secret": true,
+          "required": true
+        }
+      ],
+      "steps": [
+        "In monday.com, click your avatar → Developers → My access tokens.",
+        "Copy your personal token.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://developer.monday.com/api-reference/docs/mondaycom-mcp"
+    },
+    {
+      "id": "airtable",
+      "name": "Airtable",
+      "description": "Your Airtable bases: search, read, add and update records.",
+      "category": "Notes & tasks",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "airtable-mcp-server"
+      ],
+      "environment": {
+        "AIRTABLE_API_KEY": "{{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Airtable personal access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "pat…",
+          "link": "https://airtable.com/create/tokens"
+        }
+      ],
+      "steps": [
+        "Open Airtable's Builder hub → Personal access tokens → Create token.",
+        "Add the scopes data.records:read, data.records:write and schema.bases:read, then pick the bases Mav may use.",
+        "Copy the token (it starts with pat). Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/domdomegg/airtable-mcp-server"
+    },
+    {
+      "id": "obsidian",
+      "self_only": true,
+      "name": "Obsidian",
+      "description": "Your Obsidian vault: search, read and write notes.",
+      "category": "Notes & tasks",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "mcp-obsidian"
+      ],
+      "environment": {
+        "OBSIDIAN_API_KEY": "{{api_key}}",
+        "OBSIDIAN_HOST": "{{host}}"
+      },
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Local REST API key",
+          "secret": true,
+          "required": true
+        },
+        {
+          "key": "host",
+          "label": "Obsidian's address",
+          "required": true,
+          "placeholder": "127.0.0.1",
+          "help": "Where Obsidian runs; 127.0.0.1 if on this machine."
+        }
+      ],
+      "steps": [
+        "In Obsidian, open Settings → Community plugins, install and enable “Local REST API”.",
+        "In the plugin's settings, copy the API key.",
+        "Obsidian must run on this same machine (or one Mav can reach) and stay open.",
+        "Paste the key below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/MarkusPfundstein/mcp-obsidian"
+    },
+    {
+      "id": "miro",
+      "name": "Miro",
+      "description": "Your Miro boards: read sticky notes and diagrams, create new content.",
+      "category": "Notes & tasks",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.miro.com/",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Miro uses a sign-in.",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Miro and approve, then paste the code (or the whole address) the page shows. Pick the team Mav may use."
+      ],
+      "docs": "https://developers.miro.com/docs/miro-mcp"
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "description": "Read and post in your Slack channels, reply in threads, look up people.",
+      "category": "Team & work",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-slack"
+      ],
+      "environment": {
+        "SLACK_BOT_TOKEN": "{{token}}",
+        "SLACK_TEAM_ID": "{{team_id}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Bot User OAuth Token",
+          "secret": true,
+          "required": true,
+          "placeholder": "xoxb-…",
+          "link": "https://api.slack.com/apps"
+        },
+        {
+          "key": "team_id",
+          "label": "Team ID",
+          "required": true,
+          "placeholder": "T01234567"
+        }
+      ],
+      "steps": [
+        "Open api.slack.com/apps → Create New App → From scratch, and pick your workspace.",
+        "In OAuth & Permissions, add the bot scopes channels:history, channels:read, chat:write, reactions:write, users:read.",
+        "Click Install to Workspace and copy the Bot User OAuth Token (xoxb-…).",
+        "Your Team ID starts with T: open Slack in a browser, it is in the address (app.slack.com/client/T…/).",
+        "Invite the bot to the channels Mav may use (/invite @YourApp). Paste both below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack"
+    },
+    {
+      "id": "atlassian",
+      "name": "Jira & Confluence (Atlassian Cloud)",
+      "description": "Jira issues and Confluence pages: search, create, update, summarise.",
+      "category": "Team & work",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.atlassian.com/v1/mcp",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Atlassian uses a sign-in.",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Atlassian and approve, then paste the code (or the whole address) the page shows. Choose the site Mav may use.",
+        "Your site admin may need to allow the “Atlassian Rovo MCP” app first."
+      ],
+      "docs": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/"
+    },
+    {
+      "id": "jira-token",
+      "name": "Jira (API token)",
+      "description": "Jira with an API token instead of a sign-in — also works with Jira Server / Data Center.",
+      "category": "Team & work",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "mcp-atlassian"
+      ],
+      "environment": {
+        "JIRA_URL": "{{base_url}}",
+        "JIRA_USERNAME": "{{email}}",
+        "JIRA_API_TOKEN": "{{token}}"
+      },
+      "inputs": [
+        {
+          "key": "base_url",
+          "label": "Jira address",
+          "required": true,
+          "placeholder": "https://your-company.atlassian.net"
+        },
+        {
+          "key": "email",
+          "label": "Your Atlassian e-mail",
+          "required": true,
+          "placeholder": "you@company.com"
+        },
+        {
+          "key": "token",
+          "label": "API token",
+          "secret": true,
+          "required": true,
+          "link": "https://id.atlassian.com/manage-profile/security/api-tokens"
+        }
+      ],
+      "steps": [
+        "Open id.atlassian.com → Security → API tokens → Create API token, and copy it.",
+        "(Jira Server / Data Center: create a personal access token in your profile instead.)",
+        "Fill in your Jira address, your e-mail and the token below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/sooperset/mcp-atlassian"
+    },
+    {
+      "id": "hubspot",
+      "name": "HubSpot",
+      "description": "Your CRM: contacts, companies, deals and notes.",
+      "category": "Team & work",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@hubspot/mcp-server"
+      ],
+      "environment": {
+        "PRIVATE_APP_ACCESS_TOKEN": "{{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Private app access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "pat-…"
+        }
+      ],
+      "steps": [
+        "In HubSpot, open Settings → Integrations → Private Apps → Create a private app (or Development → Legacy apps on newer accounts).",
+        "In Scopes, tick the CRM objects Mav may read or write (contacts, companies, deals…).",
+        "Create the app and copy its access token (pat-…).",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://developers.hubspot.com/mcp"
+    },
+    {
+      "id": "intercom",
+      "name": "Intercom",
+      "description": "Customer conversations and contacts in Intercom: search, read, summarise.",
+      "category": "Team & work",
+      "cost": "paid",
+      "type": "remote",
+      "url": "https://mcp.intercom.com/mcp",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Intercom uses a sign-in (US-hosted workspaces).",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Intercom and approve, then paste the code (or the whole address) the page shows."
+      ],
+      "docs": "https://developers.intercom.com/docs/guides/mcp"
+    },
+    {
+      "id": "canva",
+      "name": "Canva",
+      "description": "Find, create and export Canva designs.",
+      "category": "Team & work",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.canva.com/mcp",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Canva uses a sign-in.",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Canva and approve, then paste the code (or the whole address) the page shows."
+      ],
+      "docs": "https://www.canva.dev/docs/mcp/"
+    },
+    {
+      "id": "zapier",
+      "name": "Zapier",
+      "description": "8,000+ apps through Zapier: whatever actions you allow, Mav can run.",
+      "category": "Automation",
+      "cost": "free tier",
+      "type": "remote",
+      "url": "{{url}}",
+      "inputs": [
+        {
+          "key": "url",
+          "label": "Your Zapier MCP server URL",
+          "secret": true,
+          "required": true,
+          "placeholder": "https://mcp.zapier.com/api/mcp/s/…/mcp",
+          "link": "https://mcp.zapier.com/"
+        }
+      ],
+      "steps": [
+        "Open mcp.zapier.com and create a new MCP server.",
+        "Add the actions Mav may run (for example “Google Sheets: add row”).",
+        "In Connect, copy the server URL. It contains a secret — keep it private.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://zapier.com/mcp"
+    },
+    {
+      "id": "make",
+      "name": "Make",
+      "description": "Run your Make scenarios from Mav.",
+      "category": "Automation",
+      "cost": "free tier",
+      "type": "remote",
+      "url": "{{url}}",
+      "inputs": [
+        {
+          "key": "url",
+          "label": "Your Make MCP server URL",
+          "secret": true,
+          "required": true,
+          "placeholder": "https://eu2.make.com/mcp/…"
+        }
+      ],
+      "steps": [
+        "In Make, set the scenarios Mav may run to “On demand” scheduling.",
+        "Open your profile → API access → MCP token, and create a token.",
+        "Copy the MCP server URL shown with it (it contains the token).",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://developers.make.com/mcp-server"
+    },
+    {
+      "id": "n8n",
+      "name": "n8n",
+      "description": "Call your own n8n workflows as tools.",
+      "category": "Automation",
+      "cost": "free",
+      "type": "remote",
+      "url": "{{url}}",
+      "inputs": [
+        {
+          "key": "url",
+          "label": "MCP Server Trigger production URL",
+          "secret": true,
+          "required": true,
+          "placeholder": "https://n8n.example.com/mcp/…"
+        }
+      ],
+      "steps": [
+        "In n8n, create a workflow that starts with an “MCP Server Trigger” node.",
+        "Connect the tools Mav may use to it (other nodes or sub-workflows), then activate the workflow.",
+        "Open the trigger node and copy the Production URL.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-langchain.mcptrigger/"
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "description": "Your repositories, issues and pull requests.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "GitHub personal access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "github_pat_…",
+          "link": "https://github.com/settings/personal-access-tokens"
+        }
+      ],
+      "steps": [
+        "Open GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token.",
+        "Pick the repositories Mav may use and give read (or read and write) access to Contents, Issues and Pull requests.",
+        "Copy the token. Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/github/github-mcp-server"
+    },
+    {
+      "id": "gitlab",
+      "name": "GitLab",
+      "description": "Your GitLab projects, issues and merge requests.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "remote",
+      "url": "{{base_url}}/api/v4/mcp",
+      "auth": "oauth",
+      "inputs": [
+        {
+          "key": "base_url",
+          "label": "GitLab address",
+          "required": true,
+          "placeholder": "https://gitlab.com"
+        }
+      ],
+      "steps": [
+        "Type your GitLab address below (https://gitlab.com, or your own instance).",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to GitLab and approve, then paste the code (or the whole address) the page shows.",
+        "GitLab's MCP server is in beta: on your own instance an administrator may need to turn it on."
+      ],
+      "docs": "https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_server/"
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "description": "Errors and issues from Sentry: what broke, since when, for whom.",
+      "category": "Developers",
+      "cost": "free tier",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@sentry/mcp-server@latest"
+      ],
+      "environment": {
+        "SENTRY_ACCESS_TOKEN": "{{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Sentry user auth token",
+          "secret": true,
+          "required": true,
+          "placeholder": "sntryu_…",
+          "link": "https://sentry.io/settings/account/api/auth-tokens/"
+        }
+      ],
+      "steps": [
+        "In Sentry, open Settings → Account → API → Personal Tokens → Create New Token.",
+        "Give it read access to Organization, Project, Team and Issue & Event. Copy it.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://docs.sentry.io/product/sentry-mcp/"
+    },
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "description": "Your Vercel projects and deployments: status, logs, domains.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.vercel.com",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Vercel uses a sign-in.",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Vercel and approve, then paste the code (or the whole address) the page shows."
+      ],
+      "docs": "https://vercel.com/docs/mcp/vercel-mcp"
+    },
+    {
+      "id": "netlify",
+      "name": "Netlify",
+      "description": "Your Netlify sites: deploys, forms, environment variables.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@netlify/mcp"
+      ],
+      "environment": {
+        "NETLIFY_PERSONAL_ACCESS_TOKEN": "{{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Netlify personal access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "nfp_…",
+          "link": "https://app.netlify.com/user/applications#personal-access-tokens"
+        }
+      ],
+      "steps": [
+        "In Netlify, open User settings → Applications → Personal access tokens → New access token.",
+        "Copy the token. Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/"
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "description": "One Supabase project, read-only: tables, SQL queries, logs and docs.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?project_ref={{project_ref}}&read_only=true",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Supabase access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "sbp_…",
+          "link": "https://supabase.com/dashboard/account/tokens"
+        },
+        {
+          "key": "project_ref",
+          "label": "Project ID",
+          "required": true,
+          "placeholder": "abcdefghijklmnop"
+        }
+      ],
+      "steps": [
+        "In Supabase, open Account → Access Tokens → Generate new token, and copy it (sbp_…).",
+        "Open your project → Project Settings → General and copy the Project ID.",
+        "Paste both below. Click Add, then Apply changes when Mav asks.",
+        "Mav connects read-only: it can query, never change your data."
+      ],
+      "docs": "https://supabase.com/docs/guides/getting-started/mcp"
+    },
+    {
+      "id": "neon",
+      "name": "Neon",
+      "description": "Your Neon Postgres projects: branches, schemas and SQL.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Neon API key",
+          "secret": true,
+          "required": true,
+          "link": "https://console.neon.tech/app/settings/api-keys"
+        }
+      ],
+      "steps": [
+        "In the Neon console, open Account settings → API keys → Create new API key.",
+        "Copy the key. Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://neon.com/docs/ai/neon-mcp-server"
+    },
+    {
+      "id": "heroku",
+      "name": "Heroku",
+      "description": "Your Heroku apps: status, logs, scaling, add-ons.",
+      "category": "Developers",
+      "cost": "paid",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "@heroku/mcp-server"
+      ],
+      "environment": {
+        "HEROKU_API_KEY": "{{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Heroku authorization token",
+          "secret": true,
+          "required": true,
+          "link": "https://dashboard.heroku.com/account/applications"
+        }
+      ],
+      "steps": [
+        "Install the Heroku CLI on any computer and run: heroku authorizations:create",
+        "(Or Account settings → Applications → Authorizations → Create authorization.)",
+        "Copy the token. Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/heroku/heroku-mcp-server"
+    },
+    {
+      "id": "posthog",
+      "name": "PostHog",
+      "description": "Product analytics: trends, funnels, feature flags and errors from PostHog.",
+      "category": "Developers",
+      "cost": "free tier",
+      "type": "remote",
+      "url": "https://mcp.posthog.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "PostHog personal API key",
+          "secret": true,
+          "required": true,
+          "placeholder": "phx_…",
+          "link": "https://app.posthog.com/settings/user-api-keys"
+        }
+      ],
+      "steps": [
+        "In PostHog, open Settings → Personal API keys → Create personal API key.",
+        "Choose the “MCP Server” preset (or give read access to the data Mav may see). Copy the key.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://posthog.com/docs/model-context-protocol"
+    },
+    {
+      "id": "huggingface",
+      "name": "Hugging Face",
+      "description": "Search models, datasets, papers and Spaces on Hugging Face.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://huggingface.co/mcp",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Hugging Face token",
+          "secret": true,
+          "required": true,
+          "placeholder": "hf_…",
+          "link": "https://huggingface.co/settings/tokens"
+        }
+      ],
+      "steps": [
+        "Sign in at huggingface.co and open Settings → Access Tokens → Create new token.",
+        "A Read token is enough. Copy it (hf_…).",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://huggingface.co/settings/mcp"
+    },
+    {
+      "id": "git",
+      "self_only": true,
+      "name": "Git repository",
+      "description": "A git repository on your server: history, diffs, branches, commits.",
+      "category": "Developers",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "mcp-server-git",
+        "--repository",
+        "{{folder}}"
+      ],
+      "inputs": [
+        {
+          "key": "folder",
+          "label": "Repository folder",
+          "required": true,
+          "placeholder": "/home/you/projects/my-app"
+        }
+      ],
+      "steps": [
+        "Type the full path of the repository below (the folder that contains .git). Click Add, then Apply changes when Mav asks.",
+        "Try it: “What changed in this repository this week?”."
+      ],
+      "docs": "https://github.com/modelcontextprotocol/servers/tree/main/src/git"
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "Ask questions of a PostgreSQL database in plain words — read-only.",
+      "category": "Data",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "postgres-mcp",
+        "--access-mode=restricted"
+      ],
+      "environment": {
+        "DATABASE_URI": "{{uri}}"
+      },
+      "inputs": [
+        {
+          "key": "uri",
+          "label": "Connection string",
+          "secret": true,
+          "required": true,
+          "placeholder": "postgresql://user:password@host:5432/database"
+        }
+      ],
+      "steps": [
+        "Ideally, create a read-only user in your database for Mav.",
+        "Build its connection string: postgresql://user:password@host:5432/database",
+        "Paste it below. Click Add, then Apply changes when Mav asks.",
+        "Mav connects in restricted mode: it can read, never change your data."
+      ],
+      "docs": "https://github.com/crystaldba/postgres-mcp"
+    },
+    {
+      "id": "mongodb",
+      "name": "MongoDB",
+      "description": "Explore and query a MongoDB database or Atlas cluster — read-only.",
+      "category": "Data",
+      "cost": "free",
+      "type": "local",
+      "runtime": "npx",
+      "command": [
+        "npx",
+        "-y",
+        "mongodb-mcp-server@latest",
+        "--readOnly"
+      ],
+      "environment": {
+        "MDB_MCP_CONNECTION_STRING": "{{uri}}"
+      },
+      "inputs": [
+        {
+          "key": "uri",
+          "label": "Connection string",
+          "secret": true,
+          "required": true,
+          "placeholder": "mongodb+srv://user:password@cluster.mongodb.net/"
+        }
+      ],
+      "steps": [
+        "In Atlas: Database → Connect → Drivers, copy the connection string and put your password in it.",
+        "(Your own server: mongodb://user:password@host:27017/database.)",
+        "Paste it below. Click Add, then Apply changes when Mav asks.",
+        "Mav connects read-only."
+      ],
+      "docs": "https://github.com/mongodb-js/mongodb-mcp-server"
+    },
+    {
+      "id": "sqlite",
+      "self_only": true,
+      "name": "SQLite database",
+      "description": "Query and analyse a SQLite database file on your server.",
+      "category": "Data",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "mcp-server-sqlite",
+        "--db-path",
+        "{{path}}"
+      ],
+      "inputs": [
+        {
+          "key": "path",
+          "label": "Database file",
+          "required": true,
+          "placeholder": "/home/you/data/app.db"
+        }
+      ],
+      "steps": [
+        "Type the full path of the .db / .sqlite file below. Click Add, then Apply changes when Mav asks.",
+        "Mav can also write to this file: point it at a copy if the data matters."
+      ],
+      "docs": "https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite"
+    },
+    {
+      "id": "stripe",
+      "name": "Stripe",
+      "description": "Your Stripe account: payments, customers, invoices, subscriptions, refunds.",
+      "category": "Money",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.stripe.com",
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
+      "inputs": [
+        {
+          "key": "token",
+          "label": "Stripe restricted key",
+          "secret": true,
+          "required": true,
+          "placeholder": "rk_live_…",
+          "link": "https://dashboard.stripe.com/apikeys"
+        }
+      ],
+      "steps": [
+        "In the Stripe dashboard, open Developers → API keys → Create restricted key.",
+        "Give it only what Mav needs (for example Read on Charges, Customers, Invoices). Copy it (rk_live_… or rk_test_…).",
+        "Paste it below. Click Add, then Apply changes when Mav asks.",
+        "Start with a test-mode key to try it safely."
+      ],
+      "docs": "https://docs.stripe.com/mcp"
+    },
+    {
+      "id": "paypal",
+      "name": "PayPal",
+      "description": "Your PayPal business account: invoices, orders, disputes, transactions.",
+      "category": "Money",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.paypal.com/mcp",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: PayPal uses a sign-in (business accounts).",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to PayPal and approve, then paste the code (or the whole address) the page shows."
+      ],
+      "docs": "https://developer.paypal.com/tools/mcp-server/"
+    },
+    {
+      "id": "square",
+      "name": "Square",
+      "description": "Your Square business: payments, orders, catalog, customers.",
+      "category": "Money",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.squareup.com/sse",
+      "auth": "oauth",
+      "inputs": [],
+      "steps": [
+        "Nothing to copy: Square uses a sign-in.",
+        "Click Add, then Apply changes when Mav asks.",
+        "On its card in Connections, click Connect, sign in to Square and approve, then paste the code (or the whole address) the page shows."
+      ],
+      "docs": "https://developer.squareup.com/docs/mcp"
+    },
+    {
+      "id": "shopify-store",
+      "name": "Shopify store",
+      "description": "A Shopify store's catalogue, policies and cart — yours or one you shop at.",
+      "category": "Money",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://{{shop}}/api/mcp",
+      "inputs": [
+        {
+          "key": "shop",
+          "label": "Store address (without https://)",
+          "required": true,
+          "placeholder": "my-shop.myshopify.com"
+        }
+      ],
+      "steps": [
+        "Type the store's address below (for example my-shop.myshopify.com or shop.example.com). Click Add, then Apply changes when Mav asks.",
+        "Try it: “Which of the store's jackets are waterproof and under €150?”."
+      ],
+      "docs": "https://shopify.dev/docs/apps/build/storefront-mcp"
+    },
+    {
+      "id": "coingecko",
+      "name": "Crypto prices (CoinGecko)",
+      "description": "Live and historical prices, market caps and trends for 15,000+ crypto assets.",
+      "category": "Money",
+      "cost": "free",
+      "type": "remote",
+      "url": "https://mcp.api.coingecko.com/mcp",
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Try it: “How did Bitcoin and Ether do this week?”."
+      ],
+      "docs": "https://docs.coingecko.com/docs/mcp-server"
+    },
+    {
+      "id": "alpha-vantage",
+      "name": "Stock market (Alpha Vantage)",
+      "description": "Stock quotes, company fundamentals, forex and economic indicators.",
+      "category": "Money",
+      "cost": "free tier",
+      "type": "remote",
+      "url": "https://mcp.alphavantage.co/mcp?apikey={{api_key}}",
+      "inputs": [
+        {
+          "key": "api_key",
+          "label": "Alpha Vantage API key",
+          "secret": true,
+          "required": true,
+          "link": "https://www.alphavantage.co/support/#api-key"
+        }
+      ],
+      "steps": [
+        "Request a free API key on Alpha Vantage's site (name and e-mail are enough).",
+        "Copy the key. Paste it below. Click Add, then Apply changes when Mav asks.",
+        "The free tier allows 25 requests a day."
+      ],
+      "docs": "https://mcp.alphavantage.co/"
+    },
+    {
+      "id": "yahoo-finance",
+      "name": "Stock market (Yahoo Finance)",
+      "description": "Quotes, history, news and financials from Yahoo Finance, with no account.",
+      "category": "Money",
+      "cost": "free",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "yfinance-mcp"
+      ],
+      "inputs": [],
+      "steps": [
+        "Nothing to sign up for.",
+        "Click Add, then Apply changes when Mav asks.",
+        "Uses Yahoo Finance's public data (unofficial): fine for personal use, not for trading decisions."
+      ],
+      "docs": "https://pypi.org/project/yfinance-mcp/"
     },
     {
       "id": "home-assistant",
       "name": "Home Assistant",
       "description": "Ask about and control your smart home: lights, heating, sensors.",
       "category": "Home",
+      "cost": "free",
       "type": "remote",
       "url": "{{base_url}}/api/mcp",
-      "headers": { "Authorization": "Bearer {{token}}" },
+      "headers": {
+        "Authorization": "Bearer {{token}}"
+      },
       "inputs": [
         {
           "key": "base_url",
           "label": "Home Assistant address",
-          "placeholder": "http://homeassistant.local:8123",
-          "required": true
+          "required": true,
+          "placeholder": "http://homeassistant.local:8123"
         },
         {
           "key": "token",
@@ -130,27 +1679,45 @@
         }
       ],
       "note": "Enable the “Model Context Protocol Server” integration in Home Assistant first.",
+      "steps": [
+        "In Home Assistant, open Settings → Devices & services → Add integration → “Model Context Protocol Server”.",
+        "Open your profile → Security → Long-lived access tokens → Create token, and copy it.",
+        "Fill in Home Assistant's address and the token below. Click Add, then Apply changes when Mav asks.",
+        "In the cloud, Mav must be able to reach that address (Nabu Casa or your own public address)."
+      ],
       "docs": "https://www.home-assistant.io/integrations/mcp_server/"
     },
     {
-      "id": "github",
-      "name": "GitHub",
-      "description": "Your repositories, issues and pull requests.",
-      "category": "Work",
-      "type": "remote",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": { "Authorization": "Bearer {{token}}" },
+      "id": "elevenlabs",
+      "name": "ElevenLabs voices",
+      "description": "Text to natural speech, voice cloning and transcription with ElevenLabs.",
+      "category": "Media",
+      "cost": "free tier",
+      "type": "local",
+      "runtime": "uvx",
+      "command": [
+        "uvx",
+        "elevenlabs-mcp"
+      ],
+      "environment": {
+        "ELEVENLABS_API_KEY": "{{api_key}}"
+      },
       "inputs": [
         {
-          "key": "token",
-          "label": "GitHub personal access token",
-          "placeholder": "github_pat_…",
+          "key": "api_key",
+          "label": "ElevenLabs API key",
           "secret": true,
           "required": true,
-          "link": "https://github.com/settings/personal-access-tokens"
+          "placeholder": "sk_…",
+          "link": "https://elevenlabs.io/app/settings/api-keys"
         }
       ],
-      "docs": "https://github.com/github/github-mcp-server"
+      "steps": [
+        "Sign up at elevenlabs.io (a free monthly quota is included).",
+        "Open Developers → API Keys → Create API key, and copy it.",
+        "Paste it below. Click Add, then Apply changes when Mav asks."
+      ],
+      "docs": "https://github.com/elevenlabs/elevenlabs-mcp"
     }
   ]
 }

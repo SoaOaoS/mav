@@ -2160,6 +2160,7 @@ h6.md-h {
 .field select,
 .field textarea,
 .inline-form input,
+.catalog-tools input,
 .watch-add input,
 .watch-add select {
   width: 100%;
@@ -2176,6 +2177,7 @@ h6.md-h {
 .field select:focus,
 .field textarea:focus,
 .inline-form input:focus,
+.catalog-tools input:focus,
 .watch-add input:focus,
 .watch-add select:focus {
   border-color: var(--accent);
@@ -3636,6 +3638,67 @@ button.memory-updated:hover {
 }
 .catalog-bar h3.sub {
   margin: 0;
+}
+.catalog-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+.catalog-tools input {
+  max-width: 420px;
+}
+.catalog-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.catalog-filter .chip {
+  padding: 0.28rem 0.7rem;
+  font-size: 0.8rem;
+}
+.catalog-filter .chip.is-active {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.catalog-group h4 {
+  margin: 1.1rem 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.catalog-group:first-child h4 {
+  margin-top: 0;
+}
+.cat-text .cat-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+.cat-text .cat-meta .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--ink-3);
+}
+.cat-text .cat-meta .badge i[data-i] {
+  width: 11px;
+  height: 11px;
+}
+.cat-steps {
+  margin: 0;
+  padding-left: 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-2);
 }
 .catalog {
   display: grid;
