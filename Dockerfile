@@ -10,8 +10,10 @@ ARG NODE_VERSION=22
 
 # ---------------------------------------------------------------- engine
 FROM node:${NODE_VERSION}-bookworm-slim AS node
-# The opencode agent engine, from npm (an exact version, or "latest").
-ARG OPENCODE_VERSION=latest
+# The opencode agent engine, from npm. Pinned: a new engine can move data
+# around (1.x keeps chats in opencode.db), so it is taken up on purpose, once
+# tested. Same version as install.sh (tests/test_units.py checks it).
+ARG OPENCODE_VERSION=1.18.35
 RUN npm install -g --omit=dev "opencode-ai@${OPENCODE_VERSION}" \
  && npm cache clean --force \
  && rm -rf /usr/local/lib/node_modules/npm/docs /usr/local/lib/node_modules/npm/man \
