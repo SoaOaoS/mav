@@ -48,13 +48,17 @@ class OnboardingE2E(unittest.TestCase):
             # 2. about you
             pg.fill("#obCity", "Toulouse")
             pg.select_option("#obLang", "en")
+            pg.click('[data-obuse="work"]')
             pg.click("#obNext")
             pg.wait_for_selector('.ob-step[data-ob="3"]:not([hidden])', timeout=8000)
-            # 3. routines: briefing (on by default) + the first template
-            pg.locator("#obRoutines input[type=checkbox]").first.check()
+            # 3. routines: picked for "my work" (planning, news, weekly review),
+            # plus the briefing; untick one and the rest is kept as chosen.
+            self.assertEqual(pg.locator("#obRoutines input:checked").count(), 3)
+            pg.locator("#obRoutines input:checked").first.uncheck()
             pg.click("#obNext")
             pg.wait_for_selector('.ob-step[data-ob="4"]:not([hidden])', timeout=8000)
-            self.assertIn("2 routines", pg.inner_text("#obSummary"))
+            self.assertIn("3 routines", pg.inner_text("#obSummary"))
+            self.assertTrue(pg.locator("#obNotify").is_visible())
             # 4. first briefing opens its chat
             pg.click("#obNext")
             pg.wait_for_function("location.hash.startsWith('#chat/')", timeout=8000)

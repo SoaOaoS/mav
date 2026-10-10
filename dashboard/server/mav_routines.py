@@ -482,6 +482,10 @@ def _briefing_job_new(time_hm: str = "") -> dict:
 ONBOARDING_FILE = mav_core.BOT_DIR / "onboarding.json"
 
 
+# "Mav is mostly for…" in the welcome flow, as a fact Mav can use.
+ONBOARDING_USES = {"work": "their work", "family": "family and home life",
+                   "study": "their studies", "me": "personal things"}
+
 LANGUAGES = {"en": "English", "fr": "French", "es": "Spanish", "de": "German",
              "it": "Italian", "pt": "Portuguese", "nl": "Dutch"}
 
@@ -537,7 +541,10 @@ def onboarding_profile(payload: dict) -> dict:
     if isinstance(raw, str):
         raw = re.split(r"[,;\n]+", raw)
     interests = [str(i).strip()[:60] for i in raw if str(i).strip()][:12]
+    use = ONBOARDING_USES.get(str(payload.get("use") or ""))
     facts = []
+    if use:
+        facts.append(f"Uses Mav mostly for {use}.")
     if name:
         facts.append(f"Their name is {name}.")
     if city:

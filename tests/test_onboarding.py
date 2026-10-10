@@ -54,6 +54,12 @@ class OnboardingTest(unittest.TestCase):
         self.assertIn("Prefers answers in French.", self.facts)
         self.assertEqual(self.interests, ["running", "tech news", "Formula 1"])
 
+    def test_what_mav_is_for_becomes_a_fact(self):
+        r = mav_api.onboarding_profile({"use": "family"})
+        self.assertEqual(r["facts"], 1)
+        self.assertIn("Uses Mav mostly for family and home life.", self.facts)
+        self.assertEqual(mav_api.onboarding_profile({"use": "anything"})["facts"], 0)
+
     def test_empty_profile_saves_nothing(self):
         r = mav_api.onboarding_profile({"language": "xx"})
         self.assertEqual((r["facts"], r["interests"]), (0, 0))

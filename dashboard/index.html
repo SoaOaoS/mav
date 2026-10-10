@@ -333,6 +333,7 @@
                   <h2>For you</h2>
                   <button class="link" data-goto="routines">Routines</button>
                 </div>
+                <p class="inbox-sum" id="inboxSum" hidden></p>
                 <ul class="inbox-list" id="inbox"></ul>
               </section>
             </div>
@@ -1114,6 +1115,15 @@
         <section class="ob-step" data-ob="2" hidden>
           <h2 class="serif">A little about you</h2>
           <p class="ob-lead">So Mav can tailor the weather, suggestions and briefing. All optional, all editable later in Memory.</p>
+          <div class="field">
+            <label id="obUseLabel">Mav is mostly for</label>
+            <div class="ob-providers" id="obUse" role="radiogroup" aria-labelledby="obUseLabel">
+              <button type="button" class="ob-prov" role="radio" aria-checked="false" data-obuse="work"><strong>My work</strong><span>Freelance, a small business, a job</span></button>
+              <button type="button" class="ob-prov" role="radio" aria-checked="false" data-obuse="family"><strong>Family and home</strong><span>Plans, errands, the week ahead</span></button>
+              <button type="button" class="ob-prov" role="radio" aria-checked="false" data-obuse="study"><strong>My studies</strong><span>Classes, deadlines, news in my field</span></button>
+              <button type="button" class="ob-prov" role="radio" aria-checked="false" data-obuse="me"><strong>Just me</strong><span>A bit of everything</span></button>
+            </div>
+          </div>
           <div class="ob-grid">
             <div class="field"><label for="obName">Your first name</label><input id="obName" autocomplete="given-name" placeholder="e.g. Alex" /></div>
             <div class="field"><label for="obCity">Where you live</label><input id="obCity" autocomplete="address-level2" placeholder="e.g. Toulouse" /></div>
@@ -1124,7 +1134,7 @@
 
         <section class="ob-step" data-ob="3" hidden>
           <h2 class="serif">What should Mav do for you?</h2>
-          <p class="ob-lead">Pick a few routines to start with. Each one runs on its own and has its own chat. You can change them anytime.</p>
+          <p class="ob-lead">A few to start with, picked for you: untick what you don't want. Each one runs on its own and has its own chat. You can change them anytime.</p>
           <label class="ob-routine is-on" id="obBriefRow">
             <input type="checkbox" id="obBrief" checked />
             <span class="ob-ico">☀️</span>
@@ -1138,6 +1148,10 @@
           <span class="splash-orb ob-orb" aria-hidden="true"></span>
           <h2 class="serif">You're all set.</h2>
           <p class="ob-lead" id="obSummary">Mav is ready.</p>
+          <div class="ob-ready" id="obNotifyRow">
+            <span>Routines and your briefing come to you as notifications, even when Mav is closed.</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="obNotify">Turn on notifications</button>
+          </div>
         </section>
 
         <footer class="ob-foot">

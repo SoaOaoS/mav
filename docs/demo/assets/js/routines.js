@@ -58,6 +58,26 @@ function renderInbox(items) {
     )
     .join("");
   $("#inbox")._items = list;
+  renderInboxSummary(items);
+}
+/* "What Mav did for you": the last 24 hours in one line, so the work done
+   while you were away is visible before any detail. */
+function renderInboxSummary(items) {
+  const day = Date.now() - 86400e3;
+  const recent = (items || []).filter((x) => toMs(x.ts) > day);
+  const n = { report: 0, alert: 0, other: 0 };
+  recent.forEach((x) => {
+    const k = x.topic === "routine" || x.topic === "job" ? "report" : x.topic === "watch" ? "alert" : "other";
+    n[k] += 1;
+  });
+  const parts = [];
+  if (n.report) parts.push(`${n.report} routine report${n.report > 1 ? "s" : ""}`);
+  if (n.alert) parts.push(`${n.alert} alert${n.alert > 1 ? "s" : ""}`);
+  if (n.other) parts.push(`${n.other} other update${n.other > 1 ? "s" : ""}`);
+  $("#inboxSum").hidden = !parts.length;
+  $("#inboxSum").textContent = parts.length
+    ? `In the last 24 hours, Mav brought you ${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]}.`
+    : "";
 }
 $("#inbox").addEventListener("click", (e) => {
   const b = e.target.closest("[data-more]");
