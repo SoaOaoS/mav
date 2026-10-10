@@ -483,7 +483,20 @@ $("#familyList").addEventListener("click", (e) => {
    Shown once on a fresh install (the server says when); reopen it from
    Settings → General. Every step can be skipped.
    ================================================================ */
-const OB = { step: 1, presets: [], sel: null, connected: false, templates: [], picked: new Set(), created: [] };
+const OB = { step: 1, presets: [], sel: null, connected: false, templates: [], picked: new Set(), created: [], use: "", auto: true };
+/* What each use starts with (routine templates, bot/ocroutine_templates.py).
+   Nothing that needs a mailbox: a first routine must work without setup. */
+const OB_PACKS = {
+  work: ["weekly-planning", "news-digest", "weekly-review"],
+  family: ["weekly-planning", "rain-reminder", "evening-recap"],
+  study: ["weekly-planning", "news-digest", "rain-reminder"],
+  me: ["rain-reminder", "news-digest"],
+};
+function obApplyPack() {
+  if (!OB.auto) return; // the person already chose: keep their picks
+  const known = new Set(OB.templates.map((t) => t.id));
+  OB.picked = new Set((OB_PACKS[OB.use] || OB_PACKS.me).filter((id) => known.has(id)));
+}
 const OB_STEPS = 4;
 
 async function maybeOnboard() {
@@ -641,6 +654,7 @@ $("#obTest").addEventListener("click", async () => {
 
 /* Step 3 — routines */
 function obRenderRoutines() {
+  obApplyPack();
   $("#obRoutines").innerHTML = OB.templates
     .map(
       (t) => `<label class="ob-routine ${OB.picked.has(t.id) ? "is-on" : ""}">
@@ -651,10 +665,32 @@ function obRenderRoutines() {
     )
     .join("");
 }
+$("#obUse").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-obuse]");
+  if (!b) return;
+  OB.use = b.dataset.obuse;
+  $$("#obUse [data-obuse]").forEach((x) => {
+    x.classList.toggle("is-sel", x === b);
+    x.setAttribute("aria-checked", String(x === b));
+  });
+});
+$("#obNotify").addEventListener("click", async () => {
+  await togglePush();
+  obNotifyUi();
+});
+function obNotifyUi() {
+  const unsupported = !("Notification" in window) || !("serviceWorker" in navigator);
+  $("#obNotifyRow").hidden = unsupported;
+  $("#obNotify").textContent = N.enabled ? "Notifications on" : "Turn on notifications";
+  $("#obNotify").disabled = N.enabled;
+}
 $("#onboarding").addEventListener("change", (e) => {
   const cb = e.target.closest('input[type="checkbox"]');
   if (!cb) return;
-  if (cb.dataset.obtpl) cb.checked ? OB.picked.add(cb.dataset.obtpl) : OB.picked.delete(cb.dataset.obtpl);
+  if (cb.dataset.obtpl) {
+    OB.auto = false;
+    cb.checked ? OB.picked.add(cb.dataset.obtpl) : OB.picked.delete(cb.dataset.obtpl);
+  }
   cb.closest(".ob-routine").classList.toggle("is-on", cb.checked);
 });
 
@@ -688,8 +724,9 @@ async function obNext() {
         city: $("#obCity").value,
         language: $("#obLang").value,
         interests: $("#obInterests").value,
+        use: OB.use,
       };
-      if (body.name.trim() || body.city.trim() || body.interests.trim() || body.language !== "en")
+      if (body.name.trim() || body.city.trim() || body.interests.trim() || body.use || body.language !== "en")
         await api.post("onboarding/profile", body);
     } else if (OB.step === 3) {
       const r = await api.post("onboarding/routines", {
@@ -710,7 +747,10 @@ async function obNext() {
       return briefMe();
     }
     obGo(OB.step + 1);
-    if (OB.step === OB_STEPS) $("#obNext").hidden = !$("#obBrief").checked;
+    if (OB.step === OB_STEPS) {
+      $("#obNext").hidden = !$("#obBrief").checked;
+      obNotifyUi();
+    }
   } catch (e) {
     msg.textContent = e.message;
     msg.className = "ob-msg is-err";
