@@ -973,6 +973,8 @@ def main():
 
     # The database is prepared beside the web app: the page never waits on it.
     threading.Thread(target=mav_store.prepare_database, name="schema", daemon=True).start()
+    # Connections started as soon as the engine is, not on the first message.
+    threading.Thread(target=mav_engine.keep_engine_warm, name="engine-warm", daemon=True).start()
 
     srv = ThreadedHTTPServer((mav_core.BIND, mav_core.PORT), Handler)
     print(f"mav-api listening on http://{mav_core.BIND}:{mav_core.PORT} (static: {mav_core.STATIC_DIR})", flush=True)

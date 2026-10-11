@@ -160,6 +160,33 @@ def mcp_status() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _engine_up() -> bool:
+    try:
+        return bool((mav_core.http_json(f"{mav_core.OPENCODE_URL}/global/health", timeout=3) or {}).get("healthy"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def keep_engine_warm(every_s: float = 5.0, stop: threading.Event | None = None) -> None:
+    """Each time the engine (re)starts, have it start its connections and read
+    its helpers right away: otherwise the first message after a start waits
+    while every MCP server is launched (npx/uvx fetch their package after a
+    wake in the cloud). Runs beside the web app; one cheap health check per
+    `every_s`."""
+    stop = stop or threading.Event()
+    was_up = False
+    while not stop.is_set():
+        up = _engine_up()
+        if up and not was_up:
+            t0 = time.time()
+            mcp = mcp_status()  # the engine connects its MCP servers to answer
+            _agents_cache["at"] = 0
+            valid_agents()
+            print(f"[mav web] engine ready: {len(mcp)} connection(s) started in {time.time() - t0:.1f} s", flush=True)
+        was_up = up
+        stop.wait(every_s)
+
+
 def _engine_error(detail: str, code: int) -> str:
     """Human message out of an opencode error body (JSON or plain)."""
     try:
@@ -1089,4 +1116,4 @@ def valid_agents() -> set:
     return names or _agents_cache["names"]
 
 
-__all__ = ['AGENT_NAME_RE', 'AGENT_TEMPLATE', 'DEFAULT_SERVER_UNITS', 'SECRET_HINTS', 'SERVER_UNIT_EXPLICIT', '_agents_cache', '_config_files', '_cpu_lock', '_cpu_prev', '_engine_error', '_engine_mcp_names', '_extract_oauth_code', '_fill', '_install_home', '_mask_secrets', '_mask_url', '_merge_secrets', '_normalize_mcp_entry', '_parse_frontmatter', '_pending', '_release_cache', '_semver', '_stored_key', '_unit_active', '_validate_mcp', 'add_mcp_entry', 'agents_dir', 'config_snapshot', 'cpu_pct', 'delete_agent_file', 'engine_started_at', 'engine_status', 'find_runtime', 'get_agents', 'get_connections', 'get_status', 'install_from_catalog', 'installed_version', 'latest_release', 'list_agent_files', 'mark_pending', 'mcp_catalog', 'mcp_oauth_callback', 'mcp_oauth_remove', 'mcp_oauth_start', 'mcp_status', 'pending_changes', 'provider_current', 'provider_save', 'provider_snapshot', 'provider_test', 'read_agent_file', 'read_agents', 'read_mcp', 'restart_engine', 'server_unit', 'start_update', 'sys_metrics', 'update_running', 'update_status', 'valid_agents', 'version_info', 'write_agent_file', 'write_agents', 'write_mcp']
+__all__ = ['AGENT_NAME_RE', 'AGENT_TEMPLATE', 'DEFAULT_SERVER_UNITS', 'SECRET_HINTS', 'SERVER_UNIT_EXPLICIT', '_agents_cache', '_config_files', '_cpu_lock', '_cpu_prev', '_engine_error', '_engine_mcp_names', '_extract_oauth_code', '_fill', '_install_home', '_engine_up', 'keep_engine_warm', '_mask_secrets', '_mask_url', '_merge_secrets', '_normalize_mcp_entry', '_parse_frontmatter', '_pending', '_release_cache', '_semver', '_stored_key', '_unit_active', '_validate_mcp', 'add_mcp_entry', 'agents_dir', 'config_snapshot', 'cpu_pct', 'delete_agent_file', 'engine_started_at', 'engine_status', 'find_runtime', 'get_agents', 'get_connections', 'get_status', 'install_from_catalog', 'installed_version', 'latest_release', 'list_agent_files', 'mark_pending', 'mcp_catalog', 'mcp_oauth_callback', 'mcp_oauth_remove', 'mcp_oauth_start', 'mcp_status', 'pending_changes', 'provider_current', 'provider_save', 'provider_snapshot', 'provider_test', 'read_agent_file', 'read_agents', 'read_mcp', 'restart_engine', 'server_unit', 'start_update', 'sys_metrics', 'update_running', 'update_status', 'valid_agents', 'version_info', 'write_agent_file', 'write_agents', 'write_mcp']
