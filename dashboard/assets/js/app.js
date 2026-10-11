@@ -338,12 +338,14 @@ function applyRole() {
 }
 async function loadFamily() {
   if (!LIVE || ME.role !== "owner") return;
+  const fresh = newest("family");
   let r;
   try {
     r = await api.get("family");
   } catch (_) {
     return;
   }
+  if (!fresh()) return;
   $("#familyRow").hidden = !r.enabled;
   const members = (r.accounts || []).filter((a) => a.role === "member");
   state.family = members;

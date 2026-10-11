@@ -373,8 +373,10 @@ async function briefMe() {
 }
 async function loadBriefing() {
   if (!LIVE) return;
+  const fresh = newest("briefing");
   try {
     const b = await api.get("briefing");
+    if (!fresh()) return;
     $("#briefingRow").hidden = !b.available;
     $("#briefingToggle").setAttribute("aria-checked", String(!!b.enabled));
     $("#briefingTime").value = b.time || "07:30";
