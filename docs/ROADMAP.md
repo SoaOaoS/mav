@@ -46,6 +46,7 @@ Effort: **S** ≈ a few days · **M** ≈ 1–2 weeks · **L** ≈ a bigger proj
 | 2.2 | Answers where people already are: a Telegram bot first, WhatsApp later. Routines report there; replies go back to Mav. | M | A routine can be followed up without opening the app. |
 | 2.3 | Forward an e-mail to Mav to hand it a task. | S | A forwarded mail becomes a chat with Mav's answer. |
 | 2.4 | Web browsing in the hosted versions, inside the sandbox. | M | The Researcher can read pages that need a browser, in the cloud too. |
+| 2.5 | A catalog of 60+ ready connections (search, knowledge, tasks, team tools, developer tools, data, money, home), each with a step-by-step guide, a cost label and sign-in where the service offers it. No mail for now: it waits for 2.1. | M | ✅ Any listed service is connected in under five minutes without reading outside docs. |
 
 ## 3 — Actions people dare to delegate
 
@@ -75,8 +76,8 @@ Effort: **S** ≈ a few days · **M** ≈ 1–2 weeks · **L** ≈ a bigger proj
 - New features for the self-hosted version alone: it is the open showcase,
   the hosted versions are the product.
 - Family and team accounts in the cloud: when customers ask for them.
-- More niche connections (Notion, Home Assistant…) before Google and
-  Microsoft.
+- A mail connection through MCP: mail arrives with Google and Microsoft
+  sign-in (2.1).
 
 ## How each item ships
 

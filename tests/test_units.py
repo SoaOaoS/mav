@@ -230,6 +230,55 @@ class Catalog(unittest.TestCase):
                 used.add(v.split("}}")[0])
             self.assertEqual(used, keys, it["id"])
 
+    def test_every_connection_has_a_tutorial(self):
+        cat = json.loads((ROOT / "dashboard/mcp-catalog.json").read_text())
+        icons = (ROOT / "dashboard/assets/js/connections.js").read_text()
+        self.assertGreaterEqual(len(cat["items"]), 60)
+        for it in cat["items"]:
+            with self.subTest(it["id"]):
+                self.assertIn(it["category"], cat["categories"])
+                self.assertIn(f'"{it["category"]}"' if " " in it["category"] else f'{it["category"]}:', icons)
+                self.assertIn(it["cost"], ("free", "free tier", "paid"))
+                self.assertGreaterEqual(len(it["steps"]), 2)
+                self.assertTrue(all(isinstance(s, str) and s.strip() for s in it["steps"]))
+                self.assertTrue(it["docs"].startswith("https://"))
+                for inp in it.get("inputs", []):
+                    self.assertTrue(inp.get("required"), inp["key"])
+                    if inp.get("link"):
+                        self.assertTrue(inp["link"].startswith("https://"))
+                if it.get("auth") == "oauth":
+                    # Signed in from its card: nothing to paste, no header to fill.
+                    self.assertEqual(it["type"], "remote")
+                    self.assertNotIn("headers", it)
+                    self.assertTrue(any("Connect" in s for s in it["steps"]))
+
+    def test_no_mail_connection_for_now(self):
+        cat = json.loads((ROOT / "dashboard/mcp-catalog.json").read_text())
+        for it in cat["items"]:
+            text = json.dumps({k: it[k] for k in ("id", "name", "command", "url") if k in it}).lower()
+            for word in ("mail", "outlook", "imap", "smtp"):
+                self.assertNotIn(word, text, it["id"])
+
+    def test_addresses_with_a_credential_are_masked(self):
+        from mav_engine import _mask_secrets, _merge_secrets
+        cfg = {
+            "zap": {"type": "remote", "url": "https://mcp.zapier.com/api/mcp/s/Zk9aQ2xYb3RhcGlTZWNyZXQx/mcp"},
+            "av": {"type": "remote", "url": "https://mcp.alphavantage.co/mcp?apikey=ABCD1234"},
+            "plain": {"type": "remote", "url": "https://mcp.linear.app/mcp"},
+            "pg": {"type": "local", "command": ["uvx", "postgres-mcp"],
+                   "environment": {"DATABASE_URI": "postgresql://u:p@h/db"}},
+        }
+        shown = _mask_secrets(cfg)
+        self.assertEqual(shown["zap"]["url"], "https://mcp.zapier.com/••••••••")
+        self.assertEqual(shown["av"]["url"], "https://mcp.alphavantage.co/••••••••")
+        self.assertEqual(shown["plain"]["url"], "https://mcp.linear.app/mcp")
+        self.assertEqual(shown["pg"]["environment"]["DATABASE_URI"], "••••••••")
+        # Saved back unchanged from the editor: the real values are kept.
+        self.assertEqual(_merge_secrets(shown, cfg), cfg)
+        # A new address replaces the old one.
+        edited = {**shown, "plain": {"type": "remote", "url": "https://mcp.linear.app/mcp/readonly"}}
+        self.assertEqual(_merge_secrets(edited, cfg)["plain"]["url"], "https://mcp.linear.app/mcp/readonly")
+
 
 class PlainSummary(unittest.TestCase):
     def test_drops_directives_and_images(self):

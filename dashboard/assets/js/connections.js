@@ -132,32 +132,90 @@ $("#mailForget").addEventListener("click", async () => {
 
 let CATALOG = { items: [], runtimes: {} };
 async function loadCatalog() {
-  if (!LIVE) return renderCatalog();
+  if (!LIVE) {
+    // The demo reads the same catalog file, so the whole list can be browsed.
+    if (!(CATALOG.items || []).length)
+      try {
+        const c = await (await fetch("mcp-catalog.json")).json();
+        CATALOG = {
+          items: c.items.map((i) => ({ ...i, ready: true })),
+          categories: c.categories,
+          runtimes: {},
+        };
+      } catch (_) {}
+    return renderCatalog();
+  }
   try {
     CATALOG = await api.get("config/mcp/catalog");
   } catch (_) {}
   renderCatalog();
 }
 const CAT_ICON = {
-  Web: "globe",
+  "Web & search": "globe",
+  Knowledge: "book",
   Everyday: "clock",
+  "Travel & places": "pin",
   "Notes & tasks": "edit",
+  "Team & work": "user",
+  Automation: "bolt",
+  Developers: "cpu",
+  Data: "server",
+  Money: "chart",
   Home: "home",
-  Work: "tool",
+  Media: "music",
 };
+const COST = { free: "free", "free tier": "free tier", paid: "paid service" };
+let CAT_FILTER = "";
+const catText = (it) =>
+  [it.name, it.description, it.category, it.id].join(" ").toLowerCase();
+function catCard(it) {
+  const state = it.installed
+    ? `<span class="badge ok">added</span>`
+    : it.ready
+      ? `<span class="badge">add</span>`
+      : `<span class="badge warn">needs ${it.runtime === "uvx" ? "uv" : "Node.js"}</span>`;
+  const meta = [
+    it.cost
+      ? `<span class="badge">${esc(COST[it.cost] || it.cost)}</span>`
+      : "",
+    it.auth === "oauth" ? `<span class="badge">${I("key")} sign-in</span>` : "",
+  ].join("");
+  return `<button class="cat-item ${it.installed ? "is-added" : ""}" data-cat="${esc(it.id)}">
+        <span class="cm-icon sm">${I(CAT_ICON[it.category] || "plug")}</span>
+        <span class="cat-text"><strong>${esc(it.name)}</strong><span>${esc(it.description)}</span>
+          ${meta ? `<span class="cat-meta">${meta}</span>` : ""}</span>
+        ${state}
+      </button>`;
+}
 function renderCatalog() {
   const items = CATALOG.items || [];
-  $("#mcpCatalog").innerHTML = items
+  const cats = CATALOG.categories || [...new Set(items.map((i) => i.category))];
+  $("#catFilter").innerHTML = [
+    "",
+    ...cats.filter((c) => items.some((i) => i.category === c)),
+  ]
     .map(
-      (
-        it,
-      ) => `<button class="cat-item ${it.installed ? "is-added" : ""}" data-cat="${esc(it.id)}">
-        <span class="cm-icon sm">${I(CAT_ICON[it.category] || "plug")}</span>
-        <span class="cat-text"><strong>${esc(it.name)}</strong><span>${esc(it.description)}</span></span>
-        <span class="badge ${it.installed ? "ok" : ""}">${it.installed ? "added" : it.ready ? "add" : "needs " + esc(it.runtime === "uvx" ? "uv" : "Node.js")}</span>
-      </button>`,
+      (c) =>
+        `<button type="button" class="chip ${c === CAT_FILTER ? "is-active" : ""}" data-catf="${esc(c)}">${c ? esc(c) : "All"}</button>`,
     )
     .join("");
+  const q = $("#catSearch").value.trim().toLowerCase();
+  const shown = items.filter(
+    (it) =>
+      (!CAT_FILTER || it.category === CAT_FILTER) &&
+      (!q || catText(it).includes(q)),
+  );
+  const groups = cats
+    .map((c) => [c, shown.filter((it) => it.category === c)])
+    .filter(([, list]) => list.length);
+  $("#mcpCatalog").innerHTML = groups.length
+    ? groups
+        .map(
+          ([c, list]) =>
+            `<section class="catalog-group"><h4>${esc(c)}</h4><div class="catalog">${list.map(catCard).join("")}</div></section>`,
+        )
+        .join("")
+    : `<div class="empty">No connection matches. Use <strong>Custom…</strong> to add any MCP server.</div>`;
   const missing = Object.entries(CATALOG.runtimes || {})
     .filter(([, ok]) => !ok)
     .map(([r]) => r);
@@ -165,6 +223,13 @@ function renderCatalog() {
     ? `Some connections need ${missing.map((r) => (r === "npx" ? "<strong>Node.js</strong> (<code>sudo apt install nodejs npm</code>)" : "<strong>uv</strong> (<code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>)")).join(" and ")} on your server.`
     : "";
 }
+$("#catSearch").addEventListener("input", renderCatalog);
+$("#catFilter").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-catf]");
+  if (!b) return;
+  CAT_FILTER = b.dataset.catf === CAT_FILTER ? "" : b.dataset.catf;
+  renderCatalog();
+});
 $("#mcpCatalog").addEventListener("click", (e) => {
   const b = e.target.closest("[data-cat]");
   if (!b) return;
@@ -185,6 +250,9 @@ function addFromCatalog(it) {
     `<p>${esc(it.description)}</p>` +
     (it.note
       ? `<div class="onboard soft"><span>${esc(it.note)}</span></div>`
+      : "") +
+    ((it.steps || []).length
+      ? `<div class="field"><span class="field-label">How to set it up</span><ol class="cat-steps">${it.steps.map((st) => `<li>${esc(st)}</li>`).join("")}</ol></div>`
       : "") +
     (it.inputs || [])
       .map(
@@ -214,7 +282,11 @@ function addFromCatalog(it) {
           btn.disabled = true;
           try {
             await api.post("config/mcp/install", { id: it.id, values });
-            changed(`${it.name} added.`);
+            changed(
+              it.auth === "oauth"
+                ? `${it.name} added. Apply the changes, then click Connect on its card to sign in.`
+                : `${it.name} added.`,
+            );
             loadMcp();
             return true;
           } catch (e) {
