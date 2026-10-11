@@ -187,6 +187,27 @@ def start_run(prompt: str, sid: str, agent: str = "", files: list | None = None,
     return run
 
 
+def asking_user() -> int | None:
+    """Whose conversation is calling a tool right now (the memory tools act
+    in that person's memory only). The answers running through the app say
+    it; otherwise the engine's busy chats do. Several people at once, or
+    nobody: None, and the tool says it could not tell."""
+    with _runs_lock:
+        users = {r.user for r in RUNS.values() if r.status == "running"}
+    if len(users) == 1:
+        return users.pop()
+    if users:
+        return None
+    try:
+        busy = mav_core.http_json(f"{mav_core.OPENCODE_URL}/session/status", timeout=5) or {}
+    except Exception:  # noqa: BLE001
+        return None
+    sids = [sid for sid, st in (busy.items() if isinstance(busy, dict) else [])
+            if (st or {}).get("type") in ("busy", "retry")]
+    owners = {mav_chat.session_owner(sid) for sid in sids}
+    return owners.pop() if len(owners) == 1 else None
+
+
 def get_run(sid: str) -> Run | None:
     _run_cleanup()
     with _runs_lock:
@@ -364,6 +385,8 @@ def _tool_detail(part: dict) -> str:
     inp = state.get("input") or {}
     if part.get("tool") == "task":
         return str(inp.get("subagent_type") or inp.get("agent") or "")
+    if inp.get("fact"):  # the memory tools: what was remembered or corrected
+        return str(inp["fact"])[:120]
     if inp.get("url"):
         return urllib.parse.urlparse(str(inp["url"])).netloc or ""
     if inp.get("query"):
@@ -727,4 +750,4 @@ def ask(
     return last
 
 
-__all__ = ['ENGINE_EVENTS', 'EngineEvents', 'MSG_WINDOW', 'RUNS', 'RUN_TTL', 'Run', 'TOOL_TEXT_MAX', '_clip', '_limit_ok', '_messages_url', '_parse_sse', '_run_cleanup', '_runs_lock', '_sse', '_tool_detail', '_tool_info', 'abort_session', 'ask', 'ensure_session', 'get_run', 'interrupt_session', 'request_interrupt', 'runs_view', 'start_run', 'stop_run', 'stream_answer']
+__all__ = ['asking_user', 'ENGINE_EVENTS', 'EngineEvents', 'MSG_WINDOW', 'RUNS', 'RUN_TTL', 'Run', 'TOOL_TEXT_MAX', '_clip', '_limit_ok', '_messages_url', '_parse_sse', '_run_cleanup', '_runs_lock', '_sse', '_tool_detail', '_tool_info', 'abort_session', 'ask', 'ensure_session', 'get_run', 'interrupt_session', 'request_interrupt', 'runs_view', 'start_run', 'stop_run', 'stream_answer']

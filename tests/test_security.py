@@ -57,6 +57,37 @@ class Server(unittest.TestCase):
         return r.status, out, r
 
 
+class AgentMemoryTest(Server):
+    """The assistant's memory tools: a token, and only the asker's memory."""
+
+    def test_without_the_token_nothing_happens(self):
+        with mock.patch.object(mav_api.mav_store, "agent_memory") as act:
+            st, body, _ = self.req("POST", "/api/agent/memory", {"action": "recall"})
+            self.assertEqual(st, 403)
+            st, _, _ = self.req("POST", "/api/agent/memory", {"action": "recall"}, {"X-Mav-Agent-Token": "nope"})
+            self.assertEqual(st, 403)
+        act.assert_not_called()
+
+    def test_it_acts_in_the_memory_of_whoever_is_talking(self):
+        seen = []
+
+        def act(payload):
+            seen.append((mav_core.uid(), payload["action"]))
+            return {"ok": True, "id": 1, "fact": "x"}
+
+        tok = {"X-Mav-Agent-Token": mav_api.mav_engine.agent_token()}
+        with mock.patch.object(mav_api.mav_stream, "asking_user", return_value=7), \
+                mock.patch.object(mav_api.mav_store, "agent_memory", side_effect=act):
+            st, body, _ = self.req("POST", "/api/agent/memory", {"action": "remember", "fact": "x"}, tok)
+        self.assertEqual((st, seen), (200, [(7, "remember")]))
+        # Several people talking at once: it refuses rather than guess.
+        with mock.patch.object(mav_api.mav_stream, "asking_user", return_value=None), \
+                mock.patch.object(mav_api.mav_store, "agent_memory") as never:
+            st, body, _ = self.req("POST", "/api/agent/memory", {"action": "remember", "fact": "x"}, tok)
+        self.assertEqual(st, 409)
+        never.assert_not_called()
+
+
 class StaticFilesTest(Server):
     def test_unchanged_files_cost_a_304_and_text_goes_compressed(self):
         import gzip

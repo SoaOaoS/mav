@@ -508,6 +508,51 @@ def _raw_mcp() -> dict:
     return dict(cfg.get("mcp", {}) or {})
 
 
+# The assistant's memory tools (dashboard/tools/mav_memory.py): always there,
+# set up by the web app itself. They call back into the web app, which knows
+# whose conversation asks; a token keeps everyone else out.
+MEMORY_TOOL = Path(__file__).resolve().parents[1] / "tools" / "mav_memory.py"
+
+
+def agent_token() -> str:
+    """The secret the memory tools present to the web app (made once)."""
+    p = mav_core.BOT_DIR / "agent.token"
+    try:
+        tok = p.read_text(encoding="utf-8").strip()
+        if len(tok) >= 32:
+            return tok
+    except OSError:
+        pass
+    import secrets  # noqa: PLC0415
+
+    tok = secrets.token_urlsafe(32)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(tok, encoding="utf-8")
+    p.chmod(0o600)
+    mav_core._chown_user(p)
+    return tok
+
+
+def ensure_memory_tool() -> bool:
+    """Write (or fix) the "memory" connection. True if the engine's config
+    changed, so the engine must restart to take it up."""
+    api = os.environ.get("MAV_AGENT_API_URL") or f"http://127.0.0.1:{mav_core.PORT}"
+    want = {
+        "type": "local",
+        "command": [sys.executable, str(MEMORY_TOOL)],
+        "environment": {"MAV_AGENT_API_URL": api, "MAV_AGENT_TOKEN": agent_token()},
+        "enabled": True,
+    }
+    mcp = _raw_mcp()
+    if mcp.get("memory") == want:
+        return False
+    ok = bool(add_mcp_entry("memory", want).get("ok"))
+    # Mav's own part, restarted for at once by the caller: not a change the
+    # person has to apply.
+    _pending.pop("Connections", None)
+    return ok
+
+
 def code_state() -> dict:
     entry = _raw_mcp().get("code") or {}
     return {
@@ -1116,4 +1161,4 @@ def valid_agents() -> set:
     return names or _agents_cache["names"]
 
 
-__all__ = ['AGENT_NAME_RE', 'AGENT_TEMPLATE', 'DEFAULT_SERVER_UNITS', 'SECRET_HINTS', 'SERVER_UNIT_EXPLICIT', '_agents_cache', '_config_files', '_cpu_lock', '_cpu_prev', '_engine_error', '_engine_mcp_names', '_extract_oauth_code', '_fill', '_install_home', '_engine_up', 'keep_engine_warm', '_mask_secrets', '_mask_url', '_merge_secrets', '_normalize_mcp_entry', '_parse_frontmatter', '_pending', '_release_cache', '_semver', '_stored_key', '_unit_active', '_validate_mcp', 'add_mcp_entry', 'agents_dir', 'config_snapshot', 'cpu_pct', 'delete_agent_file', 'engine_started_at', 'engine_status', 'find_runtime', 'get_agents', 'get_connections', 'get_status', 'install_from_catalog', 'installed_version', 'latest_release', 'list_agent_files', 'mark_pending', 'mcp_catalog', 'mcp_oauth_callback', 'mcp_oauth_remove', 'mcp_oauth_start', 'mcp_status', 'pending_changes', 'provider_current', 'provider_save', 'provider_snapshot', 'provider_test', 'read_agent_file', 'read_agents', 'read_mcp', 'restart_engine', 'server_unit', 'start_update', 'sys_metrics', 'update_running', 'update_status', 'valid_agents', 'version_info', 'write_agent_file', 'write_agents', 'write_mcp']
+__all__ = ['AGENT_NAME_RE', 'AGENT_TEMPLATE', 'DEFAULT_SERVER_UNITS', 'SECRET_HINTS', 'SERVER_UNIT_EXPLICIT', '_agents_cache', '_config_files', '_cpu_lock', '_cpu_prev', '_engine_error', '_engine_mcp_names', '_extract_oauth_code', '_fill', '_install_home', 'MEMORY_TOOL', 'agent_token', 'ensure_memory_tool', '_engine_up', 'keep_engine_warm', '_mask_secrets', '_mask_url', '_merge_secrets', '_normalize_mcp_entry', '_parse_frontmatter', '_pending', '_release_cache', '_semver', '_stored_key', '_unit_active', '_validate_mcp', 'add_mcp_entry', 'agents_dir', 'config_snapshot', 'cpu_pct', 'delete_agent_file', 'engine_started_at', 'engine_status', 'find_runtime', 'get_agents', 'get_connections', 'get_status', 'install_from_catalog', 'installed_version', 'latest_release', 'list_agent_files', 'mark_pending', 'mcp_catalog', 'mcp_oauth_callback', 'mcp_oauth_remove', 'mcp_oauth_start', 'mcp_status', 'pending_changes', 'provider_current', 'provider_save', 'provider_snapshot', 'provider_test', 'read_agent_file', 'read_agents', 'read_mcp', 'restart_engine', 'server_unit', 'start_update', 'sys_metrics', 'update_running', 'update_status', 'valid_agents', 'version_info', 'write_agent_file', 'write_agents', 'write_mcp']

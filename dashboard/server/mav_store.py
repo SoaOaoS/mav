@@ -192,6 +192,56 @@ def memory_action(action: str, payload: dict) -> dict:
     return {"ok": False, "error": "unknown action"}
 
 
+def agent_memory(payload: dict) -> dict:
+    """The assistant's own memory tools (dashboard/tools/mav_memory.py), in
+    the memory of the person it is talking to (mav_core.as_user)."""
+    action = str(payload.get("action") or "")
+    me = mav_core.uid()
+    if not (mav_core.MEMORY and mav_core.MEMORY_ENABLED):
+        return {"ok": False, "error": "Memory is turned off on this Mav."}
+    fact = " ".join(str(payload.get("fact") or "").split())[:500]
+
+    def one(fid) -> dict | None:
+        try:
+            rows = mav_core.pg_query("select id, fact from facts where id = %s and chat_id = %s", (int(fid), me))
+        except (TypeError, ValueError):
+            return None
+        return rows[0] if rows else None
+
+    if action == "remember":
+        if len(fact) < 3:
+            return {"ok": False, "error": "Give the fact as a short sentence."}
+        known = mav_core.pg_query("select id, fact from facts where chat_id = %s and lower(fact) = lower(%s)", (me, fact))
+        if known:
+            return {"ok": True, "id": known[0]["id"], "fact": known[0]["fact"], "existing": True}
+        rows = mav_core.pg_query(
+            "insert into facts (chat_id, fact, source, ts) values (%s, %s, %s, %s) returning id",
+            (me, fact, "assistant", int(time.time())),
+        )
+        return {"ok": True, "id": rows[0]["id"], "fact": fact}
+    if action == "update":
+        if len(fact) < 3:
+            return {"ok": False, "error": "Give the new fact as a short sentence."}
+        row = one(payload.get("id"))
+        if not row:
+            return {"ok": False, "error": "No such fact: use recall to see their numbers."}
+        mav_core.pg_exec("update facts set fact = %s, source = %s, ts = %s where id = %s",
+                         (fact, "assistant", int(time.time()), row["id"]))
+        return {"ok": True, "id": row["id"], "fact": fact, "was": row["fact"]}
+    if action == "forget":
+        row = one(payload.get("id"))
+        if not row:
+            return {"ok": False, "error": "No such fact: use recall to see their numbers."}
+        mav_core.pg_exec("delete from facts where id = %s", (row["id"],))
+        return {"ok": True, "id": row["id"], "fact": row["fact"]}
+    if action == "recall":
+        facts = mav_core.pg_query("select id, fact from facts where chat_id = %s order by ts desc limit 60", (me,))
+        query = str(payload.get("query") or "").strip()
+        past = mav_core.MEMORY.search(me, query, 4) if query else []
+        return {"ok": True, "facts": facts, "past": [{"q": p.get("q", ""), "a": p.get("a", "")} for p in past]}
+    return {"ok": False, "error": f"Unknown action: {action}"}
+
+
 def get_notifications(limit: int = 30) -> dict:
     """Historique des notifications proactives (veille + jobs)."""
     who, args = mav_core.mine()
@@ -654,4 +704,4 @@ def ensure_schema() -> None:
         pass
 
 
-__all__ = ['SCHEMA_FILE', 'prepare_database', 'forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']
+__all__ = ['agent_memory', 'SCHEMA_FILE', 'prepare_database', 'forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']

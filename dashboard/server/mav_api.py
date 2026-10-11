@@ -335,6 +335,34 @@ class Handler(BaseHTTPRequestHandler):
         res["restart"] = mav_engine.restart_engine()
         return self._send(200, res)
 
+    def _agent_memory(self):
+        """The assistant's memory tools (dashboard/tools/mav_memory.py): a
+        token instead of a session, and the memory of whoever is talking to
+        it right now, never anyone else's."""
+        self.close_connection = True
+        import hmac  # noqa: PLC0415
+
+        got = self.headers.get("X-Mav-Agent-Token", "")
+        if not got or not hmac.compare_digest(got.encode(), mav_engine.agent_token().encode()):
+            return self._send(403, {"ok": False, "error": "forbidden"})
+        try:
+            size = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            size = 0
+        if size > 64 * 1024:
+            return self._send(413, {"ok": False, "error": "Too large."})
+        payload = self._body()
+        who = mav_stream.asking_user()
+        if who is None:
+            return self._send(409, {"ok": False, "error": "Could not tell whose conversation this is: try again "
+                                    "in a moment, or say it in the answer instead."})
+        try:
+            with mav_core.as_user(who):
+                res = mav_store.agent_memory(payload)
+        except Exception as exc:  # noqa: BLE001
+            res = {"ok": False, "error": f"Memory unavailable: {exc}"}
+        return self._send(200 if res.get("ok") else 400, res)
+
     def _sse_open(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -622,6 +650,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path, _, _ = self.path.partition("?")
+        if path == "/api/agent/memory":
+            return self._agent_memory()
         if path == "/api/backup/restore":
             if self._cross_site(path):
                 return
@@ -971,14 +1001,20 @@ def _static_file(target: Path) -> tuple[str, bytes, bytes | None]:
 def main():
     import ssl
 
-    # Fast-answer defaults for installs made before them: once, then the
-    # engine restarts to take them up.
-    try:
-        if mav_core.mav_provider.tune(mav_core._config_dir()):
-            print("[mav web] model tuned for faster answers: restarting the engine", flush=True)
-            mav_engine.restart_engine()
-    except Exception as exc:  # noqa: BLE001
-        print(f"[mav web] could not tune the model settings: {exc}", flush=True)
+    # Fast-answer defaults and the assistant's memory tools, for installs made
+    # before them: once, then the engine restarts to take them up.
+    changed = []
+    for what, step in (("model tuned for faster answers", lambda: mav_core.mav_provider.tune(mav_core._config_dir())),
+                       ("memory tools set up", mav_engine.ensure_memory_tool)):
+        try:
+            if step():
+                changed.append(what)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[mav web] {what}: failed ({exc})", flush=True)
+    if changed:
+        print(f"[mav web] {', '.join(changed)}: restarting the engine", flush=True)
+        # Beside the web app: a restart through systemctl can take seconds.
+        threading.Thread(target=mav_engine.restart_engine, name="engine-restart", daemon=True).start()
 
     # The database is prepared beside the web app: the page never waits on it.
     threading.Thread(target=mav_store.prepare_database, name="schema", daemon=True).start()
