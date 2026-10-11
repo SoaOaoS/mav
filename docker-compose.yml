@@ -20,6 +20,8 @@ x-mav: &mav
   environment:
     TZ: ${TZ:-UTC}
     OPENCODE_URL: http://engine:4096
+    # The assistant's memory tools (run by the engine) reach the web app here.
+    MAV_AGENT_API_URL: http://web:8787
     PG_DSN: host=postgres port=5432 user=mav password=${POSTGRES_PASSWORD:-change-me-please} dbname=mav connect_timeout=5
     MAV_REPO: SoaOaoS/mav
     MAV_PROVIDER: ${MAV_PROVIDER:-}

@@ -362,6 +362,43 @@ class FastAnswers(unittest.TestCase):
             self.assertEqual(cfg, {"model": ref})
 
 
+class MemoryTools(unittest.TestCase):
+    def test_the_engine_sees_four_tools_and_reads_errors(self):
+        sys.path.insert(0, str(ROOT / "dashboard" / "tools"))
+        import mav_memory
+        from unittest import mock
+        res = mav_memory.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        self.assertEqual({t["name"] for t in res["result"]["tools"]}, {"remember", "update", "forget", "recall"})
+        with mock.patch.object(mav_memory, "call", side_effect=mav_memory.ToolError("No such fact")):
+            res = mav_memory.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                                     "params": {"name": "forget", "arguments": {"id": 9}}})
+        self.assertTrue(res["result"]["isError"])
+        self.assertIn("No such fact", res["result"]["content"][0]["text"])
+
+    def test_whose_conversation_asks(self):
+        import mav_stream
+        from unittest import mock
+
+        class R:
+            def __init__(self, user, status="running"):
+                self.user, self.status = user, status
+
+        with mock.patch.dict(mav_stream.RUNS, {"a": R(3), "b": R(5, "done")}, clear=True):
+            self.assertEqual(mav_stream.asking_user(), 3)
+        with mock.patch.dict(mav_stream.RUNS, {"a": R(3), "b": R(5)}, clear=True):
+            self.assertIsNone(mav_stream.asking_user())  # two people at once: no guess
+        # A routine run outside the app: the engine's busy chat says whose.
+        with mock.patch.dict(mav_stream.RUNS, {}, clear=True), \
+                mock.patch.object(mav_stream.mav_core, "http_json", return_value={"s1": {"type": "busy"}, "s2": {"type": "idle"}}), \
+                mock.patch.object(mav_stream.mav_chat, "session_owner", side_effect=lambda sid: {"s1": 4}[sid]):
+            self.assertEqual(mav_stream.asking_user(), 4)
+
+    def test_the_assistant_is_told_to_use_its_memory(self):
+        prompt = (ROOT / "agents" / "assistant.md").read_text()
+        self.assertIn("memory_remember", prompt)
+        self.assertIn("Never tell the person to use `/remember`", prompt)
+
+
 class StepsWhereTheyHappened(unittest.TestCase):
     """A tool shows between what was written before and after it."""
 

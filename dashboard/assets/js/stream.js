@@ -118,12 +118,17 @@ const TOOL_LABELS = {
   webfetch: "Reading a web page",
   websearch: "Searching the web",
   task: "Delegating to a helper",
+  memory_remember: "Memory updated",
+  memory_update: "Memory updated",
+  memory_forget: "Forgot something",
+  memory_recall: "Checking what I know about you",
 };
 function toolLabel(name, detail) {
   if (detail) {
     if (name === "task") return `${agentDisplay(detail)} is on it`;
     if (name === "webfetch") return `Reading ${detail}`;
     if (name === "websearch") return `Searching “${detail}”`;
+    if (name === "memory_remember" || name === "memory_update") return `Memory updated: ${detail}`;
   }
   if (TOOL_LABELS[name]) return TOOL_LABELS[name];
   const m = /^([a-z0-9]+)_(.+)$/.exec(name || "");

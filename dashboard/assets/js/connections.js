@@ -302,7 +302,8 @@ function addFromCatalog(it) {
 
 function renderMcp() {
   $("#mcpEditor").value = JSON.stringify(MCP, null, 2);
-  const names = Object.keys(MCP);
+  // "memory" is Mav's own (the assistant's memory tools), not a connection.
+  const names = Object.keys(MCP).filter((n) => n !== "memory");
   $("#mcpCards").innerHTML = names.length
     ? names
         .map((n) => {
