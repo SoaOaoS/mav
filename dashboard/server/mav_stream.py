@@ -604,15 +604,21 @@ def stream_answer(
             pause = 0.15
 
         # Surface tool/MCP activity so the web app can show it live — with the
-        # helper's name when the assistant delegates.
+        # helper's name when the assistant delegates, and where in the answer
+        # it happened (`at`, as in a reloaded chat: mav_chat.flow).
+        window = {(e.get("info") or {}).get("id") for e in new_assistant}
+        flowed = "\n\n".join(t for k, t in texts.items() if k not in window and t)  # scrolled out of the window
         for e in new_assistant:
+            flowed, steps = mav_chat.flow(flowed, e.get("parts") or [])
+            at = {s["id"]: s["at"] for s in steps}
             for part in (e.get("parts") or []):
                 if part.get("type") != "tool":
                     continue
                 key = part.get("callID") or part.get("id")
                 if not key:
                     continue
-                tool = _tool_info(part)
+                info = _tool_info(part)
+                tool = {**info, "at": at.get(info["id"], len(flowed))}
                 sig_ = (tool["status"], len(tool.get("input", "")),
                         len(tool.get("output", "")), tool.get("end"))
                 if tools_state.get(key) != sig_:

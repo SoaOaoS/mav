@@ -241,6 +241,51 @@ def list_models(pid: str, base_url: str = "", api_key: str = "", timeout: float 
 # ------------------------------------------------------------------ write
 
 
+# Claude models that think adaptively (4.6 and later): by default the engine
+# lets them think at high effort before every answer, even "hello", and gives
+# the title of each chat to an older model with a 16 000-token thinking budget.
+# Low effort: they think when the question calls for it and answer at once
+# otherwise; the titles use the same model. A user's own setting is kept.
+ADAPTIVE_CLAUDE = re.compile(r"^claude-(?:haiku|sonnet|opus|fable)-(?:[5-9]|4-[6-9])", re.I)
+FAST_THINKING = {"thinking": {"type": "adaptive"}, "effort": "low"}
+
+
+def _tune(cfg: dict) -> bool:
+    """Fast-answer defaults for the configured model, in place. True if changed."""
+    pid, _, model = str(cfg.get("model") or "").partition("/")
+    if pid != "anthropic" or not ADAPTIVE_CLAUDE.match(model):
+        return False
+    changed = False
+    blk = cfg.setdefault("provider", {}).setdefault("anthropic", {})
+    entry = blk.setdefault("models", {}).setdefault(model, {"name": model})
+    opts = entry.setdefault("options", {})
+    for k, v in FAST_THINKING.items():
+        if k not in opts:
+            opts[k] = v
+            changed = True
+    if not cfg.get("small_model"):
+        cfg["small_model"] = f"{pid}/{model}"
+        changed = True
+    return changed
+
+
+def tune(config_dir: Path) -> bool:
+    """Bring an existing install to the fast-answer defaults (once). True if
+    the engine's config changed, so the engine must restart to take it up."""
+    cfg_path = Path(config_dir) / "opencode.json"
+    try:
+        cfg = json.loads(cfg_path.read_text())
+    except Exception:  # noqa: BLE001
+        return False
+    if not _tune(cfg):
+        return False
+    tmp = cfg_path.with_name("opencode.json.tmp")
+    tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
+    tmp.replace(cfg_path)
+    _owner_like(cfg_path, Path(config_dir))
+    return True
+
+
 def apply(
     config_dir: Path,
     env_server: Path,
@@ -277,7 +322,9 @@ def apply(
         # Undo a stale empty override for a native provider (it breaks auth),
         # but keep a real user override that carries options.
         blk = blocks.get(pid)
-        if isinstance(blk, dict) and not (blk.get("options") or {}):
+        model_opts = any((m or {}).get("options") for m in ((blk or {}).get("models") or {}).values()) \
+            if isinstance(blk, dict) else False
+        if isinstance(blk, dict) and not (blk.get("options") or {}) and not model_opts:
             blocks.pop(pid, None)
         if base_url and base_url.rstrip("/") != preset["base"].rstrip("/"):
             blk = blocks.setdefault(pid, {})
@@ -307,7 +354,10 @@ def apply(
     else:
         cfg.pop("provider", None)
     ref = f"{pid}/{model}"
+    if cfg.get("model") != ref and cfg.get("small_model") == cfg.get("model"):
+        cfg.pop("small_model", None)  # ours, for the previous model: set again below
     cfg["model"] = ref
+    _tune(cfg)
     cfg.setdefault("$schema", "https://opencode.ai/config.json")
 
     try:

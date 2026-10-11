@@ -447,8 +447,8 @@ def session_messages(sid: str, entries: list | None = None) -> list[dict]:
             continue
         parts = e.get("parts") or []
         text = _part_text(parts)
-        tools = [mav_stream._tool_info(p) for p in parts if p.get("type") == "tool"] if role == "assistant" else []
-        if not text and not tools:
+        has_tools = role == "assistant" and any(p.get("type") == "tool" for p in parts)
+        if not text and not has_tools:
             continue
         ts = (info.get("time") or {}).get("created")
         if role == "user":
@@ -458,17 +458,32 @@ def session_messages(sid: str, entries: list | None = None) -> list[dict]:
         agent = info.get("agent") or info.get("mode") or ""
         prev = msgs[-1] if msgs else None
         if prev and prev["role"] == "mav":
-            if text:
-                prev["text"] = f"{prev['text']}\n\n{text}" if prev["text"] else text
+            prev["text"], tools = flow(prev["text"], parts)
             prev["agent"] = prev.get("agent") or agent
             if tools:
                 prev.setdefault("tools", []).extend(tools)
             continue
+        text, tools = flow("", parts)
         msg = {"role": "mav", "text": text, "ts": ts, "agent": agent}
         if tools:
             msg["tools"] = tools
         msgs.append(msg)
     return msgs
+
+
+def flow(text: str, parts: list) -> tuple[str, list[dict]]:
+    """`text` followed by these parts' visible text, and their tools, each with
+    `at`: where in the text it happened. The app shows a step there, between
+    what was written before and after it, not stacked above the answer."""
+    tools = []
+    for p in parts or []:
+        kind = p.get("type")
+        if kind == "text" and not p.get("synthetic") and (p.get("text") or "").strip():
+            piece = (p.get("text") or "").strip()
+            text = f"{text}\n\n{piece}" if text else piece
+        elif kind == "tool":
+            tools.append({**mav_stream._tool_info(p), "at": len(text)})
+    return text, tools
 
 
 def _drop_open_turn(msgs: list[dict]) -> list[dict]:

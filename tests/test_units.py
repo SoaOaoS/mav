@@ -330,6 +330,66 @@ class KeepEngineWarm(unittest.TestCase):
         self.assertEqual(mcp.call_count, 2)  # first start, then the restart
 
 
+class FastAnswers(unittest.TestCase):
+    """Recent Claude models answer at once on easy questions (low thinking
+    effort), and chat titles use the same model, not a slower one."""
+
+    def test_new_and_existing_installs_get_the_fast_defaults(self):
+        import mav_provider
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            res = mav_provider.apply(d, d / "s.env", "anthropic", "claude-haiku-5-5", base_url="http://llm/v1")
+            self.assertTrue(res["ok"])
+            cfg = json.loads((d / "opencode.json").read_text())
+            opts = cfg["provider"]["anthropic"]["models"]["claude-haiku-5-5"]["options"]
+            self.assertEqual(opts, {"thinking": {"type": "adaptive"}, "effort": "low"})
+            self.assertEqual(cfg["small_model"], "anthropic/claude-haiku-5-5")
+            self.assertFalse(mav_provider.tune(d))  # already there: no engine restart
+            # An install from before: tuned once, a person's own choice kept.
+            cfg["provider"]["anthropic"]["models"]["claude-haiku-5-5"]["options"] = {"effort": "high"}
+            cfg.pop("small_model")
+            (d / "opencode.json").write_text(json.dumps(cfg))
+            self.assertTrue(mav_provider.tune(d))
+            cfg = json.loads((d / "opencode.json").read_text())
+            self.assertEqual(cfg["provider"]["anthropic"]["models"]["claude-haiku-5-5"]["options"]["effort"], "high")
+            self.assertEqual(cfg["small_model"], "anthropic/claude-haiku-5-5")
+
+    def test_other_models_are_left_alone(self):
+        import mav_provider
+        for ref in ("openai/gpt-5", "anthropic/claude-3-5-haiku-latest", "ollama/llama3"):
+            cfg = {"model": ref}
+            self.assertFalse(mav_provider._tune(cfg), ref)
+            self.assertEqual(cfg, {"model": ref})
+
+
+class StepsWhereTheyHappened(unittest.TestCase):
+    """A tool shows between what was written before and after it."""
+
+    def test_each_step_has_its_place_in_the_text(self):
+        import mav_chat
+        tool = lambda i: {"type": "tool", "callID": i, "tool": "webfetch", "state": {"status": "completed"}}  # noqa: E731
+        entries = [
+            {"info": {"id": "u", "role": "user"}, "parts": [{"type": "text", "text": "Weather?"}]},
+            {"info": {"id": "a1", "role": "assistant"}, "parts": [
+                {"type": "text", "text": "Let me check."}, tool("c1"), tool("c2")]},
+            {"info": {"id": "a2", "role": "assistant"}, "parts": [
+                {"type": "text", "text": "It is sunny."}, tool("c3"), {"type": "text", "text": "Have a nice day."}]},
+        ]
+        msgs = mav_chat.session_messages("s", entries)
+        reply = msgs[-1]
+        self.assertEqual(reply["text"], "Let me check.\n\nIt is sunny.\n\nHave a nice day.")
+        at = {t["id"]: t["at"] for t in reply["tools"]}
+        self.assertEqual(reply["text"][: at["c1"]], "Let me check.")
+        self.assertEqual(at["c1"], at["c2"])
+        self.assertEqual(reply["text"][: at["c3"]], "Let me check.\n\nIt is sunny.")
+
+    def test_a_step_before_any_text_comes_first(self):
+        import mav_chat
+        text, tools = mav_chat.flow("", [{"type": "tool", "callID": "x", "tool": "read", "state": {}},
+                                         {"type": "text", "text": "Done."}])
+        self.assertEqual((text, tools[0]["at"]), ("Done.", 0))
+
+
 class PlainSummary(unittest.TestCase):
     def test_drops_directives_and_images(self):
         answer = (
