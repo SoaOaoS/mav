@@ -114,6 +114,14 @@ function hydrateIcons(root = document) {
     el.dataset.done = el.dataset.i;
   });
 }
+/* A load that may be overtaken by a newer one of the same kind (the boot's
+   background loads vs. a reload after a change): `const fresh = newest("x")`,
+   then after the await, `if (!fresh()) return;` — an older answer never
+   overwrites a newer one. */
+const newest = (kind) => {
+  const n = (newest[kind] = (newest[kind] || 0) + 1);
+  return () => newest[kind] === n;
+};
 const I = (name) => `<i data-i="${name}">${icon(name)}</i>`;
 
 /* Time formatting */

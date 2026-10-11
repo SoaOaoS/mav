@@ -57,6 +57,26 @@ class Server(unittest.TestCase):
         return r.status, out, r
 
 
+class StaticFilesTest(Server):
+    def test_unchanged_files_cost_a_304_and_text_goes_compressed(self):
+        import gzip
+        st, body, r = self.req("GET", "/assets/js/app.js", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(st, 200)
+        self.assertEqual(r.getheader("Content-Encoding"), "gzip")
+        self.assertEqual(r.getheader("Cache-Control"), "no-cache")
+        plain = (mav_core.STATIC_DIR / "assets/js/app.js").read_bytes()
+        self.assertEqual(gzip.decompress(body), plain)
+        etag = r.getheader("ETag")
+        st, body, _ = self.req("GET", "/assets/js/app.js", headers={"If-None-Match": etag})
+        self.assertEqual((st, body), (304, b""))
+        # Without gzip: the file as it is. The page keeps its security headers.
+        st, body, _ = self.req("GET", "/assets/js/app.js")
+        self.assertEqual(body, plain)
+        st, _, r = self.req("GET", "/")
+        self.assertEqual(st, 200)
+        self.assertTrue(r.getheader("Content-Security-Policy"))
+
+
 class CrossSiteTest(Server):
     def test_other_sites_cannot_act(self):
         host = f"127.0.0.1:{self.port}"

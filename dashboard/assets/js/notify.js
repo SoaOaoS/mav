@@ -175,12 +175,14 @@ $("#backupFile").addEventListener("change", () => {
    Passwords and iCal links come back masked; leaving them keeps the stored one. */
 async function loadCalendars() {
   if (!LIVE) return;
+  const fresh = newest("calendar");
   let r;
   try {
     r = await api.get("calendar");
   } catch (_) {
     return;
   }
+  if (!fresh()) return;
   state.calendars = r.sources || [];
   state.today = r.today || [];
   const box = $("#calList");
@@ -315,8 +317,10 @@ const CHAN_FIELDS = {
 const CH = { types: {}, publicUrl: "" };
 async function loadChannels() {
   if (!LIVE) return;
+  const fresh = newest("channels");
   try {
     const r = await api.get("channels");
+    if (!fresh()) return;
     state.channels = r.channels || [];
     CH.types = r.types || {};
     CH.publicUrl = r.public_url || "";

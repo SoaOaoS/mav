@@ -194,8 +194,10 @@ function renderRoutines() {
 }
 async function loadProactivity() {
   if (LIVE) {
+    const fresh = newest("proactivity");
     try {
       const r = await api.get("proactivity");
+      if (!fresh()) return;
       state.proactivity = r.level || "normal";
     } catch (_) {}
   }

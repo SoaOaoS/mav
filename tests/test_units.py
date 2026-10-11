@@ -280,6 +280,56 @@ class Catalog(unittest.TestCase):
         self.assertEqual(_merge_secrets(edited, cfg)["plain"]["url"], "https://mcp.linear.app/mcp/readonly")
 
 
+class PrepareDatabase(unittest.TestCase):
+    """The web app listens at once; the schema follows when Postgres answers."""
+
+    def test_waits_for_the_database_then_applies_everything_in_order(self):
+        import mav_store
+        from unittest import mock
+        calls = []
+
+        def pg_exec(sql, params=()):
+            calls.append(sql)
+            if len(calls) < 3:
+                raise OSError("connection refused")
+
+        with mock.patch.object(mav_store.mav_core, "pg_exec", side_effect=pg_exec), \
+                mock.patch.object(mav_store, "ensure_schema") as later, \
+                mock.patch.object(mav_store.time, "sleep"):
+            self.assertTrue(mav_store.prepare_database(wait_s=60))
+        self.assertIn("CREATE TABLE IF NOT EXISTS conversations", calls[-1])
+        later.assert_called_once()
+
+    def test_gives_up_without_a_database(self):
+        import mav_store
+        from unittest import mock
+        with mock.patch.object(mav_store.mav_core, "pg_exec", side_effect=OSError("down")), \
+                mock.patch.object(mav_store.time, "sleep"):
+            self.assertFalse(mav_store.prepare_database(wait_s=0))
+
+
+class KeepEngineWarm(unittest.TestCase):
+    def test_connections_start_each_time_the_engine_comes_up(self):
+        import threading
+        from unittest import mock
+        import mav_engine
+        stop = threading.Event()
+        states = iter([False, True, True, False, True, True])
+
+        def up():
+            try:
+                return next(states)
+            except StopIteration:
+                stop.set()
+                return True
+
+        with mock.patch.object(mav_engine, "_engine_up", side_effect=up), \
+                mock.patch.object(mav_engine, "mcp_status", return_value={}) as mcp, \
+                mock.patch.object(mav_engine, "valid_agents", return_value=set()):
+            mav_engine.keep_engine_warm(every_s=0, stop=stop)
+        self.assertEqual(mcp.call_count, 2)  # first start, then the restart
+
+
 class PlainSummary(unittest.TestCase):
     def test_drops_directives_and_images(self):
         answer = (
