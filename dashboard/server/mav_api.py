@@ -971,6 +971,15 @@ def _static_file(target: Path) -> tuple[str, bytes, bytes | None]:
 def main():
     import ssl
 
+    # Fast-answer defaults for installs made before them: once, then the
+    # engine restarts to take them up.
+    try:
+        if mav_core.mav_provider.tune(mav_core._config_dir()):
+            print("[mav web] model tuned for faster answers: restarting the engine", flush=True)
+            mav_engine.restart_engine()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[mav web] could not tune the model settings: {exc}", flush=True)
+
     # The database is prepared beside the web app: the page never waits on it.
     threading.Thread(target=mav_store.prepare_database, name="schema", daemon=True).start()
     # Connections started as soon as the engine is, not on the first message.

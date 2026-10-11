@@ -247,7 +247,6 @@ function appendMessage(
     el.innerHTML = `${agentAvatar(ag)}
       <div class="body">
         ${showMeta ? `<div class="msg-meta"><span class="who">${esc(agentDisplay(ag))}</span>${m.ts ? `<span>${esc(fmtClock(m.ts))}</span>` : ""}</div>` : ""}
-        <div class="msg-tools"></div>
         <div class="bubble"></div>
         ${m.recalled ? `<div class="recall-note">${I("brain")} Used ${m.recalled} thing${m.recalled > 1 ? "s" : ""} from memory</div>` : ""}
         ${m.interrupted ? `<div class="recall-note interrupted-note">${I("square")} Stopped by you — the rest was kept.</div>` : ""}
@@ -259,10 +258,8 @@ function appendMessage(
           ${speedHtml(m.metrics)}
         </div>
       </div>`;
-    el.querySelector(".bubble").innerHTML = mdToHtml(m.text || "");
+    renderFlow(el.querySelector(".bubble"), m.text || "", m.tools);
     hydrateCharts(el);
-    if (m.tools && m.tools.length)
-      renderToolSteps(el.querySelector(".msg-tools"), m.tools);
   }
   el._msg = m;
   t.appendChild(el);

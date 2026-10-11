@@ -3837,6 +3837,16 @@ button.memory-updated:hover {
 .msg-tools:empty {
   display: none;
 }
+/* Steps sit where they happened in the answer, between its paragraphs. */
+.bubble > .msg-tools {
+  margin: 0.5rem 0;
+}
+.bubble > .msg-tools:first-child {
+  margin-top: 0.1rem;
+}
+.bubble > .msg-tools:last-child {
+  margin-bottom: 0.1rem;
+}
 .tool-step {
   border: 1px solid var(--line);
   border-radius: 10px;

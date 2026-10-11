@@ -199,7 +199,54 @@ function toolStepBody(t) {
     ${block("Error", t.error, "is-err")}
     ${!t.input && !t.output && !t.error ? `<p class="tool-empty">${t.status === "completed" ? "No details were reported for this step." : "Details appear as soon as the step reports them."}</p>` : ""}`;
 }
-function renderToolSteps(host, tools) {
+/* An answer as it happened: its text, with each step (a tool, a helper)
+   where it took place (`at`, a position in the text), not stacked above.
+   Updated in place, so a step the person opened stays open while the answer
+   streams. Steps without a position (older chats) come first. */
+function renderFlow(bubble, text, tools) {
+  text = text || "";
+  const list = tools || [];
+  const len = text.length;
+  const pos = (t) => Math.min(Math.max(Number(t.at) || 0, 0), len);
+  const segs = [];
+  let from = 0;
+  let n = 0;
+  [...new Set(list.map(pos))]
+    .sort((a, b) => a - b)
+    .forEach((at) => {
+      if (at > from) segs.push({ k: `x${from}`, text: text.slice(from, at) });
+      const group = list.filter((t) => pos(t) === at);
+      segs.push({ k: `t${at}`, tools: group, offset: n });
+      n += group.length;
+      from = at;
+    });
+  if (from < len || !segs.length) segs.push({ k: `x${from}`, text: text.slice(from) });
+  const keep = new Set(segs.map((s) => s.k));
+  [...bubble.children].forEach((c) => {
+    if (!c.dataset.k || !keep.has(c.dataset.k)) {
+      if (!c.classList.contains("is-wait")) c.remove();
+    }
+  });
+  let prev = null;
+  segs.forEach((s) => {
+    let node = [...bubble.children].find((c) => c.dataset.k === s.k);
+    if (!node) {
+      node = document.createElement("div");
+      node.dataset.k = s.k;
+      node.className = s.tools ? "msg-tools" : "md-part";
+    }
+    const want = prev ? prev.nextSibling : bubble.firstChild;
+    if (node !== want) bubble.insertBefore(node, want);
+    if (s.tools) renderToolSteps(node, s.tools, s.offset);
+    else if (node._md !== s.text) {
+      node._md = s.text;
+      node.innerHTML = mdToHtml(s.text);
+    }
+    prev = node;
+  });
+}
+
+function renderToolSteps(host, tools, offset = 0) {
   if (!host) return;
   if (!tools || !tools.length) {
     host.innerHTML = "";
@@ -231,7 +278,7 @@ function renderToolSteps(host, tools) {
     const sig = JSON.stringify([t, took]);
     if (row._sig === sig) return;
     row._sig = sig;
-    row.querySelector("summary").innerHTML = `<span class="tool-n">${i + 1}</span>
+    row.querySelector("summary").innerHTML = `<span class="tool-n">${offset + i + 1}</span>
       <span class="tool-ico">${I(status === "error" ? "x" : status === "completed" ? "check" : "tool")}</span>
       <span class="tool-label">${esc(toolLabel(t.name, t.detail))}</span>
       <span class="tool-meta">${esc(took || TOOL_STATUS[status] || "")}</span>
@@ -359,8 +406,11 @@ function paintWaiting(st, bubble) {
   const s = Math.floor((Date.now() - st.reply.ts) / 1000);
   let row = bubble.querySelector(".thinking-row.is-wait");
   if (!row) {
-    bubble.innerHTML = `<div class="thinking-row is-wait">${dots()}<span class="wait-label"></span><span class="wait-time"></span></div>`;
-    row = bubble.firstElementChild;
+    bubble.insertAdjacentHTML(
+      "beforeend",
+      `<div class="thinking-row is-wait">${dots()}<span class="wait-label"></span><span class="wait-time"></span></div>`,
+    );
+    row = bubble.lastElementChild;
   }
   // Updated in place: the animations keep running smoothly.
   const label = `${waitLabel(st, s)}…`;
@@ -397,10 +447,10 @@ function paintStream(st) {
       const bubble = st.el.querySelector(".bubble");
       const waiting = !st.reply.text && !st.done;
       st.el.classList.toggle("is-waiting", waiting);
+      renderFlow(bubble, st.reply.text || "", st.tools);
       if (waiting) paintWaiting(st, bubble);
-      else bubble.innerHTML = mdToHtml(st.reply.text || "");
+      else bubble.querySelectorAll(".is-wait").forEach((w) => w.remove());
       hydrateCharts(st.el);
-      renderToolSteps(st.el.querySelector(".msg-tools"), st.tools);
       if (stick) scrollToBottom(true);
     }
   });
@@ -424,6 +474,9 @@ function applyEvent(st, ev, d) {
     const key = d.id || d.name;
     const i = st.tools.findIndex((t) => (t.id || t.name) === key);
     const entry = {
+      // Where the step happened: the server says (as in a reloaded chat);
+      // otherwise, the end of what was written when it appeared.
+      at: st.reply.text.length,
       ...(i >= 0 ? st.tools[i] : {}),
       ...d,
       id: key,
@@ -778,16 +831,16 @@ function demoReply(text, draft) {
   const reply = { role: "mav", agent: a, ts: start, text: "", tools: [] };
   setStreaming(true);
   const el = appendMessage(reply, { last: true, meta: true, streaming: true });
-  const host = el.querySelector(".msg-tools");
+  const host = el.querySelector(".bubble");
   const steps = ans.tools.map((t, i) => ({ ...t, start: start + i * 500, end: start + i * 500 + Math.min(t.end - t.start, 900) }));
   steps.forEach((t, i) => {
     setTimeout(() => {
-      reply.tools.push({ ...t, status: "running", end: undefined, output: "" });
-      renderToolSteps(host, reply.tools);
+      reply.tools.push({ ...t, at: 0, status: "running", end: undefined, output: "" });
+      renderFlow(host, reply.text, reply.tools);
     }, 250 + i * 500);
     setTimeout(() => {
-      reply.tools[i] = t;
-      renderToolSteps(host, reply.tools);
+      reply.tools[i] = { ...t, at: 0 };
+      renderFlow(host, reply.text, reply.tools);
     }, 650 + i * 500);
   });
   const words = ans.text.split(/(\s+)/);
@@ -796,7 +849,7 @@ function demoReply(text, draft) {
   const tick = () => {
     n = Math.min(words.length, n + 6);
     reply.text = words.slice(0, n).join("");
-    el.querySelector(".bubble").innerHTML = mdToHtml(reply.text);
+    renderFlow(host, reply.text, reply.tools);
     if (nearBottom()) scrollToBottom(true);
     if (n < words.length) return setTimeout(tick, 30);
     hydrateCharts(el);
