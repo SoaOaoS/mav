@@ -140,6 +140,9 @@ def wait_or_explain(page, stack: Stack, selector: str, state: str = "visible", t
             "auth_error": err.inner_text() if err.count() and err.is_visible() else "",
             "has_session_cookie": any(c["name"].startswith("mav") for c in page.context.cookies()),
             "auth_state": page.request.get(stack.url + "api/auth/state").text()[:300],
+            # What the app said on screen (an error toast, a dialog left open).
+            "toasts": page.locator(".toast").all_inner_texts()[-3:],
+            "modal": page.locator("#modal:not([hidden]) #modalTitle").all_inner_texts(),
         }
         try:
             log = (stack.tmp / "api.log").read_text(errors="replace").splitlines()[-40:]

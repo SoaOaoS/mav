@@ -546,7 +546,11 @@ def ensure_memory_tool() -> bool:
     mcp = _raw_mcp()
     if mcp.get("memory") == want:
         return False
-    return bool(add_mcp_entry("memory", want).get("ok"))
+    ok = bool(add_mcp_entry("memory", want).get("ok"))
+    # Mav's own part, restarted for at once by the caller: not a change the
+    # person has to apply.
+    _pending.pop("Connections", None)
+    return ok
 
 
 def code_state() -> dict:

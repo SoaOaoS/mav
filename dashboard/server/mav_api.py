@@ -1013,7 +1013,8 @@ def main():
             print(f"[mav web] {what}: failed ({exc})", flush=True)
     if changed:
         print(f"[mav web] {', '.join(changed)}: restarting the engine", flush=True)
-        mav_engine.restart_engine()
+        # Beside the web app: a restart through systemctl can take seconds.
+        threading.Thread(target=mav_engine.restart_engine, name="engine-restart", daemon=True).start()
 
     # The database is prepared beside the web app: the page never waits on it.
     threading.Thread(target=mav_store.prepare_database, name="schema", daemon=True).start()
