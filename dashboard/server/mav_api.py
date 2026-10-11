@@ -10,6 +10,7 @@ No authentication: meant for a private host, reachable over VPN.
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import shutil
@@ -22,6 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import mav_core
 import mav_engine
@@ -148,7 +150,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
+        if "Cache-Control" not in (headers or {}):
+            self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
         if ctype.startswith("text/html"):
@@ -927,13 +930,49 @@ class Handler(BaseHTTPRequestHandler):
         ctype = self.STATIC_TYPES.get(target.suffix)
         if not ctype or not target.is_file():
             return self._send(404, "not found", "text/plain")
-        return self._send(200, target.read_bytes(), ctype)
+        etag, raw, gz = _static_file(target)
+        # Checked on every load (no-cache), but an unchanged file costs a
+        # 304 and no body; text goes compressed. An update still shows at once.
+        headers = {"Cache-Control": "no-cache", "ETag": etag, "Vary": "Accept-Encoding"}
+        if etag in (self.headers.get("If-None-Match") or ""):
+            self.send_response(304)
+            for k, v in headers.items():
+                self.send_header(k, v)
+            self.end_headers()
+            return None
+        if gz is not None and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            return self._send(200, gz, ctype, {**headers, "Content-Encoding": "gzip"})
+        return self._send(200, raw, ctype, headers)
+
+
+_STATIC_CACHE: dict = {}
+_STATIC_LOCK = threading.Lock()
+
+
+def _static_file(target: Path) -> tuple[str, bytes, bytes | None]:
+    """(ETag, bytes, gzipped bytes or None) of a web app file, read and
+    compressed once per version of the file."""
+    st = target.stat()
+    key = str(target)
+    with _STATIC_LOCK:
+        hit = _STATIC_CACHE.get(key)
+        if hit and hit[0] == (st.st_mtime_ns, st.st_size):
+            return hit[1]
+    raw = target.read_bytes()
+    gz = None
+    if target.suffix in (".html", ".js", ".css", ".svg", ".json", ".webmanifest") and len(raw) > 1024:
+        gz = gzip.compress(raw, compresslevel=6, mtime=0)
+    entry = (f'"{st.st_mtime_ns:x}-{st.st_size:x}"', raw, gz)
+    with _STATIC_LOCK:
+        _STATIC_CACHE[key] = ((st.st_mtime_ns, st.st_size), entry)
+    return entry
 
 
 def main():
     import ssl
 
-    mav_store.ensure_schema()
+    # The database is prepared beside the web app: the page never waits on it.
+    threading.Thread(target=mav_store.prepare_database, name="schema", daemon=True).start()
 
     srv = ThreadedHTTPServer((mav_core.BIND, mav_core.PORT), Handler)
     print(f"mav-api listening on http://{mav_core.BIND}:{mav_core.PORT} (static: {mav_core.STATIC_DIR})", flush=True)

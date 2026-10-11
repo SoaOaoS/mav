@@ -599,6 +599,32 @@ def forget_account(uid: int) -> dict:
     return out
 
 
+SCHEMA_FILE = Path(mav_core.STATIC_DIR).parent / "scripts" / "schema.sql"
+
+
+def prepare_database(wait_s: float = 300.0) -> bool:
+    """The whole schema (scripts/schema.sql, then the later columns), once the
+    database answers. Runs beside the web app, which listens at once instead
+    of waiting for the database: a sleeping Postgres (Neon) no longer delays
+    the page. Idempotent; gives up after `wait_s` (memory stays off until the
+    next start)."""
+    deadline = time.time() + wait_s
+    pause = 1.0
+    while True:
+        try:
+            if SCHEMA_FILE.is_file():
+                mav_core.pg_exec(SCHEMA_FILE.read_text(encoding="utf-8"))
+            ensure_schema()
+            print("[mav web] database schema ready", flush=True)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            if time.time() + pause > deadline:
+                print(f"[mav web] database unreachable, memory is off: {exc}", flush=True)
+                return False
+            time.sleep(pause)
+            pause = min(pause * 2, 15.0)
+
+
 def ensure_schema() -> None:
     """Columns added after the first release (idempotent, silent without PG)."""
     try:
@@ -628,4 +654,4 @@ def ensure_schema() -> None:
         pass
 
 
-__all__ = ['forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']
+__all__ = ['SCHEMA_FILE', 'prepare_database', 'forget_account', '_selfinit_diff', 'add_interest', 'answer_metrics', 'backup_places', 'budget_blocked', 'calendar_action', 'calendar_view', 'channels_action', 'delete_interest', 'draft_action', 'draft_notify', 'ensure_schema', 'get_actions', 'get_drafts', 'get_interests', 'get_memory', 'get_notification', 'get_notifications', 'global_search', 'interest_context', 'interest_feedback', 'interests_autonomy', 'mail_config', 'mail_forget', 'mail_reply_draft', 'mail_save', 'mail_test', 'memory_action', 'record_notification', 'record_speed', 'record_usage', 'selfinit_apply', 'send_draft', 'set_interests_autonomy', 'update_interest']

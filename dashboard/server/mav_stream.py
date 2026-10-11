@@ -335,7 +335,10 @@ ENGINE_EVENTS = EngineEvents(mav_core.OPENCODE_URL)
 _limit_ok: dict = {"known": False, "ok": False}
 
 
-MSG_WINDOW = 80
+# The newest messages read on every poll (several times a second while an
+# answer streams). The texts of this turn are kept as they arrive, so the
+# window only has to cover what changes between two polls.
+MSG_WINDOW = 30
 
 
 def _messages_url(sid: str, full: list | None = None) -> str:
@@ -478,9 +481,14 @@ def stream_answer(
         except Exception:
             pass
 
-    # Start marker: any message older than our prompt is ignored.
+    # Start marker: any message older than our prompt is ignored. Only the
+    # newest ones matter (polls read the same window), so a long chat is not
+    # downloaded in full before every message once the engine takes a limit.
+    marker = f"{mav_core.OPENCODE_URL}/session/{sid}/message"
+    if _limit_ok["ok"]:
+        marker += f"?limit={MSG_WINDOW}"
     try:
-        before = mav_core.http_json(f"{mav_core.OPENCODE_URL}/session/{sid}/message", timeout=12) or []
+        before = mav_core.http_json(marker, timeout=12) or []
     except Exception:
         before = []
     before_ids = {(e.get("info") or {}).get("id") for e in before}

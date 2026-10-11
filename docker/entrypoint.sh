@@ -98,28 +98,6 @@ seed_provider() {
     || log "could not apply the model from .env — set it in the web app"
 }
 
-ensure_schema() {
-  python3 - "$APP/scripts/schema.sql" <<'PY'
-import os, sys, time
-import psycopg2
-dsn = os.environ.get("PG_DSN", "")
-sql = open(sys.argv[1], encoding="utf-8").read()
-for attempt in range(60):
-    try:
-        conn = psycopg2.connect(dsn, connect_timeout=3)
-        break
-    except Exception as exc:  # noqa: BLE001
-        if attempt == 59:
-            print(f"[mav web] database unreachable: {exc}", file=sys.stderr)
-            sys.exit(0)  # start anyway: memory is off until it is back
-        time.sleep(2)
-with conn, conn.cursor() as cur:
-    cur.execute(sql)
-conn.close()
-print("[mav web] database schema ready")
-PY
-}
-
 # Run "$@", restart it when the web app asks (the flag file changes) or when
 # it exits; re-read the env files on every start (new model, new keys).
 child=0
@@ -165,7 +143,8 @@ case "$role" in
     supervise python3 mav_worker.py
     ;;
   web)
-    ensure_schema
+    # The database schema is applied by the web app itself, beside it
+    # (mav_store.prepare_database): it listens without waiting for Postgres.
     load_env
     cd "$APP/dashboard/server"
     export MAV_STATIC="$APP/dashboard" MAV_API_BIND=0.0.0.0 MAV_API_PORT="${MAV_API_PORT:-8787}"
