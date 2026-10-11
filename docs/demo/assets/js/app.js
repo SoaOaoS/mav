@@ -803,17 +803,18 @@ async function boot() {
   LIVE = true;
   document.body.dataset.mode = "live";
   renderStatus(status);
-  await Promise.allSettled([
-    loadAgentsList(),
-    loadConvs(),
-    loadRoutines(),
-    loadProactivity(),
-    checkVersion(),
-    loadBriefing(),
-    loadChannels(),
-    loadCalendars(),
-    loadFamily(),
-  ]);
+  // The app shows as soon as what the first screen needs is there; the rest
+  // (remote calendars, the version check…) fills in behind it.
+  const later = [
+    loadProactivity,
+    checkVersion,
+    loadBriefing,
+    loadChannels,
+    loadCalendars,
+    loadFamily,
+  ];
+  await Promise.allSettled([loadAgentsList(), loadConvs(), loadRoutines()]);
+  later.forEach((load) => Promise.resolve().then(load).catch(() => {}));
   route();
   if (!state.chat.id) renderThread();
   maybeOnboard();
