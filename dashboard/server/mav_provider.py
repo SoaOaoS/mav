@@ -120,6 +120,19 @@ def read_env(path: Path) -> dict:
     return out
 
 
+def _write_private(path: Path, text: str) -> None:
+    """Write `text` atomically with owner-only permissions.
+
+    opencode.json and the env files carry API keys. With the default umask
+    they land in 0644, readable by every local user; we always clamp to 0600
+    instead of preserving whatever mode the file happened to have.
+    """
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
+
+
 def set_env(path: Path, values: dict) -> None:
     """Set KEY=value lines in an env file, keeping every other line."""
     path = Path(path)
@@ -137,12 +150,8 @@ def set_env(path: Path, values: dict) -> None:
     for k, v in values.items():
         if k not in seen and v is not None:
             out.append(f"{k}={v}")
-    mode = path.stat().st_mode & 0o777 if path.is_file() else 0o600
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text("\n".join(out) + "\n")
-    os.chmod(tmp, mode)
-    tmp.replace(path)
+    _write_private(path, "\n".join(out) + "\n")
 
 
 def _owner_like(path: Path, ref: Path) -> None:
@@ -279,9 +288,7 @@ def tune(config_dir: Path) -> bool:
         return False
     if not _tune(cfg):
         return False
-    tmp = cfg_path.with_name("opencode.json.tmp")
-    tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
-    tmp.replace(cfg_path)
+    _write_private(cfg_path, json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
     _owner_like(cfg_path, Path(config_dir))
     return True
 
@@ -362,9 +369,7 @@ def apply(
 
     try:
         config_dir.mkdir(parents=True, exist_ok=True)
-        tmp = cfg_path.with_name("opencode.json.tmp")
-        tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
-        tmp.replace(cfg_path)
+        _write_private(cfg_path, json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
         _owner_like(cfg_path, config_dir)
         if api_key is not None and key_env:
             set_env(env_server, {key_env: api_key})

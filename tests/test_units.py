@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s tests -v
 """
 
 import json
+import os
 import re
 import sys
 import tempfile
@@ -157,6 +158,19 @@ class Provider(unittest.TestCase):
     def test_rejects_bad_input(self):
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "Bad Id!", "m")["ok"])
         self.assertFalse(mav_provider.apply(self.cfg, self.env, "openai", "")["ok"])
+
+    def test_config_and_env_are_owner_only(self):
+        """Both files hold API keys: never leave them world-readable."""
+        os.chmod(self.cfg / "opencode.json", 0o664)
+        self.env.write_text("X=1\n")
+        os.chmod(self.env, 0o664)
+        res = mav_provider.apply(self.cfg, self.env, "ollama-cloud-api",
+                                 "deepseek-v4.1-flash", api_key="k")
+        self.assertTrue(res["ok"])
+        for path in (self.cfg / "opencode.json", self.env):
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600, path)
+        mav_provider.tune(self.cfg)
+        self.assertEqual((self.cfg / "opencode.json").stat().st_mode & 0o777, 0o600)
 
 
 class MemoryRecall(unittest.TestCase):
