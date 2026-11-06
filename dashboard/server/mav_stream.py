@@ -539,8 +539,9 @@ def stream_answer(
     yield sse("start", {"session": sid, "agent": ag, "recalled": recalled})
     t_first: float | None = None
 
-    deadline = time.time() + 900      # overall guard (15 min)
-    idle_limit = 240                  # no real progress (4 min)
+    # No wall-clock cap: a long task may legitimately run for an hour. We only
+    # stop when the engine stops making progress (`MAV_STREAM_IDLE` seconds).
+    idle_limit = int(os.environ.get("MAV_STREAM_IDLE", "240"))
     last_progress = time.time()
     last_sig = None
     last_text = ""
@@ -560,7 +561,7 @@ def stream_answer(
     heard = False
     pause = 0.15
 
-    while time.time() < deadline and time.time() - last_progress < idle_limit:
+    while time.time() - last_progress < idle_limit:
         # Stop requested from another request (interrupt-and-reprocess): abort
         # the engine, keep whatever text we already have.
         if sid in mav_chat.INTERRUPTED:
