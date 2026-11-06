@@ -17,6 +17,6 @@ out=agents/shipped.sha256
     for f in agents/*.md; do
       printf '%s  %s\n' "$(sha256sum <"$f" | cut -d' ' -f1)" "$(basename "$f")"
     done
-  } | sort -u -k2,2 -k1,1
+  } | LC_ALL=C sort -u -k2,2 -k1,1
 } >"$out"
 echo "wrote $out ($(($(wc -l <"$out") - 1)) entries)"
